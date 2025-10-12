@@ -1,20 +1,6 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
-
-export interface IUser extends Document {
-  name: string;
-  img: string;
-  password: string;
-  phone: string;
-  email: string;
-  role: 'admin' | 'vendor' | 'user';
-  otp?: string;
-  otpExpires?: Date;
-  comparePassword(password: string): Promise<boolean>;
-  compareOtp(otp: string): boolean;
-}
-
-
+import { IUser } from './auth.interface';
 
 const userSchema: Schema = new Schema(
   {
