@@ -1,17 +1,27 @@
-import { Response, NextFunction } from "express";
+import { Response, NextFunction, Request } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "@/modules/auth/auth.model";
 import { appError } from "@/errors";
-import { userInterface } from "@/interface"
+
+import { IUser } from "@/modules/auth/auth.interface";
+declare global {
+  namespace Express {
+    interface Request {
+      user?: IUser;
+    }
+  }
+}
+
+
+
 export const auth = (...requiredRoles: string[]) => {
-  return async (req: userInterface, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Get token from header
       const token = req.headers.authorization?.split(" ")[1];
       if (!token) {
         return next(new appError("Authentication required. No token provided", 401));
       }
-
 
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
