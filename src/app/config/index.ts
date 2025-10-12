@@ -16,6 +16,15 @@ const envSchema = z.object({
         }
     ),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    CLOUDINARY_CLOUD_NAME: z.string({
+        error: "CLOUDINARY_CLOUD_NAME is required"
+    }),
+    CLOUDINARY_API_KEY: z.string({
+        error: "CLOUDINARY_API_KEY is required"
+    }),
+    CLOUDINARY_API_SECRET: z.string({
+        error: "CLOUDINARY_API_SECRET is required"
+    }),
 });
 
 let envVars: z.infer<typeof envSchema>;
