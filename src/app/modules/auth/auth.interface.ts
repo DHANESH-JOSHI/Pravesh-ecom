@@ -12,5 +12,3 @@ export interface IUser extends Document {
   comparePassword(password: string): Promise<boolean>;
   compareOtp(otp: string): boolean;
 }
-
-
