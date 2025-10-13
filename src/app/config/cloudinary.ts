@@ -1,12 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
-import dotenv from 'dotenv';
 import { Request } from 'express'; // Import the Request type
 import config from '@/config';
-
-dotenv.config();
-
 
 // Configure cloudinary
 cloudinary.config({
@@ -31,7 +27,7 @@ const storage = new CloudinaryStorage({
       }
       return 'pravesh-uploads';
     },
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'avif','gif'],
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'],
     transformation: [{ width: 1200, height: 600, crop: 'limit' }] // Appropriate for banners
   } as any
 });

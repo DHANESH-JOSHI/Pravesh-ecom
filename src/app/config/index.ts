@@ -2,10 +2,9 @@ import dotenv from 'dotenv';
 import path from 'path';
 import z from 'zod';
 
-// Configure dotenv with quiet option to suppress all logs
 dotenv.config({
     path: path.join(process.cwd(), '.env'),
-    quiet: true // Suppress all dotenv logs
+    quiet: true
 });
 
 const envSchema = z.object({
@@ -24,6 +23,18 @@ const envSchema = z.object({
     }),
     CLOUDINARY_API_SECRET: z.string({
         error: "CLOUDINARY_API_SECRET is required"
+    }),
+    RAZORPAY_KEY_ID: z.string({
+        error: "RAZORPAY_KEY_ID is required"
+    }),
+    RAZORPAY_KEY_SECRET: z.string({
+        error: "RAZORPAY_KEY_SECRET is required"
+    }),
+    RAZORPAY_WEBHOOK_SECRET: z.string({
+        error: "RAZORPAY_WEBHOOK_SECRET is required"
+    }),
+    JWT_SECRET: z.string({
+        error: "JWT_SECRET is required"
     }),
 });
 
