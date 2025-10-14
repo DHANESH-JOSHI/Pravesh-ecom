@@ -1,183 +1,89 @@
-import mongoose, { Schema } from 'mongoose';
-import { IProduct } from './product.interface';
+import mongoose, { Schema } from "mongoose";
+import { IProduct } from "./product.interface";
 
-const ProductSchema: Schema = new Schema(
+const ProductSchema = new Schema<IProduct>(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true
-    },
-    sku: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      index: true
-    },
-    slug: {
-      type: String,
-      unique: true,
-      sparse: true,
-      index: true,
-      trim: true
-    },
-    description: {
-      type: String,
-      required: true
-    },
-    shortDescription: {
-      type: String,
-      trim: true
-    },
+    name: { type: String, required: true, trim: true, index: true },
+    slug: { type: String, unique: true, trim: true, sparse: true },
+    sku: { type: String, unique: true, sparse: true, trim: true },
+    description: { type: String },
+    shortDescription: { type: String },
+
+    brand: { type: Schema.Types.ObjectId, ref: "Brand" },
+    category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
+
     pricing: {
-      basePrice: { type: Number, required: true, min: 0 },
+      basePrice: { type: Number, required: true },
       discount: {
-        value: { type: Number, min: 0, max: 100, default: 0 },
-        type: {
-          type: String,
-          enum: ['percentage', 'fixed'],
-          default: 'percentage'
-        },
+        value: { type: Number, default: 0 },
+        type: { type: String, enum: ["percentage", "fixed"], default: "percentage" },
       },
-      required: true
     },
     inventory: {
-      stock: {
-        type: Number,
-        required: true,
-      },
+      stock: { type: Number, required: true },
       unit: {
         type: String,
-        enum: ['bag', 'piece', 'kg', 'litre', 'box', 'packet', 'set'],
-        default: 'piece'
-      },
-      minStock: {
-        type: Number,
+        enum: ["bag", "piece", "kg", "ton", "litre", "bundle", "meter"],
         required: true,
-        min: 1,
-        default: 1
       },
-      required: true
+      minStock: { type: Number, default: 1 },
     },
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: 'Category',
-      required: true,
-      index: true
+
+    attributes: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
-    brand: {
-      type: Schema.Types.ObjectId,
-      ref: 'Brand',
-      index: true,
-    },
-    images: [{
-      type: String,
-      required: true
-    }],
-    thumbnail: {
-      type: String,
-      required: true
-    },
-    tags: [{
-      type: String,
-      trim: true,
-      index: true
-    }],
-    features: [{
-      type: String,
-      trim: true
-    }],
     specifications: {
       type: Map,
-      of: String
+      of: [String],
+      default: {},
     },
-    rating: {
-      type: Number,
-      min: 0,
-      max: 5,
-      default: 0
+
+    images: [{ type: String, required: true }],
+    thumbnail: { type: String, required: true },
+
+    tags: [{ type: String, trim: true }],
+    seoTitle: { type: String, trim: true },
+    seoDescription: { type: String, trim: true },
+    seoKeywords: [{ type: String, trim: true }],
+
+    shippingInfo: {
+      weight: { type: Number, default: 0 }, // in kg
+      freeShipping: { type: Boolean, default: false },
+      shippingCost: { type: Number, default: 0 },
+      estimatedDelivery: { type: String, default: "" },
     },
-    reviewCount: {
-      type: Number,
-      min: 0,
-      default: 0
-    },
+
     status: {
       type: String,
-      enum: ['active', 'inactive', 'out_of_stock', 'discontinued'],
-      default: 'active',
-      index: true
+      enum: ["active", "inactive", "out_of_stock", "discontinued"],
+      default: "active",
     },
-    isFeatured: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    isTrending: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    isNewArrival: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    isDiscount: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    isWeeklyBestSelling: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    isWeeklyDiscount: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    seoTitle: {
-      type: String,
-      trim: true
-    },
-    seoDescription: {
-      type: String,
-      trim: true
-    },
-    seoKeywords: [{
-      type: String,
-      trim: true
-    }],
-    shippingInfo: {
-      weight: { type: Number, min: 0 },
-      freeShipping: { type: Boolean, default: false },
-      shippingCost: { type: Number, min: 0, default: 0 },
-      estimatedDelivery: { type: String, trim: true }
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
-      index: true
-    }
+
+    isFeatured: { type: Boolean, default: false },
+    isTrending: { type: Boolean, default: false },
+    isNewArrival: { type: Boolean, default: false },
+    isDiscount: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false },
+
+    rating: { type: Number, default: 0 },
+    reviewCount: { type: Number, default: 0 },
   },
   {
     timestamps: true,
     toJSON: {
+      virtuals: true,
       transform: function (doc, ret) {
         (ret as any).createdAt = new Date((ret as any).createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
         (ret as any).updatedAt = new Date((ret as any).updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        return ret;
       }
-    }
+    },
+    toObject: { virtuals: true }
   }
 );
 
 // Indexes for better query performance
-ProductSchema.index({ name: 'text', description: 'text', tags: 'text' });
+ProductSchema.index({ name: 'text', description: 'text', tags: 'text', shortDescription: 'text' });
 ProductSchema.index({ 'pricing.basePrice': 1, category: 1 });
 ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ rating: -1, reviewCount: -1 });

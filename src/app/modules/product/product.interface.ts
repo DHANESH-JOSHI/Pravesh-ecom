@@ -1,13 +1,16 @@
-import { Document } from 'mongoose';
+import { Document, Schema } from 'mongoose';
 
 export enum UnitType {
   Bag = 'bag',
   Piece = 'piece',
   Kg = 'kg',
+  Tonne = 'tonne',
   Litre = 'litre',
   Box = 'box',
   Packet = 'packet',
-  Set = 'set'
+  Set = 'set',
+  Bundle = 'bundle',
+  Meter = 'meter'
 }
 
 export enum DiscountType {
@@ -24,52 +27,60 @@ export enum ProductStatus {
 
 export interface IProduct extends Document {
   name: string;
-  slug?: string;
+  slug: string;
   sku: string;
-  description: string;
+  description?: string;
   shortDescription?: string;
+
+  category: Schema.Types.ObjectId;
+  brand?: Schema.Types.ObjectId;
+
   pricing: {
     basePrice: number;
-    discount: {
+    discount?: {
       value: number;
       type: DiscountType;
     };
   };
+
   inventory: {
     stock: number;
     unit: UnitType;
-    minStock: number;
+    minStock?: number;
   };
-  category: string | object;
-  brand?: string | object;
+
+  attributes: Record<string, any>;
+
+  specifications?: Record<string, any>;
+
   images: string[];
   thumbnail: string;
+
   tags?: string[];
-  features?: string[];
-  specifications?: {
-    [key: string]: string;
-  };
-  rating?: number;
-  reviewCount?: number;
-  status: ProductStatus;
-  isFeatured: boolean;
-  isTrending: boolean;
-  isNewArrival: boolean;
-  isDiscount: boolean;
-  isWeeklyBestSelling: boolean;
-  isWeeklyDiscount: boolean;
   seoTitle?: string;
   seoDescription?: string;
   seoKeywords?: string[];
+
+  status?: ProductStatus;
+  isFeatured?: boolean;
+  isTrending?: boolean;
+  isNewArrival?: boolean;
+  isDiscount?: boolean;
+  isDeleted?: boolean;
+
+  rating?: number;
+  reviewCount?: number;
+
   shippingInfo?: {
-    weight?: number;
+    weight?: number; // kg or ton
     freeShipping?: boolean;
     shippingCost?: number;
     estimatedDelivery?: string;
   };
-  isDeleted: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+
+  createdAt?: Date;
+  updatedAt?: Date;
+
   // Virtuals
   finalPrice?: number;
   stockStatus?: string;
@@ -81,15 +92,16 @@ export interface IProductFilter {
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;
-  status?: string;
+  status?: ProductStatus;
+
   isFeatured?: boolean;
   isTrending?: boolean;
   isNewArrival?: boolean;
   isDiscount?: boolean;
-  isWeeklyBestSelling?: boolean;
-  isWeeklyDiscount?: boolean;
+  isDeleted?: boolean;
+
   tags?: string[];
-  features?: string[];
+  attributes?: Record<string, any>;
   rating?: number;
   search?: string;
 }
@@ -97,7 +109,7 @@ export interface IProductFilter {
 export interface IProductQuery {
   page?: number;
   limit?: number;
-  sort?: string;
+  sort?: string; // e.g.,
   order?: 'asc' | 'desc';
   filter?: IProductFilter;
 }

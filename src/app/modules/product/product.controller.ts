@@ -1,8 +1,10 @@
 import { Product } from './product.model';
-// import { IProduct, IProductFilter } from './product.interface';
-import mongoose from 'mongoose';
 import { asyncHandler } from '@/utils';
+import { cloudinary } from '@/config/cloudinary';
 import { ApiError, ApiResponse } from '@/interface';
+import { createProductValidation } from './product.validation';
+import { Category } from '../category/category.model';
+import { Brand } from '../brand/brand.model';
 
 // Create a new product
 const slugify = (text: string) =>
@@ -13,13 +15,25 @@ const slugify = (text: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)+/g, '');
 
-export const createProduct = asyncHandler(async (req, res, next) => {
-  const productData = req.body;
-
+export const createProduct = asyncHandler(async (req, res) => {
+  const productData: any = createProductValidation.parse(req.body);
   // Check if SKU already exists
   const existingSku = await Product.findOne({ sku: productData.sku, isDeleted: false });
   if (existingSku) {
     throw new ApiError(400, 'Product with this SKU already exists');
+  }
+
+  if (productData.category) {
+    const existingCategory = await Category.findById(productData.category);
+    if (!existingCategory) {
+      throw new ApiError(400, 'Invalid category ID');
+    }
+  }
+  if (productData.brand) {
+    const existingBrand = await Brand.findById(productData.brand);
+    if (!existingBrand) {
+      throw new ApiError(400, 'Invalid brand ID');
+    }
   }
 
   // Generate slug if not provided
@@ -34,15 +48,25 @@ export const createProduct = asyncHandler(async (req, res, next) => {
     productData.slug = candidate;
   }
 
+  if (req.files && typeof req.files === 'object') {
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
+      productData.thumbnail = files['thumbnail'][0].path;
+    }
+    if (Array.isArray(files['images'])) {
+      productData.images = files['images'].map((file) => file.path);
+    }
+  }
+
   const result = await Product.create(productData);
-  const populatedResult = await Product.findById(result._id).populate('category', 'brand');
+  const populatedResult = await Product.findById(result._id).populate('category brand');
 
   res.status(201).json(
     new ApiResponse(201, 'Product created successfully', populatedResult)
   );
 });
 
-export const getDiscountProducts = asyncHandler(async (req, res, next) => {
+export const getDiscountProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
 
   const products = await Product.find({
@@ -60,43 +84,7 @@ export const getDiscountProducts = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getWeeklyBestSellingProducts = asyncHandler(async (req, res, next) => {
-  const { limit = 10 } = req.query;
-
-  const products = await Product.find({
-    isWeeklyBestSelling: true,
-    status: 'active',
-    isDeleted: false,
-  })
-    .populate('category', 'brand')
-    .sort({ reviewCount: -1, rating: -1 })
-    .limit(Number(limit))
-    .lean();
-
-  res.json(
-    new ApiResponse(200, 'Weekly best selling products retrieved successfully', products)
-  );
-});
-
-export const getWeeklyDiscountProducts = asyncHandler(async (req, res, next) => {
-  const { limit = 10 } = req.query;
-
-  const products = await Product.find({
-    isWeeklyDiscount: true,
-    status: 'active',
-    isDeleted: false,
-  })
-    .populate('category', 'brand')
-    .sort({ discount: -1, createdAt: -1 })
-    .limit(Number(limit))
-    .lean();
-
-  res.json(
-    new ApiResponse(200, 'Weekly discount products retrieved successfully', products)
-  );
-});
-
-export const getProductBySlug = asyncHandler(async (req, res, next) => {
+export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
 
   const product = await Product.findOne({ slug, isDeleted: false })
@@ -112,7 +100,7 @@ export const getProductBySlug = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getAllProducts = asyncHandler(async (req, res, next) => {
+export const getAllProducts = asyncHandler(async (req, res) => {
   const {
     page = 1,
     limit = 10,
@@ -128,8 +116,6 @@ export const getAllProducts = asyncHandler(async (req, res, next) => {
     isTrending,
     isNewArrival,
     isDiscount,
-    isWeeklyBestSelling,
-    isWeeklyDiscount,
     colors,
     sizes,
     rating,
@@ -146,8 +132,6 @@ export const getAllProducts = asyncHandler(async (req, res, next) => {
   if (isTrending !== undefined) filter.isTrending = isTrending === 'true';
   if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival === 'true';
   if (isDiscount !== undefined) filter.isDiscount = isDiscount === 'true';
-  if (isWeeklyBestSelling !== undefined) filter.isWeeklyBestSelling = isWeeklyBestSelling === 'true';
-  if (isWeeklyDiscount !== undefined) filter.isWeeklyDiscount = isWeeklyDiscount === 'true';
   if (inStock !== undefined) {
     filter['inventory.stock'] = inStock === 'true' ? { $gt: 0 } : 0;
   }
@@ -161,21 +145,20 @@ export const getAllProducts = asyncHandler(async (req, res, next) => {
 
   // Colors filter
   if (colors) {
-    const colorArray = (colors as string).split(',');
-    filter.specifications.color = { $in: colorArray };
+    const colorArray = (colors as string).split(',').map(c => c.trim());
+    filter['specifications.colors'] = { $in: colorArray };
   }
 
   // Sizes filter
   if (sizes) {
-    const sizeArray = (sizes as string).split(',');
-    filter.specifications.size = { $in: sizeArray };
+    const sizeArray = (sizes as string).split(',').map(s => s.trim());
+    filter['specifications.sizes'] = { $in: sizeArray };
   }
 
   // Rating filter
   if (rating) {
     filter.rating = { $gte: Number(rating) };
   }
-``
   // Search filter
   if (search) {
     filter.$text = { $search: search as string };
@@ -191,7 +174,7 @@ export const getAllProducts = asyncHandler(async (req, res, next) => {
 
   const [products, total] = await Promise.all([
     Product.find(filter)
-      .populate('category', 'brand')
+      .populate('category brand')
       .sort(sortObj)
       .skip(skip)
       .limit(Number(limit))
@@ -212,12 +195,8 @@ export const getAllProducts = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getProductById = asyncHandler(async (req, res, next) => {
+export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(400, 'Invalid product ID');
-  }
 
   const product = await Product.findOne({ _id: id, isDeleted: false })
     .populate('category', 'brand')
@@ -232,13 +211,9 @@ export const getProductById = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const updateProduct = asyncHandler(async (req, res, next) => {
+export const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const updateData = req.body;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(400, 'Invalid product ID');
-  }
+  const updateData: any = createProductValidation.partial().parse(req.body);
 
   const existingProduct = await Product.findOne({ _id: id, isDeleted: false });
   if (!existingProduct) {
@@ -274,6 +249,36 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
     updateData.slug = candidate;
   }
 
+  if (req.files && typeof req.files === 'object') {
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+    if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
+      updateData.thumbnail = files['thumbnail'][0].path;
+      // Delete old thumbnail from Cloudinary
+      if (existingProduct.thumbnail) {
+        const publicId = existingProduct.thumbnail.split('/').pop()?.split('.')[0];
+        if (publicId) {
+          await cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
+        }
+      }
+    }
+
+    if (Array.isArray(files['images']) && files['images'].length > 0) {
+      updateData.images = files['images'].map((file) => file.path);
+      // Delete old images from Cloudinary
+      if (existingProduct.images && existingProduct.images.length > 0) {
+        const deletionPromises = existingProduct.images.map(imageUrl => {
+          const publicId = imageUrl.split('/').pop()?.split('.')[0];
+          if (publicId) {
+            return cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
+          }
+          return Promise.resolve();
+        });
+        await Promise.all(deletionPromises);
+      }
+    }
+  }
+
   const result = await Product.findByIdAndUpdate(
     id,
     updateData,
@@ -285,12 +290,8 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const deleteProduct = asyncHandler(async (req, res, next) => {
+export const deleteProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(400, 'Invalid product ID');
-  }
 
   const result = await Product.findByIdAndUpdate(
     id,
@@ -307,7 +308,7 @@ export const deleteProduct = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getFeaturedProducts = asyncHandler(async (req, res, next) => {
+export const getFeaturedProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
 
   const products = await Product.find({
@@ -325,7 +326,7 @@ export const getFeaturedProducts = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getTrendingProducts = asyncHandler(async (req, res, next) => {
+export const getTrendingProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
 
   const products = await Product.find({
@@ -343,7 +344,7 @@ export const getTrendingProducts = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getNewArrivalProducts = asyncHandler(async (req, res, next) => {
+export const getNewArrivalProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
 
   const products = await Product.find({
@@ -361,13 +362,9 @@ export const getNewArrivalProducts = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getProductsByCategory = asyncHandler(async (req, res, next) => {
+export const getProductsByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
   const { page = 1, limit = 10, sort = 'createdAt', order = 'desc' } = req.query;
-
-  if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-    throw new ApiError(400, 'Invalid category ID');
-  }
 
   const filter = {
     category: categoryId,
@@ -404,7 +401,7 @@ export const getProductsByCategory = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const searchProducts = asyncHandler(async (req, res, next) => {
+export const searchProducts = asyncHandler(async (req, res) => {
   const { q, page = 1, limit = 10 } = req.query;
 
   if (!q) {
@@ -442,7 +439,7 @@ export const searchProducts = asyncHandler(async (req, res, next) => {
   );
 });
 
-export const getProductFilters = asyncHandler(async (req, res, next) => {
+export const getProductFilters = asyncHandler(async (req, res) => {
   const [brands, colors, sizes, priceRange] = await Promise.all([
     Product.distinct('brand', { status: 'active', isDeleted: false }),
     Product.distinct('specifications.color', { status: 'active', isDeleted: false }),
