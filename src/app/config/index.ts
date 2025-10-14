@@ -24,15 +24,6 @@ const envSchema = z.object({
     CLOUDINARY_API_SECRET: z.string({
         error: "CLOUDINARY_API_SECRET is required"
     }),
-    RAZORPAY_KEY_ID: z.string({
-        error: "RAZORPAY_KEY_ID is required"
-    }),
-    RAZORPAY_KEY_SECRET: z.string({
-        error: "RAZORPAY_KEY_SECRET is required"
-    }),
-    RAZORPAY_WEBHOOK_SECRET: z.string({
-        error: "RAZORPAY_WEBHOOK_SECRET is required"
-    }),
     JWT_SECRET: z.string({
         error: "JWT_SECRET is required"
     }),

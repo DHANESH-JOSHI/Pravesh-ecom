@@ -3,12 +3,12 @@
     "version": "1.0.0",
     "main": "index.js",
     "scripts": {
-        "start:prod": "node ./dist/server.js",
-        "start:dev": "ts-node-dev --respawn --transpile-only -r module-alias/register src/server.ts",
+        "start": "node ./dist/server.js",
+        "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
         "build": "tsc",
         "lint": "eslint src --ext .ts",
         "lint:fix": "eslint src --ext .ts --fix",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "seed": "ts-node src/seeder.ts"
     },
     "author": "",
     "license": "ISC",

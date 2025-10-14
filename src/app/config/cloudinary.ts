@@ -20,10 +20,10 @@ const storage = new CloudinaryStorage({
         return 'pravesh-products';
       } else if (req.originalUrl.includes('/categories')) {
         return 'pravesh-categories';
-      } else if (req.originalUrl.includes('/banners')) {
-        return 'pravesh-banners';
-      } else if (req.originalUrl.includes('/blogs')) {
-        return 'pravesh-blogs';
+      } else if (req.originalUrl.includes('/brands')) {
+        return 'pravesh-brands';
+      } else if (req.originalUrl.includes('/orders')) {
+        return 'pravesh-orders';
       }
       return 'pravesh-uploads';
     },
