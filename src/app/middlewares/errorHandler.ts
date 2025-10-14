@@ -3,10 +3,8 @@ import { handleCastError, handleDuplicateError, handleValidationError, handleZod
 import { ApiError, ApiResponse } from '@/interface';
 import { ZodError } from 'zod';
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
   if (err instanceof ApiError) {
-    res.status(statusCode).json(new ApiResponse(statusCode, message))
+    res.status(err.statusCode || 500).json(new ApiResponse(err.statusCode || 500, err.message || 'Internal Server Error'))
     return;
   }
   if (err.name === 'CastError') err = handleCastError(err);
@@ -16,9 +14,8 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   res.status(err.statusCode).json({
     success: false,
-    statusCode,
-    message,
-    errorMessages: err.errors || [{ path: '', message: err.message }],
+    statusCode: err.statusCode || 500,
+    message: err.message,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };

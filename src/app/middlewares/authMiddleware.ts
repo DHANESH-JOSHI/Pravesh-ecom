@@ -2,17 +2,7 @@ import { Response, NextFunction, Request } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "@/modules/auth/auth.model";
 import { appError } from "@/errors";
-
-import { IUser } from "@/modules/auth/auth.interface";
-declare global {
-  namespace Express {
-    interface Request {
-      user?: IUser;
-    }
-  }
-}
-
-
+import config from "@/config";
 
 export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -24,12 +14,9 @@ export const auth = (...requiredRoles: string[]) => {
       }
 
       // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+      const decoded = jwt.verify(token, config.JWT_SECRET) as { userId: string };
 
-      // Find user across different collections
-      let user: any = await User.findById(decoded.userId)
-      // await Staff.findById(decoded.userId) || 
-      // await AdminStaff.findById(decoded.userId);
+      let user = await User.findById(decoded.userId)
 
       if (!user) {
         return next(new appError("User not found", 401));
@@ -37,7 +24,6 @@ export const auth = (...requiredRoles: string[]) => {
 
       // Attach user to request
       req.user = user;
-
       // Role-based authorization
       if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
         return next(new appError("You do not have permission to perform this action", 403));
