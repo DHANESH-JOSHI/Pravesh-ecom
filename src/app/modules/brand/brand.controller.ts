@@ -3,10 +3,10 @@ import { brandValidation, brandUpdateValidation } from "./brand.validation";
 import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler } from "@/utils";
 import { ApiError, ApiResponse } from "@/interface";
-import { IBrand } from "./brand.interface";
+import mongoose from "mongoose";
 
-export const createBrand = asyncHandler(async (req, res, next) => {
-    const { name } = req.body;
+export const createBrand = asyncHandler(async (req, res) => {
+    const { name } = brandValidation.parse(req.body);
 
     const existingBrand = await Brand.findOne({
         name,
@@ -20,14 +20,12 @@ export const createBrand = asyncHandler(async (req, res, next) => {
         throw new ApiError(400, "Image is required");
     }
 
-    const image = req.file.path;
+    const image = req.file.path
 
-    const validatedData = brandValidation.parse({
+    const brand = new Brand({
         name,
         image,
     });
-
-    const brand = new Brand(validatedData);
     await brand.save();
 
     res
@@ -37,7 +35,7 @@ export const createBrand = asyncHandler(async (req, res, next) => {
         );
 });
 
-export const getAllBrands = asyncHandler(async (req, res, next) => {
+export const getAllBrands = asyncHandler(async (req, res) => {
     const brands = await Brand.find({ isDeleted: false }).sort({
         createdAt: -1,
     });
@@ -49,9 +47,13 @@ export const getAllBrands = asyncHandler(async (req, res, next) => {
     res.json(new ApiResponse(200, "Brands retrieved successfully", brands));
 });
 
-export const getBrandById = asyncHandler(async (req, res, next) => {
+export const getBrandById = asyncHandler(async (req, res) => {
+    const brandId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        throw new ApiError(400, "Invalid brand ID");
+    }
     const brand = await Brand.findOne({
-        _id: req.params.id,
+        _id: brandId,
         isDeleted: false,
     });
 
@@ -62,9 +64,11 @@ export const getBrandById = asyncHandler(async (req, res, next) => {
     res.json(new ApiResponse(200, "Brand retrieved successfully", brand));
 });
 
-export const updateBrandById = asyncHandler(async (req, res, next) => {
+export const updateBrandById = asyncHandler(async (req, res) => {
     const brandId = req.params.id;
-
+    if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        throw new ApiError(400, "Invalid brand ID");
+    }
     const brand = await Brand.findOne({
         _id: brandId,
         isDeleted: false,
@@ -79,7 +83,7 @@ export const updateBrandById = asyncHandler(async (req, res, next) => {
     if (req.body.name) {
         if (req.body.name !== brand.name) {
             const existingBrand = await Brand.findOne({
-                title: req.body.title,
+                name: req.body.name,
                 isDeleted: false,
                 _id: { $ne: brandId },
             });
@@ -120,16 +124,19 @@ export const updateBrandById = asyncHandler(async (req, res, next) => {
     res.json(new ApiResponse(200, "No changes to update", brand));
 });
 
-export const deleteBrandById = asyncHandler(async (req, res, next) => {
-    const brand = await Brand.findOneAndUpdate(
-        { _id: req.params.id, isDeleted: false },
-        { isDeleted: true },
-        { new: true }
-    );
-
+export const deleteBrandById = asyncHandler(async (req, res) => {
+    const brandId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        throw new ApiError(400, "Invalid brand ID");
+    }
+    const brand = await Brand.findOne({
+        _id: brandId,
+        isDeleted: false,
+    });
     if (!brand) {
         throw new ApiError(404, "Brand not found");
     }
-
+    brand.isDeleted = true;
+    await brand.save();
     res.json(new ApiResponse(200, "Brand deleted successfully", brand));
 });
