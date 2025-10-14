@@ -6,8 +6,8 @@ import {
   updateCategoryById,
   deleteCategoryById
 } from './category.controller';
-import { upload } from '../../config/cloudinary';
-import { auth } from '../../middlewares/authMiddleware';
+import { upload } from '@/config/cloudinary';
+import { auth } from '@/middlewares';
 
 const router = express.Router();
 

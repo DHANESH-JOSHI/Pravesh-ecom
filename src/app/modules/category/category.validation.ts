@@ -1,14 +1,16 @@
-import { z } from "zod";
+import { z } from 'zod';
+import mongoose from 'mongoose';
+
+const objectIdSchema = z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), {
+  message: 'Invalid ObjectId',
+});
 
 export const categoryValidation = z.object({
-  title: z.string().min(2, "Title must be at least 2 characters long"),
-  image: z.url("Image must be a valid URL"),
-  parentId: z.string().nullable().optional(),
+    title: z.string().min(1, 'Title is required'),
+    parentCategoryId: objectIdSchema.optional().nullable(),
 });
 
 export const categoryUpdateValidation = z.object({
-  title: z.string().min(2, "Title must be at least 2 characters long").optional(),
-  image: z.url("Image must be a valid URL").optional(),
-  parentId: z.string().nullable().optional(),
-  isDeleted: z.boolean().optional(),
+  title: z.string().optional(),
+  parentCategoryId: objectIdSchema.optional().nullable(),
 });

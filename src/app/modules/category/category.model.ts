@@ -17,7 +17,7 @@ const CategorySchema: Schema = new Schema(
       type: Boolean,
       default: false
     },
-    parentId: {
+    parentCategory: {
       type: Schema.Types.ObjectId,
       ref: 'Category',
       default: null
@@ -30,7 +30,7 @@ const CategorySchema: Schema = new Schema(
         (ret as any).createdAt = new Date((ret as any).createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
         (ret as any).updatedAt = new Date((ret as any).updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       }
-    }
+    },
   }
 );
 
