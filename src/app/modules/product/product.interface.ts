@@ -1,4 +1,4 @@
-import { Document, Schema } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export enum UnitType {
   Bag = 'bag',
@@ -32,12 +32,12 @@ export interface IProduct extends Document {
   description?: string;
   shortDescription?: string;
 
-  category: Schema.Types.ObjectId;
-  brand?: Schema.Types.ObjectId;
+  category: Types.ObjectId;
+  brand?: Types.ObjectId;
 
   pricing: {
     basePrice: number;
-    discount?: {
+    discount: {
       value: number;
       type: DiscountType;
     };
@@ -46,7 +46,7 @@ export interface IProduct extends Document {
   inventory: {
     stock: number;
     unit: UnitType;
-    minStock?: number;
+    minStock: number;
   };
 
   attributes: Record<string, any>;
@@ -87,8 +87,8 @@ export interface IProduct extends Document {
 }
 
 export interface IProductFilter {
-  category?: string;
-  brand?: string;
+  category?: Types.ObjectId;
+  brand?: Types.ObjectId;
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;

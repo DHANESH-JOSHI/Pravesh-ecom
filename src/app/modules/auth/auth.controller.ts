@@ -3,7 +3,7 @@ import { activateUserValidation, authValidation, emailCheckValidation, loginVali
 import { asyncHandler, generateToken } from "@/utils";
 import { ApiError, ApiResponse } from "@/interface";
 
-export const signUpController = asyncHandler(async (req, res, next): Promise<void> => {
+export const signUpController = asyncHandler(async (req, res, next) => {
   const { name, password, img, phone, email, role } = authValidation.parse(req.body);
 
   const existingEmail = await User.findOne({ email });
@@ -34,12 +34,12 @@ const generateOTP = (): string => {
 };
 
 // get logged in user profile
-export const getMe = asyncHandler(async (req, res, next): Promise<void> => {
+export const getMe = asyncHandler(async (req, res, next) => {
   res.status(200).json(new ApiResponse(200, "User profile retrieved successfully", req.user));
 });
 
 // Request OTP handler
-export const requestOtp = asyncHandler(async (req, res, next): Promise<void> => {
+export const requestOtp = asyncHandler(async (req, res, next) => {
   const { phone } = requestOtpValidation.parse(req.body);
 
   // Find or create user
@@ -65,7 +65,7 @@ export const requestOtp = asyncHandler(async (req, res, next): Promise<void> => 
 });
 
 // Verify OTP and login
-export const verifyOtp = asyncHandler(async (req, res, next): Promise<void> => {
+export const verifyOtp = asyncHandler(async (req, res, next) => {
   const { phone, otp } = verifyOtpValidation.parse(req.body);
 
   // Find user by phone
@@ -95,7 +95,7 @@ export const verifyOtp = asyncHandler(async (req, res, next): Promise<void> => {
   return;
 });
 
-export const updateUser = asyncHandler(async (req, res, next): Promise<void> => {
+export const updateUser = asyncHandler(async (req, res, next) => {
   const userId = req.user?._id;
   // Validate the clean data
   const validatedData = updateUserValidation.parse(req.body);
@@ -131,7 +131,7 @@ export const updateUser = asyncHandler(async (req, res, next): Promise<void> => 
   return;
 });
 
-export const loginController = asyncHandler(async (req, res, next): Promise<void> => {
+export const loginController = asyncHandler(async (req, res, next) => {
   const { email, password } = loginValidation.parse(req.body);
 
   let user = await User.findOne({ email });
@@ -153,7 +153,7 @@ export const loginController = asyncHandler(async (req, res, next): Promise<void
   return;
 });
 
-export const getAllUsers = asyncHandler(async (req, res, next): Promise<void> => {
+export const getAllUsers = asyncHandler(async (req, res, next) => {
   const users = await User.find({}, { password: 0 });
 
   if (users.length === 0) {
@@ -164,7 +164,7 @@ export const getAllUsers = asyncHandler(async (req, res, next): Promise<void> =>
   return;
 });
 
-export const getUserById = asyncHandler(async (req, res, next): Promise<void> => {
+export const getUserById = asyncHandler(async (req, res, next) => {
   const userId = req.params.id;
   if (!userId) {
     throw new ApiError(400, "User ID is required");
@@ -179,7 +179,7 @@ export const getUserById = asyncHandler(async (req, res, next): Promise<void> =>
   return;
 });
 
-export const resetPassword = asyncHandler(async (req, res, next): Promise<void> => {
+export const resetPassword = asyncHandler(async (req, res, next) => {
   const userId = req.user?._id;
   if (!userId) {
     throw new ApiError(401, "User not authenticated");
@@ -198,7 +198,7 @@ export const resetPassword = asyncHandler(async (req, res, next): Promise<void> 
   return;
 });
 
-export const activateUser = asyncHandler(async (req, res, next): Promise<void> => {
+export const activateUser = asyncHandler(async (req, res, next) => {
   const { phone } = activateUserValidation.parse(req.body);
 
   const user = await User.findOne({ phone });
@@ -206,14 +206,18 @@ export const activateUser = asyncHandler(async (req, res, next): Promise<void> =
     throw new ApiError(404, "User not found");
   }
 
-  (user as any).status = 'active';
+  if (user.status !== 'pending') {
+    throw new ApiError(400, "User is already active");
+  }
+
+  user.status = 'active';
   await user.save();
 
   res.json(new ApiResponse(200, "User activated successfully"));
   return;
 });
 
-export const checkPhoneExists = asyncHandler(async (req, res, next): Promise<void> => {
+export const checkPhoneExists = asyncHandler(async (req, res, next) => {
   const { phone } = phoneCheckValidation.parse(req.body);
 
   const user = await User.findOne({ phone });
@@ -226,7 +230,7 @@ export const checkPhoneExists = asyncHandler(async (req, res, next): Promise<voi
   return;
 });
 
-export const checkEmailExists = asyncHandler(async (req, res, next): Promise<void> => {
+export const checkEmailExists = asyncHandler(async (req, res, next) => {
   const { email } = emailCheckValidation.parse(req.body);
 
   const user = await User.findOne({ email });

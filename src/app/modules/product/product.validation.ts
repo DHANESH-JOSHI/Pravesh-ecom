@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { Types } from "mongoose";
+
+const objectIdValidation = z
+  .string()
+  .refine((val) => Types.ObjectId.isValid(val), {
+    message: 'Invalid ObjectId',
+  }).transform((val) => new Types.ObjectId(val));
 
 const createProductValidation = z.object({
   name: z.string().nonempty('Product name is required').max(200, 'Product name too long'),
@@ -6,8 +13,8 @@ const createProductValidation = z.object({
   sku: z.string().nonempty('SKU is required'),
   description: z.string().optional(),
   shortDescription: z.string().optional(),
-  brand: z.string().optional(),
-  category: z.string().nonempty('Category is required').regex(/^[0-9a-fA-F]{24}$/, 'Invalid category ID'),
+  brand: objectIdValidation.optional(),
+  category: objectIdValidation,
 
   pricing: z.preprocess((val) => {
     if (typeof val === 'string') {
@@ -22,6 +29,9 @@ const createProductValidation = z.object({
       }).optional(),
     })
   ),
+
+  thumbnail: z.url().optional(),
+  images: z.array(z.string().nonempty('Image URL cannot be empty')).optional(),
 
   inventory: z.preprocess((val) => {
     if (typeof val === 'string') {
@@ -81,8 +91,8 @@ const getProductsValidation = z.object({
   limit: z.string().regex(/^\d+$/, 'Limit must be a number').optional(),
   sort: z.string().optional(),
   order: z.enum(['asc', 'desc']).optional(),
-  category: z.string().optional(),
-  brand: z.string().optional(),
+  category: objectIdValidation.optional(),
+  brand: objectIdValidation.optional(),
   minPrice: z.string().regex(/^\d+(\.\d+)?$/, 'Invalid minimum price').optional(),
   maxPrice: z.string().regex(/^\d+(\.\d+)?$/, 'Invalid maximum price').optional(),
   inStock: z.string().regex(/^(true|false)$/, 'Invalid stock filter').optional(),

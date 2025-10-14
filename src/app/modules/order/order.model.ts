@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
-import { IOrder, OrderStatus } from './order.interface';
+import { IOrder, OrderStatus,IOrderItem } from './order.interface';
 
-const OrderItemSchema = new Schema({
+const OrderItemSchema = new Schema<IOrderItem>({
     product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true },
@@ -35,11 +35,11 @@ const OrderSchema = new Schema<IOrder>(
     {
         timestamps: true,
         toJSON: {
-            transform: function (doc, ret) {
-                (ret as any).createdAt = new Date((ret as any).createdAt).toLocaleString('en-IN', {
+            transform: function (doc, ret:any) {
+                ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', {
                     timeZone: 'Asia/Kolkata',
                 });
-                (ret as any).updatedAt = new Date((ret as any).updatedAt).toLocaleString('en-IN', {
+                ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', {
                     timeZone: 'Asia/Kolkata',
                 });
                 return ret;

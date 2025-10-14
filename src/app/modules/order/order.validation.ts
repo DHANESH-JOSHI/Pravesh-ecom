@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { OrderStatus } from './order.interface';
+import { Types } from "mongoose";
+
+const objectIdValidation = z
+  .string()
+  .refine((val) => Types.ObjectId.isValid(val), {
+    message: 'Invalid ObjectId',
+  }).transform((val) => new Types.ObjectId(val));
 
 export const checkoutFromCartValidation = z.object({
     shippingAddress: z.object({
@@ -13,7 +20,7 @@ export const checkoutFromCartValidation = z.object({
 
 export const adminUpdateOrderValidation = z.object({
     items:z.array(z.object({
-        product: z.string().min(1, 'Product ID is required'),
+        product: objectIdValidation,
         quantity: z.number().min(1, 'Quantity must be a positive number'),
         price: z.number().min(0, 'Price must be a positive number'),
         selectedColor: z.string().optional(),

@@ -4,6 +4,7 @@ export interface IUser extends Document {
   name: string;
   img: string;
   password: string;
+  status: 'pending' | 'active';
   phone: string;
   email: string;
   role: 'admin' | 'vendor' | 'user';

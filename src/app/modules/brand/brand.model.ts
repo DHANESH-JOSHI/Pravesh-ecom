@@ -1,7 +1,7 @@
 import mongoose from "mongoose"
 import { IBrand } from './brand.interface'
 
-const brandSchema = new mongoose.Schema({
+const brandSchema = new mongoose.Schema<IBrand>({
     name: {
         type: String,
         required: true
@@ -18,9 +18,9 @@ const brandSchema = new mongoose.Schema({
     {
         timestamps: true,
         toJSON: {
-            transform: function (doc, ret) {
-                (ret as any).createdAt = new Date((ret as any).createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                (ret as any).updatedAt = new Date((ret as any).updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+            transform: function (doc, ret:any) {
+                ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
                 return ret;
             }
         }

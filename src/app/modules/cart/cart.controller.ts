@@ -1,5 +1,5 @@
 import { Cart } from './cart.model'; // This should be from './cart.model'
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { Product } from '../product/product.model';
 import { asyncHandler } from '@/utils';
 import { ApiError, ApiResponse } from '@/interface';
@@ -78,7 +78,7 @@ export const addToCart = asyncHandler(async (req, res) => {
   }
 
   // Add item to cart
-  await (cart as any).addItem(productId, quantity, product.finalPrice, selectedColor, selectedSize);
+  await cart.addItem(productId, quantity, product.finalPrice!, selectedColor, selectedSize);
 
   // Populate the cart with product details
   const populatedCart = await Cart.findOne({ user: userId }).populate('items.product');
@@ -119,13 +119,13 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   }
 
   // Check stock availability
-  if ((product as any).stock < quantity) {
-    throw new ApiError(400, `Only ${(product as any).stock} items available in stock`);
+  if (product.inventory.stock < quantity) {
+    throw new ApiError(400, `Only ${product.inventory.stock} items available in stock`);
   }
 
   // Update item in cart
   try {
-    await (cart as any).updateItem(productId, quantity, selectedColor, selectedSize);
+    await cart.updateItem(new Types.ObjectId(productId), quantity, selectedColor, selectedSize);
   } catch (error) {
     if (error instanceof Error && error.message === 'Item not found in cart') {
       throw new ApiError(404, 'Item not found in cart');
@@ -161,7 +161,7 @@ export const removeFromCart = asyncHandler(async (req, res) => {
   }
 
   // Remove item from cart
-  await (cart as any).removeItem(productId, selectedColor as string, selectedSize as string);
+  await cart.removeItem(new Types.ObjectId(productId), selectedColor as string, selectedSize as string);
 
   // Get updated cart with populated data
   const updatedCart = await Cart.findOne({ user: userId }).populate('items.product');
@@ -185,7 +185,7 @@ export const clearCart = asyncHandler(async (req, res) => {
   }
 
   // Clear all items from cart
-  await (cart as any).clearCart();
+  await cart.clearCart();
 
   res.status(200).json(new ApiResponse(200, 'Cart cleared successfully', {
     user: userId,

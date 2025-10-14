@@ -1,10 +1,14 @@
 import { z } from 'zod';
-import mongoose from 'mongoose';
+import { Types } from "mongoose";
+
+const objectIdValidation = z
+  .string()
+  .refine((val) => Types.ObjectId.isValid(val), {
+    message: 'Invalid ObjectId',
+  }).transform((val) => new Types.ObjectId(val));
 
 const addToCartValidation = z.object({
-  productId: z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), {
-    message: 'Invalid ObjectId',
-  }),
+  productId: objectIdValidation,
   quantity: z.number().int().positive('Quantity must be a positive integer'),
   selectedColor: z.string().optional(),
   selectedSize: z.string().optional(),

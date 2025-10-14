@@ -1,7 +1,14 @@
 import { z } from "zod";
+import { Types } from "mongoose";
+
+const objectIdValidation = z
+  .string()
+  .refine((val) => Types.ObjectId.isValid(val), {
+    message: 'Invalid ObjectId',
+  }).transform((val) => new Types.ObjectId(val));
 
 export const addFundsValidation = z.object({
-    userId: z.string().min(1, "User ID is required"),
+    userId: objectIdValidation,
     amount: z.number().positive("Amount must be a positive number"),
     description: z.string().optional(),
 });

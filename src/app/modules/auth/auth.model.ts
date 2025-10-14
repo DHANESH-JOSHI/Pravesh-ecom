@@ -2,7 +2,7 @@ import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { IUser } from './auth.interface';
 
-const userSchema: Schema = new Schema(
+const userSchema = new Schema<IUser>(
   {
     name: { type: String },
     password: { type: String },
@@ -18,7 +18,7 @@ const userSchema: Schema = new Schema(
 );
 
 
-userSchema.pre<IUser>('save', async function (next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }

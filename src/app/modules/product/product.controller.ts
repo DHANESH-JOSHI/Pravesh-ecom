@@ -16,7 +16,7 @@ const slugify = (text: string) =>
     .replace(/(^-|-$)+/g, '');
 
 export const createProduct = asyncHandler(async (req, res) => {
-  const productData: any = createProductValidation.parse(req.body);
+  const productData = createProductValidation.parse(req.body);
   // Check if SKU already exists
   const existingSku = await Product.findOne({ sku: productData.sku, isDeleted: false });
   if (existingSku) {
@@ -123,7 +123,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   } = req.query;
 
   // Build filter object
-  const filter: any = { isDeleted: false };
+  const filter:any = { isDeleted: false };
 
   if (status) filter.status = status;
   if (category) filter.category = category;

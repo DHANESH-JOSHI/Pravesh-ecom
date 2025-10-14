@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
-import { IWallet } from './wallet.interface';
+import { IWallet,ITransaction } from './wallet.interface';
 
-const TransactionSchema = new Schema(
+const TransactionSchema = new Schema<ITransaction>(
     {
         amount: {
             type: Number,
@@ -18,7 +18,7 @@ const TransactionSchema = new Schema(
     { _id: false }
 );
 
-const WalletSchema = new Schema(
+const WalletSchema = new Schema<IWallet>(
     {
         userId: {
             type: Schema.Types.ObjectId,
@@ -35,9 +35,9 @@ const WalletSchema = new Schema(
     {
         timestamps: true,
         toJSON: {
-            transform: function (doc, ret) {
-                (ret as any).createdAt = new Date((ret as any).createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                (ret as any).updatedAt = new Date((ret as any).updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+            transform: function (doc, ret:any) {
+                ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
             }
         }
     }

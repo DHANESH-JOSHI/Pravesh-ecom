@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { IProduct } from "./product.interface";
+import { IProduct, ProductStatus } from "./product.interface";
 
 const ProductSchema = new Schema<IProduct>(
   {
@@ -17,7 +17,7 @@ const ProductSchema = new Schema<IProduct>(
       discount: {
         value: { type: Number, default: 0 },
         type: { type: String, enum: ["percentage", "fixed"], default: "percentage" },
-      },
+      }
     },
     inventory: {
       stock: { type: Number, required: true },
@@ -73,9 +73,9 @@ const ProductSchema = new Schema<IProduct>(
     timestamps: true,
     toJSON: {
       virtuals: true,
-      transform: function (doc, ret) {
-        (ret as any).createdAt = new Date((ret as any).createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        (ret as any).updatedAt = new Date((ret as any).updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      transform: function (doc, ret: any) {
+        ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       }
     },
     toObject: { virtuals: true }
@@ -89,31 +89,31 @@ ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ rating: -1, reviewCount: -1 });
 
 // Virtual for calculating final price after discount
-ProductSchema.virtual('finalPrice').get(function () {
-  if ((this as any).pricing.discount.value > 0) {
-    if ((this as any).pricing.discount.type === 'percentage') {
-      return (this as any).pricing.basePrice - ((this as any).pricing.basePrice * (this as any).pricing.discount.value / 100);
+ProductSchema.virtual<IProduct>('finalPrice').get(function () {
+  if (this.pricing.discount.value > 0) {
+    if (this.pricing.discount.type === 'percentage') {
+      return this.pricing.basePrice - (this.pricing.basePrice * this.pricing.discount.value / 100);
     } else {
-      return (this as any).pricing.basePrice - (this as any).pricing.discount.value;
+      return this.pricing.basePrice - this.pricing.discount.value;
     }
   }
-  return (this as any).pricing.basePrice;
+  return this.pricing.basePrice;
 });
 
 // Virtual for stock status
-ProductSchema.virtual('stockStatus').get(function () {
-  if ((this as any).inventory.stock === 0) return 'out_of_stock';
-  if ((this as any).inventory.stock <= (this as any).inventory.minStock) return 'low_stock';
-  else if ((this as any).inventory.stock > 0 && (this as any).status === 'out_of_stock') return 'in_stock';
+ProductSchema.virtual<IProduct>('stockStatus').get(function () {
+  if (this.inventory.stock === 0) return 'out_of_stock';
+  if (this.inventory.stock <= this.inventory.minStock) return 'low_stock';
+  else if (this.inventory.stock > 0 && this.status === 'out_of_stock') return 'in_stock';
   return 'in_stock';
 });
 
 // Pre-save middleware to update status based on stock
 ProductSchema.pre('save', function (next) {
-  if ((this as any).inventory.stock === 0 && (this as any).status === 'active') {
-    (this as any).status = 'out_of_stock';
-  } else if ((this as any).inventory.stock > 0 && (this as any).status === 'out_of_stock') {
-    (this as any).status = 'active';
+  if (this.inventory.stock === 0 && this.status === 'active') {
+    this.status = ProductStatus.OutOfStock;
+  } else if (this.inventory.stock > 0 && this.status === ProductStatus.OutOfStock) {
+    this.status = ProductStatus.Active;
   }
   next();
 });

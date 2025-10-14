@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { Document } from 'mongoose';
 
 export enum OrderStatus {
@@ -11,7 +12,7 @@ export enum OrderStatus {
 }
 
 export interface IOrderItem {
-  product: string;
+  product: Types.ObjectId;
   quantity: number;
   price: number; 
   selectedColor?: string;
@@ -19,7 +20,7 @@ export interface IOrderItem {
 }
 
 export interface IOrder extends Document {
-  user: string;
+  user: Types.ObjectId;
   items: IOrderItem[];
   totalAmount: number;
   shippingAddress: {
