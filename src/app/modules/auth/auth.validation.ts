@@ -35,9 +35,6 @@ export const loginValidation = z.object({
 });
 
 export const resetPasswordValidation = z.object({
-  phone: z.string().refine(validateIndianMobile, {
-    message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
-  }),
   newPassword: z.string().min(6)
 });
 

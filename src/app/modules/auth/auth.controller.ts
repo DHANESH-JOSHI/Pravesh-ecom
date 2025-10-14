@@ -6,7 +6,6 @@ import { ApiError, ApiResponse } from "@/interface";
 export const signUpController = asyncHandler(async (req, res, next): Promise<void> => {
   const { name, password, img, phone, email, role } = authValidation.parse(req.body);
 
-  // Check for existing email
   const existingEmail = await User.findOne({ email });
   if (existingEmail) {
     throw new ApiError(400, "Email already exists");
@@ -33,6 +32,11 @@ export const signUpController = asyncHandler(async (req, res, next): Promise<voi
 const generateOTP = (): string => {
   return Math.floor(1000 + Math.random() * 9000).toString();
 };
+
+// get logged in user profile
+export const getMe = asyncHandler(async (req, res, next): Promise<void> => {
+  res.status(200).json(new ApiResponse(200, "User profile retrieved successfully", req.user));
+});
 
 // Request OTP handler
 export const requestOtp = asyncHandler(async (req, res, next): Promise<void> => {
@@ -92,19 +96,15 @@ export const verifyOtp = asyncHandler(async (req, res, next): Promise<void> => {
 });
 
 export const updateUser = asyncHandler(async (req, res, next): Promise<void> => {
-  // Create a clean request body by filtering out undefined/null values
-  const cleanBody = Object.fromEntries(
-    Object.entries(req.body).filter(([_, v]) => v !== undefined && v !== null)
-  );
-
+  const userId = req.user?._id;
   // Validate the clean data
-  const validatedData = updateUserValidation.parse(cleanBody);
+  const validatedData = updateUserValidation.parse(req.body);
 
   // Check if email is being updated with a non-empty value and if it already exists
   if (validatedData.email && validatedData.email.length > 0) {
     const existingUser = await User.findOne({
       email: validatedData.email,
-      _id: { $ne: req.params.id }
+      _id: { $ne: userId }
     });
 
     if (existingUser) {
@@ -118,7 +118,7 @@ export const updateUser = asyncHandler(async (req, res, next): Promise<void> => 
   }
 
   const updatedUser = await User.findByIdAndUpdate(
-    req.params.id,
+    userId,
     validatedData,
     { new: true, select: '-password' }
   );
@@ -134,16 +134,7 @@ export const updateUser = asyncHandler(async (req, res, next): Promise<void> => 
 export const loginController = asyncHandler(async (req, res, next): Promise<void> => {
   const { email, password } = loginValidation.parse(req.body);
 
-  // First try to find in User model
   let user = await User.findOne({ email });
-  // let userType = 'user';
-
-  // If not found in User model, try AdminStaff model
-  // if (!user) {
-  //   user = await AdminStaff.findOne({ email });
-  //   userType = 'admin-staff';
-  // }
-
   if (!user) {
     throw new ApiError(400, "Invalid email or password");
   }
@@ -174,7 +165,11 @@ export const getAllUsers = asyncHandler(async (req, res, next): Promise<void> =>
 });
 
 export const getUserById = asyncHandler(async (req, res, next): Promise<void> => {
-  const user = await User.findById(req.params.id, { password: 0 });
+  const userId = req.params.id;
+  if (!userId) {
+    throw new ApiError(400, "User ID is required");
+  }
+  const user = await User.findById(userId, { password: 0 });
 
   if (!user) {
     throw new ApiError(404, "User not found");
@@ -185,9 +180,13 @@ export const getUserById = asyncHandler(async (req, res, next): Promise<void> =>
 });
 
 export const resetPassword = asyncHandler(async (req, res, next): Promise<void> => {
-  const { phone, newPassword } = resetPasswordValidation.parse(req.body);
+  const userId = req.user?._id;
+  if (!userId) {
+    throw new ApiError(401, "User not authenticated");
+  }
+  const { newPassword } = resetPasswordValidation.parse(req.body);
 
-  const user = await User.findOne({ phone });
+  const user = await User.findById(userId);
   if (!user) {
     throw new ApiError(404, "User not found");
   }
