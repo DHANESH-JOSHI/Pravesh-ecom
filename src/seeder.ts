@@ -1,4 +1,4 @@
-import { User } from '@/modules/auth/auth.model';
+import { User } from '@/modules/user/user.model';
 export const seedDatabase = async () => {
     const adminEmail = 'admin@example.com';
     const existingAdmin = await User.findOne({ email: adminEmail });

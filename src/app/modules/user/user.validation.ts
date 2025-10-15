@@ -1,0 +1,36 @@
+import { validateIndianMobile } from "@/utils/validatePhone";
+import { z } from "zod";
+
+export const resetPasswordValidation = z.object({
+  newPassword: z.string().min(6)
+});
+
+export const activateUserValidation = z.object({
+  phone: z.string().refine(validateIndianMobile, {
+    message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
+  })
+});
+
+export const phoneCheckValidation = z.object({
+  phone: z.string().refine(validateIndianMobile, {
+    message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
+  })
+});
+
+export const emailCheckValidation = z.object({
+  email: z.string().email("Invalid email format")
+});
+
+export const updateUserValidation = z.object({
+  name: z.string().optional(),
+  phone: z.string().refine(validateIndianMobile, {
+    message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
+  }).optional(),
+  email: z.union([
+    z.string().email("Invalid email format"),
+    z.string().length(0) // Allow empty string
+  ]).optional(),
+  img: z.string().optional(),
+  role: z.enum(['admin','vendor', 'user']).optional(),
+});
+

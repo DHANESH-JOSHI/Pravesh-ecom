@@ -1,6 +1,6 @@
 import { Response, NextFunction, Request } from "express";
 import jwt from "jsonwebtoken";
-import { User } from "@/modules/auth/auth.model";
+import { User } from "@/modules/user/user.model";
 import config from "@/config";
 import { ApiError } from "@/interface";
 

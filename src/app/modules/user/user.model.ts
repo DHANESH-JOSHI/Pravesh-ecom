@@ -1,6 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
-import { IUser } from './auth.interface';
+import { IUser } from './user.interface';
 
 const userSchema = new Schema<IUser>(
   {

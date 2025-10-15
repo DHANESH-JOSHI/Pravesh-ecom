@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { IUser } from '@/modules/auth/auth.interface';
-export const generateToken = (user: IUser ) => {
+import { IUser } from '@/modules/user/user.interface';
+export const generateToken = (user: IUser) => {
   const payload = {
     userId: user._id,
     name: user.name,

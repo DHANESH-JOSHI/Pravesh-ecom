@@ -6,6 +6,7 @@ import { walletRouter } from "@/modules/wallet/wallet.routes";
 import { brandRouter } from "@/modules/brand/brand.routes";
 import { cartRouter } from "@/modules/cart/cart.routes";
 import { orderRouter } from '@/modules/order/order.routes';
+import { userRouter } from "@/modules/user/user.routes";
 const router = Router();
 
 type Route = {
@@ -17,6 +18,10 @@ const moduleRoutes: Route[] = [
   {
     path: '/auth',
     route: authRouter
+  },
+  {
+    path: '/users',
+    route: userRouter
   },
   {
     path: '/categories',

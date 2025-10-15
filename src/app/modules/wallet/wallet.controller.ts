@@ -3,7 +3,7 @@ import { getApiErrorClass,getApiResponseClass } from '@/interface';
 import { asyncHandler } from '@/utils';
 import { addFundsValidation } from './wallet.validation';
 import mongoose from 'mongoose';
-import { User } from '../auth/auth.model';
+import { User } from '../user/user.model';
 const ApiError = getApiErrorClass("WALLET");
 const ApiResponse = getApiResponseClass("WALLET");
 
