@@ -17,13 +17,13 @@ router.post('/', auth('user'), createOrder);
 
 router.post('/custom', auth('user'), upload.single('image'), createCustomOrder);
 
-router.post('/custom/confirm/:orderId', auth('user'), confirmCustomOrder);
+router.post('/confirm/:orderId', auth('user'), confirmCustomOrder);
 
-router.get('/my-orders', auth('user'), getMyOrders);
+router.get('/me', auth('user'), getMyOrders);
 
 router.get('/', auth('admin'), getAllOrders);
 
-router.patch('/custom/:orderId', auth('admin'), adminUpdateCustomOrder);
+router.patch('/:orderId', auth('admin'), adminUpdateCustomOrder);
 
 router.get('/:orderId', getOrderById);
 
