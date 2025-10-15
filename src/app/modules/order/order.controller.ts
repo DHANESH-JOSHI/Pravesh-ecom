@@ -1,26 +1,29 @@
 import { asyncHandler } from '@/utils';
-import { getApiErrorClass,getApiResponseClass } from '@/interface';
+import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { Order } from './order.model';
 import { Cart } from '../cart/cart.model';
 import { Wallet } from '../wallet/wallet.model';
 import { OrderStatus } from './order.interface';
 import { checkoutFromCartValidation, adminUpdateOrderValidation } from './order.validation';
+import mongoose, { Types } from 'mongoose';
+import { Address } from '../address/address.model';
+import status from 'http-status';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
-export const checkoutFromCart = asyncHandler(async (req, res) => {
+export const createOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
-  const { shippingAddress } = checkoutFromCartValidation.parse(req.body);
+  const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
 
   const cart = await Cart.findOne({ user: userId }).populate('items.product');
   if (!cart || cart.items.length === 0) {
-    throw new ApiError(400, 'Your cart is empty');
+    throw new ApiError(status.BAD_REQUEST, 'Your cart is empty');
   }
 
-  const totalAmount = cart.totalPrice;
+  const totalAmount = await cart.getCartSummary().then(summary => summary.totalPrice);
 
   let wallet = await Wallet.findOne({ userId });
   if (!wallet) {
@@ -28,7 +31,7 @@ export const checkoutFromCart = asyncHandler(async (req, res) => {
     wallet = await Wallet.create({ userId, balance: 0, transactions: [] });
   }
   if (!wallet || wallet.balance < totalAmount) {
-    throw new ApiError(400, 'Insufficient wallet funds');
+    throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
   }
   // Deduct from wallet
   wallet.balance -= totalAmount;
@@ -43,13 +46,13 @@ export const checkoutFromCart = asyncHandler(async (req, res) => {
     user: userId,
     items: cart.items,
     totalAmount,
-    shippingAddress,
+    shippingAddressId,
     status: OrderStatus.Processing,
   });
 
   await cart.clearCart();
 
-  res.status(201).json(new ApiResponse(201, 'Order placed successfully', order));
+  res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
 });
 
 
@@ -57,7 +60,7 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
   if (!req.file) {
-    throw new ApiError(400, 'An image is required for a custom order');
+    throw new ApiError(status.BAD_REQUEST, 'An image is required for a custom order');
   }
 
   const customOrderImage = req.file.path;
@@ -72,16 +75,16 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     customOrderImage,
   });
 
-  res.status(201).json(new ApiResponse(201, 'Custom order request submitted successfully. An admin will review it shortly.', order));
+  res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
 });
 
 export const adminUpdateCustomOrder = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
-  const { items, shippingAddress, status, feedback } = adminUpdateOrderValidation.parse(req.body);
+  const { items, status: orderStatus, feedback } = adminUpdateOrderValidation.parse(req.body);
 
   const order = await Order.findById(orderId);
   if (!order || !order.isCustomOrder) {
-    throw new ApiError(404, 'Custom order not found');
+    throw new ApiError(status.NOT_FOUND, 'Custom order not found');
   }
   //calculate total amount if items are provided
   let totalAmount = order.totalAmount;
@@ -89,34 +92,41 @@ export const adminUpdateCustomOrder = asyncHandler(async (req, res) => {
     totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     order.items = items;
     order.totalAmount = totalAmount;
-    if (!shippingAddress) {
-      throw new ApiError(400, 'Shipping address is required for a custom order');
-    }
-    order.shippingAddress = shippingAddress;
     order.status = OrderStatus.AwaitingPayment;
   }
-  if (status) order.status = status;
+  if (orderStatus) order.status = orderStatus;
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
 
-  res.status(200).json(new ApiResponse(200, 'Custom order updated successfully', order));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order updated successfully', order));
 });
 
 export const confirmCustomOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { orderId } = req.params;
+  const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
+  if (!mongoose.Types.ObjectId.isValid(shippingAddressId)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid address ID');
+  }
+  const shippingAddress = await Address.findOne({ _id: shippingAddressId, user: userId, isDeleted: false });
+  if (!shippingAddress) {
+    throw new ApiError(status.NOT_FOUND, 'Shipping address not found or you are not authorized to confirm it');
+  }
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
+  }
   const order = await Order.findOne({ _id: orderId, user: userId, isCustomOrder: true });
   if (!order) {
-    throw new ApiError(404, 'Custom order not found or you are not authorized to confirm it');
+    throw new ApiError(status.NOT_FOUND, 'Custom order not found or you are not authorized to confirm it');
   }
 
   if (order.status !== OrderStatus.AwaitingPayment) {
-    throw new ApiError(400, 'This order is not awaiting payment. It may not have been priced by an admin yet.');
+    throw new ApiError(status.BAD_REQUEST, 'This order is not awaiting payment. It may not have been priced by an admin yet.');
   }
 
   const wallet = await Wallet.findOne({ userId });
   if (!wallet || wallet.balance < order.totalAmount) {
-    throw new ApiError(400, 'Insufficient wallet funds');
+    throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
   }
   // Deduct from wallet
   wallet.balance -= order.totalAmount;
@@ -128,10 +138,10 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
   await wallet.save();
 
   order.status = OrderStatus.Processing;
-
+  order.shippingAddress = shippingAddress._id as Types.ObjectId;
   await order.save();
 
-  res.status(200).json(new ApiResponse(200, 'Custom order confirmed and paid successfully', order));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
 });
 
 
@@ -139,7 +149,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).populate('items.product');
 
-  res.status(200).json(new ApiResponse(200, 'Your orders retrieved successfully', orders));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', orders));
 });
 
 
@@ -148,18 +158,18 @@ export const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(orderId).populate('user', 'name email').populate('items.product');
 
   if (!order) {
-    throw new ApiError(404, 'Order not found');
+    throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
   // Optional: Add check to ensure only the user who placed the order or an admin can view it
   if (req.user?.role !== 'admin' && order.user.toString() !== req.user?._id) {
-    throw new ApiError(403, 'You are not authorized to view this order');
+    throw new ApiError(status.FORBIDDEN, 'You are not authorized to view this order');
   }
 
-  res.status(200).json(new ApiResponse(200, 'Order retrieved successfully', order));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Order retrieved successfully', order));
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({}).sort({ createdAt: -1 }).populate('user', 'name email');
-  res.status(200).json(new ApiResponse(200, 'All orders retrieved successfully', orders));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', orders));
 });

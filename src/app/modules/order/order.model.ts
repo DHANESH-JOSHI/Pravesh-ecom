@@ -15,11 +15,9 @@ const OrderSchema = new Schema<IOrder>(
         items: [OrderItemSchema],
         totalAmount: { type: Number, required: true, min: 0 },
         shippingAddress: {
-            street: { type: String, required: true },
-            city: { type: String, required: true },
-            state: { type: String, required: true },
-            postalCode: { type: String, required: true },
-            country: { type: String, required: true },
+            type: Schema.Types.ObjectId,
+            ref: 'Address',
+            required: true,
         },
         status: {
             type: String,

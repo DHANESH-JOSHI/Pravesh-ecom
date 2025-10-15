@@ -1,4 +1,5 @@
 import { logger } from "@/config/logger";
+import status from "http-status";
 
 export class ApiResponse {
     statusCode: number;
@@ -8,7 +9,7 @@ export class ApiResponse {
     constructor(statusCode: number, message: string, data?: any, context = 'Global') {
         logger.info(`[${context}] : ${message}`);
         this.statusCode = statusCode;
-        this.success = statusCode >= 200 && statusCode < 400;
+        this.success = statusCode >= status.OK && statusCode < status.INTERNAL_SERVER_ERROR;
         this.message = message;
         this.data = data;
     }

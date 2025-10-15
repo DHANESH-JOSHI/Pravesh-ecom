@@ -7,6 +7,7 @@ import { brandRouter } from "@/modules/brand/brand.routes";
 import { cartRouter } from "@/modules/cart/cart.routes";
 import { orderRouter } from '@/modules/order/order.routes';
 import { userRouter } from "@/modules/user/user.routes";
+import { addressRouter } from "@/modules/address/address.routes";
 const router = Router();
 
 type Route = {
@@ -46,6 +47,10 @@ const moduleRoutes: Route[] = [
   {
     path: '/orders',
     route: orderRouter
+  },
+  {
+    path: '/addresses',
+    route: addressRouter
   }
 ];
 

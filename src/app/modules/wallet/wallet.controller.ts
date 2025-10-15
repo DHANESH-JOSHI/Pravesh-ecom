@@ -4,19 +4,20 @@ import { asyncHandler } from '@/utils';
 import { addFundsValidation } from './wallet.validation';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
+import status from 'http-status';
 const ApiError = getApiErrorClass("WALLET");
 const ApiResponse = getApiResponseClass("WALLET");
 
 export const getWalletBalance = asyncHandler(async (req, res) => {
     const userId = req.user?._id;
     if (!userId) {
-        throw new ApiError(401, 'User not authenticated');
+        throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
     }
     let wallet = await Wallet.findOne({ userId });
     if (!wallet) {
         wallet = await Wallet.create({ userId, balance: 0, transactions: [] });
     }
-    res.json(new ApiResponse(200, 'Wallet balance retrieved', { balance: wallet.balance }));
+    res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', { balance: wallet.balance }));
 });
 
 export const addFundsToWallet = asyncHandler(async (req, res) => {
@@ -24,11 +25,11 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
     const { userId, amount, description } = addFundsValidation.parse(req.body);
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-        throw new ApiError(400, 'Invalid user ID');
+        throw new ApiError(status.BAD_REQUEST, 'Invalid user ID');
     }
     const user = await User.findById(userId);
     if (!user) {
-        throw new ApiError(404, 'User not found');
+        throw new ApiError(status.NOT_FOUND, 'User not found');
     }
     let wallet = await Wallet.findOne({ userId: user._id });
     if (!wallet) {
@@ -44,7 +45,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 
     await wallet.save();
 
-    res.json(new ApiResponse(200, 'Funds added to wallet successfully', {
+    res.json(new ApiResponse(status.OK, 'Funds added to wallet successfully', {
         userId: wallet.userId,
         newBalance: wallet.balance
     }));
@@ -53,11 +54,11 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 export const getTransactions = asyncHandler(async (req, res) => {
     const userId = req.user?._id;
     if (!userId) {
-        throw new ApiError(401, 'Unauthorized');
+        throw new ApiError(status.UNAUTHORIZED, 'Unauthorized');
     }
     let wallet = await Wallet.findOne({ userId: userId });
     if (!wallet) {
         wallet = await Wallet.create({ userId, balance: 0, transactions: [] });
     }
-    res.json(new ApiResponse(200, 'Transactions retrieved', wallet.transactions));
+    res.json(new ApiResponse(status.OK, 'Transactions retrieved', wallet.transactions));
 });

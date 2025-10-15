@@ -6,6 +6,7 @@ import { createProductValidation, productsQueryValidation } from './product.vali
 import { Category } from '../category/category.model';
 import { Brand } from '../brand/brand.model';
 import { IProductQuery, ProductStatus } from './product.interface';
+import status from 'http-status';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
 // Create a new product
@@ -22,19 +23,19 @@ export const createProduct = asyncHandler(async (req, res) => {
   // Check if SKU already exists
   const existingSku = await Product.findOne({ sku: productData.sku, isDeleted: false });
   if (existingSku) {
-    throw new ApiError(400, 'Product with this SKU already exists');
+    throw new ApiError(status.BAD_REQUEST, 'Product with this SKU already exists');
   }
 
   if (productData.category) {
     const existingCategory = await Category.findById(productData.category);
     if (!existingCategory) {
-      throw new ApiError(400, 'Invalid category ID');
+      throw new ApiError(status.BAD_REQUEST, 'Invalid category ID');
     }
   }
   if (productData.brand) {
     const existingBrand = await Brand.findById(productData.brand);
     if (!existingBrand) {
-      throw new ApiError(400, 'Invalid brand ID');
+      throw new ApiError(status.BAD_REQUEST, 'Invalid brand ID');
     }
   }
 
@@ -63,8 +64,8 @@ export const createProduct = asyncHandler(async (req, res) => {
   const result = await Product.create(productData);
   const populatedResult = await Product.findById(result._id).populate('category brand');
 
-  res.status(201).json(
-    new ApiResponse(201, 'Product created successfully', populatedResult)
+  res.status(status.CREATED).json(
+    new ApiResponse(status.CREATED, 'Product created successfully', populatedResult)
   );
 });
 
@@ -83,7 +84,7 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
     .lean();
 
   res.json(
-    new ApiResponse(200, 'Discount products retrieved successfully', products)
+    new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
   );
 });
 
@@ -95,11 +96,11 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     .lean();
 
   if (!product) {
-    throw new ApiError(404, 'Product not found');
+    throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
   res.json(
-    new ApiResponse(200, 'Product retrieved successfully', product)
+    new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
 });
 
@@ -114,7 +115,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     minPrice,
     maxPrice,
     inStock,
-    status = 'active',
+    status:productStatus = 'active',
     stockStatus = 'in_stock',
     isFeatured,
     isNewArrival,
@@ -128,7 +129,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const filter: any = {
     isDeleted,
     stockStatus,
-    status,
+    status:productStatus,
     isFeatured,
     isNewArrival,
     isDiscount,
@@ -176,7 +177,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const totalPages = Math.ceil(total / Number(limit));
 
   res.json(
-    new ApiResponse(200, 'Products retrieved successfully', {
+    new ApiResponse(status.OK, 'Products retrieved successfully', {
       products,
       page: Number(page),
       limit: Number(limit),
@@ -194,11 +195,11 @@ export const getProductById = asyncHandler(async (req, res) => {
     .lean();
 
   if (!product) {
-    throw new ApiError(404, 'Product not found');
+    throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
   res.json(
-    new ApiResponse(200, 'Product retrieved successfully', product)
+    new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
 });
 
@@ -208,7 +209,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
   const existingProduct = await Product.findOne({ _id: id, isDeleted: false });
   if (!existingProduct) {
-    throw new ApiError(404, 'Product not found');
+    throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
   if (updateData.sku && updateData.sku !== existingProduct.sku) {
@@ -218,7 +219,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       _id: { $ne: id }
     });
     if (existingSku) {
-      throw new ApiError(400, 'Product with this SKU already exists');
+      throw new ApiError(status.BAD_REQUEST, 'Product with this SKU already exists');
     }
   }
 
@@ -277,7 +278,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
   ).populate('category', 'brand');
 
   res.json(
-    new ApiResponse(200, 'Product updated successfully', result)
+    new ApiResponse(status.OK, 'Product updated successfully', result)
   );
 });
 
@@ -291,11 +292,11 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   );
 
   if (!result) {
-    throw new ApiError(404, 'Product not found');
+    throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
   res.json(
-    new ApiResponse(200, 'Product deleted successfully', result)
+    new ApiResponse(status.OK, 'Product deleted successfully', result)
   );
 });
 
@@ -313,7 +314,7 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
     .lean();
 
   res.json(
-    new ApiResponse(200, 'Featured products retrieved successfully', products)
+    new ApiResponse(status.OK, 'Featured products retrieved successfully', products)
   );
 });
 
@@ -331,7 +332,7 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
 //     .lean();
 
 //   res.json(
-//     new ApiResponse(200, 'Trending products retrieved successfully', products)
+//     new ApiResponse(status.OK, 'Trending products retrieved successfully', products)
 //   );
 // });
 
@@ -349,7 +350,7 @@ export const getNewArrivalProducts = asyncHandler(async (req, res) => {
     .lean();
 
   res.json(
-    new ApiResponse(200, 'New arrival products retrieved successfully', products)
+    new ApiResponse(status.OK, 'New arrival products retrieved successfully', products)
   );
 });
 
@@ -382,7 +383,7 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
   const totalPages = Math.ceil(total / Number(limit));
 
   res.json(
-    new ApiResponse(200, 'Products retrieved successfully', {
+    new ApiResponse(status.OK, 'Products retrieved successfully', {
       products,
       page: Number(page),
       limit: Number(limit),
@@ -396,7 +397,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   const { q, page = 1, limit = 10 } = req.query;
 
   if (!q) {
-    throw new ApiError(400, 'Search query is required');
+    throw new ApiError(status.BAD_REQUEST, 'Search query is required');
   }
 
   const filter = {
@@ -420,7 +421,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   const totalPages = Math.ceil(total / Number(limit));
 
   res.json(
-    new ApiResponse(200, 'Products found successfully', {
+    new ApiResponse(status.OK, 'Products found successfully', {
       products,
       page: Number(page),
       limit: Number(limit),
@@ -457,6 +458,6 @@ export const getProductFilters = asyncHandler(async (req, res) => {
   };
 
   res.json(
-    new ApiResponse(200, 'Product filters retrieved successfully', filters)
+    new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)
   );
 });

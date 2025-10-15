@@ -4,6 +4,7 @@ import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler } from "@/utils";
 import { getApiErrorClass,getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
+import status from "http-status";
 const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
 
@@ -16,11 +17,11 @@ export const createBrand = asyncHandler(async (req, res) => {
         isDeleted: false,
     });
     if (existingBrand) {
-        throw new ApiError(400, "Brand with this title already exists");
+        throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
     }
 
     if (!req.file) {
-        throw new ApiError(400, "Image is required");
+        throw new ApiError(status.BAD_REQUEST, "Image is required");
     }
 
     const image = req.file.path
@@ -32,9 +33,9 @@ export const createBrand = asyncHandler(async (req, res) => {
     await brand.save();
 
     res
-        .status(201)
+        .status(status.CREATED)
         .json(
-            new ApiResponse(201, "Brand created successfully", brand)
+            new ApiResponse(status.CREATED, "Brand created successfully", brand)
         );
 });
 
@@ -44,16 +45,16 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     });
 
     if (brands.length === 0) {
-        throw new ApiError(404, "No brands found");
+        throw new ApiError(status.NOT_FOUND, "No brands found");
     }
 
-    res.json(new ApiResponse(200, "Brands retrieved successfully", brands));
+    res.json(new ApiResponse(status.OK, "Brands retrieved successfully", brands));
 });
 
 export const getBrandById = asyncHandler(async (req, res) => {
     const brandId = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
-        throw new ApiError(400, "Invalid brand ID");
+        throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
     }
     const brand = await Brand.findOne({
         _id: brandId,
@@ -61,16 +62,16 @@ export const getBrandById = asyncHandler(async (req, res) => {
     });
 
     if (!brand) {
-        throw new ApiError(404, "Brand not found");
+        throw new ApiError(status.NOT_FOUND, "Brand not found");
     }
 
-    res.json(new ApiResponse(200, "Brand retrieved successfully", brand));
+    res.json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
 });
 
 export const updateBrandById = asyncHandler(async (req, res) => {
     const brandId = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
-        throw new ApiError(400, "Invalid brand ID");
+        throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
     }
     const brand = await Brand.findOne({
         _id: brandId,
@@ -78,7 +79,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
     });
 
     if (!brand) {
-        throw new ApiError(404, "Brand not found");
+        throw new ApiError(status.NOT_FOUND, "Brand not found");
     }
 
     const updateData: { name?: string; image?: string; } = {};
@@ -92,7 +93,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
             });
 
             if (existingBrand) {
-                throw new ApiError(400, "Brand with this title already exists");
+                throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
             }
         }
         updateData.name = req.body.name;
@@ -119,27 +120,27 @@ export const updateBrandById = asyncHandler(async (req, res) => {
         );
 
         res.json(
-            new ApiResponse(200, "Brand updated successfully", updatedBrand)
+            new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
         );
         return;
     }
 
-    res.json(new ApiResponse(200, "No changes to update", brand));
+    res.json(new ApiResponse(status.OK, "No changes to update", brand));
 });
 
 export const deleteBrandById = asyncHandler(async (req, res) => {
     const brandId = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
-        throw new ApiError(400, "Invalid brand ID");
+        throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
     }
     const brand = await Brand.findOne({
         _id: brandId,
         isDeleted: false,
     });
     if (!brand) {
-        throw new ApiError(404, "Brand not found");
+        throw new ApiError(status.NOT_FOUND, "Brand not found");
     }
     brand.isDeleted = true;
     await brand.save();
-    res.json(new ApiResponse(200, "Brand deleted successfully", brand));
+    res.json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
 });

@@ -3,6 +3,7 @@ import { User } from "../user/user.model";
 import { loginValidation, registerValidation, requestOtpValidation, verifyOtpValidation } from "./auth.validation";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { generateOTP } from "@/utils/generateOtp";
+import status from "http-status";
 
 const ApiError = getApiErrorClass("AUTH");
 const ApiResponse = getApiResponseClass("AUTH");
@@ -12,13 +13,13 @@ export const registerUser = asyncHandler(async (req, res) => {
 
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
-        throw new ApiError(400, "Email already exists");
+        throw new ApiError(status.BAD_REQUEST, "Email already exists");
     }
 
     // Check for existing phone
     const existingPhone = await User.findOne({ phone });
     if (existingPhone) {
-        throw new ApiError(400, "Phone number already exists");
+        throw new ApiError(status.BAD_REQUEST, "Phone number already exists");
     }
 
 
@@ -27,7 +28,7 @@ export const registerUser = asyncHandler(async (req, res) => {
 
     const { password: _, ...userObject } = user.toObject();
 
-    res.status(201).json(new ApiResponse(200, "User registered successfully", userObject));
+    res.status(status.CREATED).json(new ApiResponse(status.OK, "User registered successfully", userObject));
     return;
 });
 
@@ -36,12 +37,12 @@ export const loginUser = asyncHandler(async (req, res) => {
 
     let user = await User.findOne({ email });
     if (!user) {
-        throw new ApiError(400, "Invalid email or password");
+        throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-        throw new ApiError(400, "Invalid email or password");
+        throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
     }
 
     const token = generateToken(user);
@@ -49,7 +50,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     // remove password
     const { password: _, ...userObject } = user.toObject();
 
-    res.json(new ApiResponse(200, "User logged in successfully", { token, ...userObject }));
+    res.json(new ApiResponse(status.OK, "User logged in successfully", { token, ...userObject }));
     return;
 });
 
@@ -75,7 +76,7 @@ export const requestForOtp = asyncHandler(async (req, res) => {
 
     await user.save();
 
-    res.json(new ApiResponse(200, "OTP sent successfully", { otp, phone }));
+    res.json(new ApiResponse(status.OK, "OTP sent successfully", { otp, phone }));
     return;
 });
 
@@ -87,12 +88,12 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     const user = await User.findOne({ phone });
 
     if (!user) {
-        throw new ApiError(404, "User not found");
+        throw new ApiError(status.NOT_FOUND, "User not found");
     }
 
     // Check if OTP is valid and not expired
     if (!user.compareOtp(otp)) {
-        throw new ApiError(401, "Invalid or expired OTP");
+        throw new ApiError(status.UNAUTHORIZED, "Invalid or expired OTP");
     }
 
     // Generate token for the user
@@ -106,6 +107,6 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     // Remove password from response
     const { password: _, ...userObject } = user.toObject();
 
-    res.json(new ApiResponse(200, "OTP verified successfully", { token, ...userObject }));
+    res.json(new ApiResponse(status.OK, "OTP verified successfully", { token, ...userObject }));
     return;
 });

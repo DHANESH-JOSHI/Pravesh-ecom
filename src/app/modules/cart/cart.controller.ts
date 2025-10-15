@@ -4,6 +4,8 @@ import { Product } from '../product/product.model';
 import { asyncHandler } from '@/utils';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { addToCartValidation, updateCartItemValidation } from './cart.validation';
+import { IProduct } from '../product/product.interface';
+import status from 'http-status';
 const ApiError = getApiErrorClass("CART");
 const ApiResponse = getApiResponseClass("CART");
 // Get user's cart
@@ -12,7 +14,7 @@ export const getCart = asyncHandler(async (req, res) => {
   const { populate = 'true' } = req.query;
 
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
 
   let cart;
@@ -26,20 +28,20 @@ export const getCart = asyncHandler(async (req, res) => {
     // Create empty cart if doesn't exist
     cart = await Cart.create({ user: userId, items: [] });
   }
-  res.status(200).json(new ApiResponse(200, 'Cart retrieved successfully', cart));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Cart retrieved successfully', cart));
 });
 
 // Add item to cart
 export const addToCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { productId, quantity, selectedColor, selectedSize } = addToCartValidation.parse(req.body);
+  const { productId, quantity} = addToCartValidation.parse(req.body);
 
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
-    throw new ApiError(400, 'Invalid product ID');
+    throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
   }
 
   // Check if product exists and is available
@@ -50,25 +52,12 @@ export const addToCart = asyncHandler(async (req, res) => {
   });
 
   if (!product) {
-    throw new ApiError(404, 'Product not found or unavailable');
+    throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
   // Check stock availability
   if (product.stock < quantity) {
-    throw new ApiError(400, `Only ${product.stock} items available in stock`);
-  }
-  // Check if selected color/size is available
-  if (selectedColor) { // The product's colors are now a string[]
-    const availableColors = product.specifications?.get('colors') || [];
-    if (!availableColors.includes(selectedColor)) {
-      throw new ApiError(400, 'Selected color is not available');
-    }
-  }
-  if (selectedSize) { // The product's sizes are now a string[]
-    const availableSizes = product.specifications?.get('sizes') || [];
-    if (!availableSizes.includes(selectedSize)) {
-      throw new ApiError(400, 'Selected size is not available');
-    }
+    throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
   }
 
   // Find or create user's cart
@@ -79,33 +68,33 @@ export const addToCart = asyncHandler(async (req, res) => {
   }
 
   // Add item to cart
-  await cart.addItem(productId, quantity, product.finalPrice!, selectedColor, selectedSize);
+  await cart.addItem(productId, quantity);
 
   // Populate the cart with product details
-  const populatedCart = await Cart.findOne({ user: userId }).populate('items.product');
+  const populatedCart = await Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
 
-  res.status(200).json(new ApiResponse(200, 'Item added to cart successfully', populatedCart));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Item added to cart successfully', populatedCart));
 });
 
 // Update cart item quantity
 export const updateCartItem = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
-  const { quantity, selectedColor, selectedSize } = updateCartItemValidation.parse(req.body);
+  const { quantity } = updateCartItemValidation.parse(req.body);
 
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
-    throw new ApiError(400, 'Invalid product ID');
+    throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
   }
 
   // Find user's cart
   const cart = await Cart.findOne({ user: userId });
 
   if (!cart) {
-    throw new ApiError(404, 'Cart not found');
+    throw new ApiError(status.NOT_FOUND, 'Cart not found');
   }
 
   // Check if product exists and is available
@@ -116,58 +105,57 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   });
 
   if (!product) {
-    throw new ApiError(404, 'Product not found or unavailable');
+    throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
   // Check stock availability
   if (product.stock < quantity) {
-    throw new ApiError(400, `Only ${product.stock} items available in stock`);
+    throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
   }
 
   // Update item in cart
   try {
-    await cart.updateItem(new Types.ObjectId(productId), quantity, selectedColor, selectedSize);
+    await cart.updateItem(new Types.ObjectId(productId), quantity);
   } catch (error) {
     if (error instanceof Error && error.message === 'Item not found in cart') {
-      throw new ApiError(404, 'Item not found in cart');
+      throw new ApiError(status.NOT_FOUND, 'Item not found in cart');
     }
     throw error;
   }
 
   // Get updated cart with populated data
-  const updatedCart = await Cart.findOne({ user: userId }).populate('items.product');
+  const updatedCart = await Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
 
-  res.status(200).json(new ApiResponse(200, 'Cart item updated successfully', updatedCart));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Cart item updated successfully', updatedCart));
 });
 
 // Remove item from cart
 export const removeFromCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
-  const { selectedColor, selectedSize } = req.query;
 
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
-    throw new ApiError(400, 'Invalid product ID');
+    throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
   }
 
   // Find user's cart
   const cart = await Cart.findOne({ user: userId });
 
   if (!cart) {
-    throw new ApiError(404, 'Cart not found');
+    throw new ApiError(status.NOT_FOUND, 'Cart not found');
   }
 
   // Remove item from cart
-  await cart.removeItem(new Types.ObjectId(productId), selectedColor as string, selectedSize as string);
+  await cart.removeItem(new Types.ObjectId(productId));
 
   // Get updated cart with populated data
-  const updatedCart = await Cart.findOne({ user: userId }).populate('items.product');
+  const updatedCart = await Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
 
-  res.status(200).json(new ApiResponse(200, 'Item removed from cart successfully', updatedCart));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Item removed from cart successfully', updatedCart));
 });
 
 // Clear entire cart
@@ -175,20 +163,20 @@ export const clearCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
 
   // Find user's cart
   const cart = await Cart.findOne({ user: userId });
 
   if (!cart) {
-    throw new ApiError(404, 'Cart not found');
+    throw new ApiError(status.NOT_FOUND, 'Cart not found');
   }
 
   // Clear all items from cart
   await cart.clearCart();
 
-  res.status(200).json(new ApiResponse(200, 'Cart cleared successfully', {
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Cart cleared successfully', {
     user: userId,
     items: [],
     totalItems: 0,
@@ -202,23 +190,43 @@ export const getCartSummary = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
   if (!userId) {
-    throw new ApiError(401, 'User not authenticated');
+    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
 
   const cart = await Cart.findOne({ user: userId });
 
   if (!cart) {
-    res.status(200).json(new ApiResponse(200, 'Cart summary retrieved successfully', {
-      totalItems: 0,
-      totalPrice: 0,
+    res.status(status.OK).json(new ApiResponse(status.OK, 'Cart summary retrieved successfully', {
+      totalItems: 0, // total quantity of all products
       itemCount: 0,
     }));
     return;
   }
+  const { totalItems, totalPrice } = await cart.getCartSummary();
 
-  res.status(200).json(new ApiResponse(200, 'Cart summary retrieved successfully', {
-    totalItems: cart.totalItems,
-    totalPrice: cart.totalPrice,
-    itemCount: cart.items.length,
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Cart summary retrieved successfully', {
+    totalItems,
+    totalPrice,
   }));
 });
+
+export const checkoutCart = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const cart = await Cart.findOne({ user: userId }).populate('items.product', 'finalPrice');
+  if (!cart || cart.items.length === 0) {
+    throw new ApiError(status.BAD_REQUEST, 'Cart is empty');
+  }
+  // check stock for each item and calculate total price
+  let totalPrice = 0;
+  for (const item of cart.items) {
+    const product = item.product as unknown as IProduct;
+    if (product.isDeleted || product.status !== 'active') {
+      throw new ApiError(status.BAD_REQUEST, `Product ${product.name} is not available`);
+    }
+    if (item.quantity > product.stock) {
+      throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock for product ${product.name}`);
+    }
+    totalPrice += item.quantity * product.finalPrice
+  }
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Checkout successful', { totalPrice }));
+})

@@ -5,6 +5,7 @@ import { Category } from "../category/category.model";
 import { categoryValidation, categoryUpdateValidation } from "./category.validation";
 import mongoose from "mongoose";
 import { ICategory } from "../category/category.interface";
+import status from "http-status";
 const ApiError = getApiErrorClass("CATEGORY");
 const ApiResponse = getApiResponseClass("CATEGORY");
 
@@ -18,11 +19,11 @@ export const createCategory = asyncHandler(async (req, res) => {
     isDeleted: false,
   });
   if (existingCategory) {
-    throw new ApiError(400, "Category with this title already exists");
+    throw new ApiError(status.BAD_REQUEST, "Category with this title already exists");
   }
 
   if (!req.file) {
-    throw new ApiError(400, "Image is required");
+    throw new ApiError(status.BAD_REQUEST, "Image is required");
   }
 
   const image = req.file.path;
@@ -34,9 +35,9 @@ export const createCategory = asyncHandler(async (req, res) => {
   });
 
   res
-    .status(201)
+    .status(status.CREATED)
     .json(
-      new ApiResponse(201, "Category created successfully", category)
+      new ApiResponse(status.CREATED, "Category created successfully", category)
     );
 });
 
@@ -46,16 +47,16 @@ export const getAllCategories = asyncHandler(async (req, res) => {
   });
 
   if (categories.length === 0) {
-    throw new ApiError(404, "No categories found");
+    throw new ApiError(status.NOT_FOUND, "No categories found");
   }
 
-  res.json(new ApiResponse(200, "Categories retrieved successfully", categories));
+  res.json(new ApiResponse(status.OK, "Categories retrieved successfully", categories));
 });
 
 export const getCategoryById = asyncHandler(async (req, res) => {
   const categoryId = req.params.id;
   if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-    throw new ApiError(400, "Invalid category ID");
+    throw new ApiError(status.BAD_REQUEST, "Invalid category ID");
   }
   const category = await Category.findOne({
     _id: categoryId,
@@ -63,16 +64,16 @@ export const getCategoryById = asyncHandler(async (req, res) => {
   }).populate('parentCategory');
 
   if (!category) {
-    throw new ApiError(404, "Category not found");
+    throw new ApiError(status.NOT_FOUND, "Category not found");
   }
 
-  res.json(new ApiResponse(200, "Category retrieved successfully", category));
+  res.json(new ApiResponse(status.OK, "Category retrieved successfully", category));
 });
 
 export const updateCategoryById = asyncHandler(async (req, res) => {
   const categoryId = req.params.id;
   if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-    throw new ApiError(400, "Invalid Category ID");
+    throw new ApiError(status.BAD_REQUEST, "Invalid Category ID");
   }
   const category = await Category.findOne({
     _id: categoryId,
@@ -80,7 +81,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
   });
 
   if (!category) {
-    throw new ApiError(404, "Category not found");
+    throw new ApiError(status.NOT_FOUND, "Category not found");
   }
 
   const updateData: { title?: string; image?: string; parentCategory?: ICategory['_id'] | null } = {};
@@ -94,7 +95,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
       });
 
       if (existingCategory) {
-        throw new ApiError(400, "Category with this title already exists");
+        throw new ApiError(status.BAD_REQUEST, "Category with this title already exists");
       }
     }
     updateData.title = req.body.title;
@@ -107,7 +108,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
         isDeleted: false,
       });
       if (!existingParentCategory) {
-        throw new ApiError(400, "Category with this parentCategory does not exist");
+        throw new ApiError(status.BAD_REQUEST, "Category with this parentCategory does not exist");
       }
       updateData.parentCategory = existingParentCategory._id;
     }
@@ -134,18 +135,18 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
     );
 
     res.json(
-      new ApiResponse(200, "Category updated successfully", updatedCategory)
+      new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
     );
     return;
   }
 
-  res.json(new ApiResponse(200, "No changes to update", category));
+  res.json(new ApiResponse(status.OK, "No changes to update", category));
 });
 
 export const deleteCategoryById = asyncHandler(async (req, res) => {
   const categoryId = req.params.id;
   if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-    throw new ApiError(400, "Invalid category ID");
+    throw new ApiError(status.BAD_REQUEST, "Invalid category ID");
   }
 
   const category = await Category.findOneAndUpdate(
@@ -155,8 +156,8 @@ export const deleteCategoryById = asyncHandler(async (req, res) => {
   );
 
   if (!category) {
-    throw new ApiError(404, "Category not found");
+    throw new ApiError(status.NOT_FOUND, "Category not found");
   }
 
-  res.json(new ApiResponse(200, "Category deleted successfully", category));
+  res.json(new ApiResponse(status.OK, "Category deleted successfully", category));
 });

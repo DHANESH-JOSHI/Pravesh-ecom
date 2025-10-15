@@ -3,13 +3,14 @@ import morgan from 'morgan';
 import cors from 'cors';
 import router from '@/routes';
 import { errorHandler, notFound } from '@/middlewares';
+import status from 'http-status';
 const app: Application = express();
 
 // CORS configuration
 const corsOptions = {
   origin: true,
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: status.OK
 };
 
 // parsers

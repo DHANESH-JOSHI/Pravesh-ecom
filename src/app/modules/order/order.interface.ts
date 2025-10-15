@@ -14,7 +14,7 @@ export enum OrderStatus {
 export interface IOrderItem {
   product: Types.ObjectId;
   quantity: number;
-  price: number; 
+  price: number;
   selectedColor?: string;
   selectedSize?: string;
 }
@@ -23,13 +23,7 @@ export interface IOrder extends Document {
   user: Types.ObjectId;
   items: IOrderItem[];
   totalAmount: number;
-  shippingAddress: {
-    street: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
+  shippingAddress: Types.ObjectId;
   status: OrderStatus;
   isCustomOrder: boolean;
   feedback?: string;

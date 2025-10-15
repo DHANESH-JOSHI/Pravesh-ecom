@@ -19,7 +19,6 @@ const logger = createLogger({
             ? [new transports.MongoDB({
                 db: config.DATABASE_URL as string,
                 level: 'info',
-                options: { useUnifiedTopology: true },
             })]
             : [])
     ],

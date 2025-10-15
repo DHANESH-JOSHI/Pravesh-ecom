@@ -1,4 +1,5 @@
 import { ApiError } from "@/interface";
+import status from "http-status";
 
 export const handleDuplicateError = (err: any) => {
   // check match
@@ -8,7 +9,7 @@ export const handleDuplicateError = (err: any) => {
 
   const message = `${extractedMessage} is already exists`;
 
-  const statusCode = 400;
+  const statusCode = status.BAD_REQUEST;
 
   return new ApiError(
     statusCode,

@@ -12,19 +12,8 @@ const CartItemSchema = new Schema<ICartItem>(
       type: Number,
       required: true,
       min: 1,
-    },
-    price: {
-      type: Number,
-      required: true,
-    },
-    selectedColor: {
-      type: String,
-    },
-    selectedSize: {
-      type: String,
-    },
-  },
-  { _id: false }
+    }
+  }
 );
 
 const CartSchema = new Schema<ICart, ICartModel>(
@@ -44,29 +33,15 @@ const CartSchema = new Schema<ICart, ICartModel>(
   }
 );
 
-// Virtuals for calculated properties
-CartSchema.virtual('totalPrice').get(function (this: ICart) {
-  return this.items.reduce((total, item) => total + item.quantity * item.price, 0);
-});
-
-CartSchema.virtual('totalItems').get(function (this: ICart) {
-  return this.items.reduce((total, item) => total + item.quantity, 0);
-});
-
 // Instance method to add an item
 CartSchema.methods.addItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
-  price: number,
-  selectedColor?: string,
-  selectedSize?: string
 ) {
   const existingItemIndex = this.items.findIndex(
     (item) =>
-      item.product.equals(productId) &&
-      item.selectedColor === selectedColor &&
-      item.selectedSize === selectedSize
+      item.product.equals(productId)
   );
 
   if (existingItemIndex > -1) {
@@ -74,7 +49,7 @@ CartSchema.methods.addItem = async function (
     this.items[existingItemIndex].quantity += quantity;
   } else {
     // Add new item
-    this.items.push({ product: productId, quantity, price, selectedColor, selectedSize });
+    this.items.push({ product: productId, quantity });
   }
   return this.save();
 };
@@ -84,14 +59,10 @@ CartSchema.methods.updateItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
-  selectedColor?: string,
-  selectedSize?: string
 ) {
   const itemIndex = this.items.findIndex(
     (item) =>
-      item.product.equals(productId) &&
-      item.selectedColor === selectedColor &&
-      item.selectedSize === selectedSize
+      item.product.equals(productId)
   );
 
   if (itemIndex === -1) {
@@ -111,14 +82,10 @@ CartSchema.methods.updateItem = async function (
 CartSchema.methods.removeItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
-  selectedColor?: string,
-  selectedSize?: string
 ) {
   this.items = this.items.filter(
     (item) =>
-      !(item.product.equals(productId) &&
-      item.selectedColor === selectedColor &&
-      item.selectedSize === selectedSize)
+      !(item.product.equals(productId))
   );
   return this.save();
 };
@@ -128,5 +95,15 @@ CartSchema.methods.clearCart = async function (this: ICart) {
   this.items = [];
   return this.save();
 };
+
+CartSchema.methods.getCartSummary = async function (this: ICart) {
+  const totalItems = this.items.reduce((sum, item) => sum + item.quantity, 0);
+  const populatedProduct = await this.populate('items.product', 'finalPrice');
+  const totalPrice = populatedProduct.items.reduce((sum, item) => {
+    const product = item.product as unknown as { finalPrice: number };
+    return sum + (item.quantity * product.finalPrice);
+  }, 0)
+  return { totalItems, totalPrice };
+}
 
 export const Cart = mongoose.model<ICart, ICartModel>('Cart', CartSchema);
