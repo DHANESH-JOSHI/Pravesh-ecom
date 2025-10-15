@@ -1,5 +1,6 @@
-import { appError } from ".";
+import { ApiError } from "@/interface";
+
 export const handleCastError = (err: any) => {
   const message = `Invalid ${err.path}: ${err.value}.`;
-  return new appError(message, 400);
+  return new ApiError(400, message);
 };

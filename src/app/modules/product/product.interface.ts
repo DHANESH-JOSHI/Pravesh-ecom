@@ -18,12 +18,18 @@ export enum DiscountType {
   Fixed = 'fixed'
 }
 
+export enum StockStatus {
+  InStock = 'in_stock',
+  LowStock = 'low_stock',
+  OutOfStock = 'out_of_stock',
+}
+
 export enum ProductStatus {
   Active = 'active',
   Inactive = 'inactive',
-  OutOfStock = 'out_of_stock',
   Discontinued = 'discontinued'
 }
+
 
 export interface IProduct extends Document {
   name: string;
@@ -35,35 +41,27 @@ export interface IProduct extends Document {
   category: Types.ObjectId;
   brand?: Types.ObjectId;
 
-  pricing: {
-    basePrice: number;
-    discount: {
-      value: number;
-      type: DiscountType;
-    };
-  };
+  originalPrice: number;
+  discountValue: number;
+  discountType: DiscountType;
+  finalPrice: number;
 
-  inventory: {
-    stock: number;
-    unit: UnitType;
-    minStock: number;
-  };
-
-  attributes: Record<string, any>;
-
+  stock: number;
+  minStock: number;
+  unit: UnitType;
+  stockStatus: StockStatus;
   specifications?: Record<string, any>;
-
+  features?: Record<string, any>;
   images: string[];
   thumbnail: string;
 
+  status: ProductStatus;
   tags?: string[];
   seoTitle?: string;
   seoDescription?: string;
   seoKeywords?: string[];
 
-  status?: ProductStatus;
   isFeatured?: boolean;
-  isTrending?: boolean;
   isNewArrival?: boolean;
   isDiscount?: boolean;
   isDeleted?: boolean;
@@ -71,19 +69,10 @@ export interface IProduct extends Document {
   rating?: number;
   reviewCount?: number;
 
-  shippingInfo?: {
-    weight?: number; // kg or ton
-    freeShipping?: boolean;
-    shippingCost?: number;
-    estimatedDelivery?: string;
-  };
+  shippingInfo?: Record<string, any>;
 
   createdAt?: Date;
   updatedAt?: Date;
-
-  // Virtuals
-  finalPrice?: number;
-  stockStatus?: string;
 }
 
 export interface IProductFilter {
@@ -92,24 +81,22 @@ export interface IProductFilter {
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;
+  stockStatus?: StockStatus;
   status?: ProductStatus;
 
   isFeatured?: boolean;
-  isTrending?: boolean;
   isNewArrival?: boolean;
   isDiscount?: boolean;
   isDeleted?: boolean;
 
   tags?: string[];
-  attributes?: Record<string, any>;
   rating?: number;
   search?: string;
 }
 
-export interface IProductQuery {
+export interface IProductQuery extends IProductFilter {
   page?: number;
   limit?: number;
   sort?: string; // e.g.,
   order?: 'asc' | 'desc';
-  filter?: IProductFilter;
 }

@@ -1,10 +1,13 @@
 import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler } from "@/utils";
-import { ApiError, ApiResponse } from "@/interface";
+import { getApiErrorClass,getApiResponseClass } from "@/interface";
 import { Category } from "../category/category.model";
 import { categoryValidation, categoryUpdateValidation } from "./category.validation";
 import mongoose from "mongoose";
 import { ICategory } from "../category/category.interface";
+const ApiError = getApiErrorClass("CATEGORY");
+const ApiResponse = getApiResponseClass("CATEGORY");
+
 
 export const createCategory = asyncHandler(async (req, res) => {
   const { title, parentCategoryId } = categoryValidation.parse(req.body);

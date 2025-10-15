@@ -2,9 +2,10 @@ import { Cart } from './cart.model'; // This should be from './cart.model'
 import mongoose, { Types } from 'mongoose';
 import { Product } from '../product/product.model';
 import { asyncHandler } from '@/utils';
-import { ApiError, ApiResponse } from '@/interface';
+import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { addToCartValidation, updateCartItemValidation } from './cart.validation';
-
+const ApiError = getApiErrorClass("CART");
+const ApiResponse = getApiResponseClass("CART");
 // Get user's cart
 export const getCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
@@ -53,8 +54,8 @@ export const addToCart = asyncHandler(async (req, res) => {
   }
 
   // Check stock availability
-  if (product.inventory.stock < quantity) {
-    throw new ApiError(400, `Only ${product.inventory.stock} items available in stock`);
+  if (product.stock < quantity) {
+    throw new ApiError(400, `Only ${product.stock} items available in stock`);
   }
   // Check if selected color/size is available
   if (selectedColor) { // The product's colors are now a string[]
@@ -119,8 +120,8 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   }
 
   // Check stock availability
-  if (product.inventory.stock < quantity) {
-    throw new ApiError(400, `Only ${product.inventory.stock} items available in stock`);
+  if (product.stock < quantity) {
+    throw new ApiError(400, `Only ${product.stock} items available in stock`);
   }
 
   // Update item in cart

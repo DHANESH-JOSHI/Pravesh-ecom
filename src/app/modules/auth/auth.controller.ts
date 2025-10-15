@@ -1,7 +1,10 @@
 import { User } from "./auth.model";
 import { activateUserValidation, authValidation, emailCheckValidation, loginValidation, phoneCheckValidation, requestOtpValidation, resetPasswordValidation, updateUserValidation, verifyOtpValidation } from "./auth.validation";
 import { asyncHandler, generateToken } from "@/utils";
-import { ApiError, ApiResponse } from "@/interface";
+import { getApiErrorClass, getApiResponseClass } from "@/interface";
+import { logger } from "@/config/logger";
+const ApiError = getApiErrorClass("AUTH");
+const ApiResponse = getApiResponseClass("AUTH");
 
 export const signUpController = asyncHandler(async (req, res, next) => {
   const { name, password, img, phone, email, role } = authValidation.parse(req.body);
@@ -35,6 +38,7 @@ const generateOTP = (): string => {
 
 // get logged in user profile
 export const getMe = asyncHandler(async (req, res, next) => {
+  logger.info('Fetching logged in user profile');
   res.status(200).json(new ApiResponse(200, "User profile retrieved successfully", req.user));
 });
 

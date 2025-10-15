@@ -1,10 +1,12 @@
 import { asyncHandler } from '@/utils';
-import { ApiError, ApiResponse } from '@/interface';
+import { getApiErrorClass,getApiResponseClass } from '@/interface';
 import { Order } from './order.model';
 import { Cart } from '../cart/cart.model';
 import { Wallet } from '../wallet/wallet.model';
 import { OrderStatus } from './order.interface';
 import { checkoutFromCartValidation, adminUpdateOrderValidation } from './order.validation';
+const ApiError = getApiErrorClass("ORDER");
+const ApiResponse = getApiResponseClass("ORDER");
 
 export const checkoutFromCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;

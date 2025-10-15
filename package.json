@@ -3,53 +3,45 @@
     "version": "1.0.0",
     "main": "index.js",
     "scripts": {
-        "start": "node ./dist/server.js",
-        "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+        "start": "NODE_ENV=production node -r module-alias/register ./dist/server.js",
+        "dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
         "build": "tsc",
         "lint": "eslint src --ext .ts",
-        "lint:fix": "eslint src --ext .ts --fix",
-        "seed": "ts-node src/seeder.ts"
+        "lint:fix": "eslint src --ext .ts --fix"
     },
     "author": "",
     "license": "ISC",
     "description": "",
     "dependencies": {
-        "@google/generative-ai": "^0.24.1",
         "bcrypt": "^6.0.0",
-        "cloudinary": "^1.30.0",
+        "cloudinary": "^1.41.3",
         "cors": "^2.8.5",
-        "crypto": "^1.0.1",
-        "dotenv": "^17.2.0",
+        "dotenv": "^17.2.3",
         "express": "^5.1.0",
         "http-status": "^2.1.0",
         "jsonwebtoken": "^9.0.2",
         "module-alias": "^2.2.3",
-        "mongoose": "^8.16.4",
+        "mongoose": "^8.19.1",
+        "morgan": "^1.10.1",
         "multer": "^2.0.2",
         "multer-storage-cloudinary": "^4.0.0",
-        "razorpay": "^2.9.6",
-        "swagger-jsdoc": "^6.2.8",
-        "swagger-ui-express": "^5.0.1",
-        "zod": "^4.0.5"
+        "winston": "^3.18.3",
+        "winston-mongodb": "^7.0.1",
+        "zod": "^4.1.12"
     },
     "devDependencies": {
-        "@eslint/js": "^9.31.0",
+        "@eslint/js": "^9.37.0",
         "@types/bcrypt": "^6.0.0",
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.3",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/module-alias": "^2.0.4",
+        "@types/morgan": "^1.9.10",
         "@types/multer": "^2.0.0",
-        "@types/node": "^24.0.15",
-        "@types/swagger-jsdoc": "^6.0.4",
-        "@types/swagger-ui-express": "^4.1.8",
-        "eslint": "^9.31.0",
-        "eslint-config-prettier": "^10.1.8",
+        "@types/node": "^24.7.2",
+        "eslint": "^9.37.0",
         "ts-node-dev": "^2.0.0",
-        "typescript": "^5.8.3",
-        "typescript-eslint": "^8.37.0"
-    },
-    "_moduleAliases": {
-        "@": "dist"
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.46.1"
     }
 }

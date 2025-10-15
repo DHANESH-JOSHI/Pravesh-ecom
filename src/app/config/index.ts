@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import z from 'zod';
-
 dotenv.config({
     path: path.join(process.cwd(), '.env'),
     quiet: true
@@ -32,12 +31,12 @@ const envSchema = z.object({
 let envVars: z.infer<typeof envSchema>;
 try {
     envVars = envSchema.parse(process.env);
-    console.log("[ENV] Environment variables loaded.");
+    console.info("[ENV] Environment variables loaded.");
 } catch (error) {
     if (error instanceof z.ZodError) {
-        console.log("[ENV] Environment variable validation error:", error.issues.map(issue => issue.message).join(", "));
+        console.error("[ENV] Environment variable validation error:", error.issues.map(issue => issue.message).join(", "));
     } else {
-        console.log("[ENV] Unexpected error during environment variable validation:", error);
+        console.error("[ENV] Unexpected error during environment variable validation:", error);
     }
     process.exit(1);
 }

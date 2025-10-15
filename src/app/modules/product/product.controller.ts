@@ -1,11 +1,13 @@
 import { Product } from './product.model';
 import { asyncHandler } from '@/utils';
 import { cloudinary } from '@/config/cloudinary';
-import { ApiError, ApiResponse } from '@/interface';
-import { createProductValidation } from './product.validation';
+import { getApiErrorClass,getApiResponseClass } from '@/interface';
+import { createProductValidation, productsQueryValidation } from './product.validation';
 import { Category } from '../category/category.model';
 import { Brand } from '../brand/brand.model';
-
+import { IProductQuery, ProductStatus } from './product.interface';
+const ApiError = getApiErrorClass("PRODUCT");
+const ApiResponse = getApiResponseClass("PRODUCT");
 // Create a new product
 const slugify = (text: string) =>
   text
@@ -67,15 +69,16 @@ export const createProduct = asyncHandler(async (req, res) => {
 });
 
 export const getDiscountProducts = asyncHandler(async (req, res) => {
-  const { limit = 10 } = req.query;
+  const { page = 1, limit = 10 } = req.query;
 
   const products = await Product.find({
     isDiscount: true,
-    status: 'active',
+    status: ProductStatus.Active,
     isDeleted: false,
   })
     .populate('category', 'brand')
-    .sort({ discount: -1, createdAt: -1 })
+    .sort({ discountValue: -1, createdAt: -1 })
+    .skip((Number(page) - 1) * Number(limit))
     .limit(Number(limit))
     .lean();
 
@@ -112,47 +115,35 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     maxPrice,
     inStock,
     status = 'active',
+    stockStatus = 'in_stock',
     isFeatured,
-    isTrending,
     isNewArrival,
     isDiscount,
-    colors,
-    sizes,
     rating,
     search,
-  } = req.query;
+    isDeleted = false,
+  } = productsQueryValidation.parse(req.query) as IProductQuery;
 
   // Build filter object
-  const filter:any = { isDeleted: false };
-
-  if (status) filter.status = status;
-  if (category) filter.category = category;
-  if (brand) filter.brand = new RegExp(brand as string, 'i');
-  if (isFeatured !== undefined) filter.isFeatured = isFeatured === 'true';
-  if (isTrending !== undefined) filter.isTrending = isTrending === 'true';
-  if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival === 'true';
-  if (isDiscount !== undefined) filter.isDiscount = isDiscount === 'true';
-  if (inStock !== undefined) {
-    filter['inventory.stock'] = inStock === 'true' ? { $gt: 0 } : 0;
+  const filter: any = {
+    isDeleted,
+    stockStatus,
+    status,
+    isFeatured,
+    isNewArrival,
+    isDiscount,
+    rating,
+    category,
+    brand,
+  };
+  if (inStock) {
+    filter.stock = { $gt: 0 };
   }
-
   // Price range filter
   if (minPrice || maxPrice) {
-    filter['pricing.basePrice'] = {};
-    if (minPrice) filter['pricing.basePrice'].$gte = Number(minPrice);
-    if (maxPrice) filter['pricing.basePrice'].$lte = Number(maxPrice);
-  }
-
-  // Colors filter
-  if (colors) {
-    const colorArray = (colors as string).split(',').map(c => c.trim());
-    filter['specifications.colors'] = { $in: colorArray };
-  }
-
-  // Sizes filter
-  if (sizes) {
-    const sizeArray = (sizes as string).split(',').map(s => s.trim());
-    filter['specifications.sizes'] = { $in: sizeArray };
+    filter.finalPrice = {};
+    if (minPrice) filter.finalPrice.$gte = Number(minPrice);
+    if (maxPrice) filter.finalPrice.$lte = Number(maxPrice);
   }
 
   // Rating filter
@@ -326,23 +317,23 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
   );
 });
 
-export const getTrendingProducts = asyncHandler(async (req, res) => {
-  const { limit = 10 } = req.query;
+// export const getTrendingProducts = asyncHandler(async (req, res) => {
+//   const { limit = 10 } = req.query;
 
-  const products = await Product.find({
-    isTrending: true,
-    status: 'active',
-    isDeleted: false,
-  })
-    .populate('category', 'brand')
-    .sort({ rating: -1, reviewCount: -1 })
-    .limit(Number(limit))
-    .lean();
+//   const products = await Product.find({
+//     isTrending: true,
+//     status: 'active',
+//     isDeleted: false,
+//   })
+//     .populate('category', 'brand')
+//     .sort({ rating: -1, reviewCount: -1 })
+//     .limit(Number(limit))
+//     .lean();
 
-  res.json(
-    new ApiResponse(200, 'Trending products retrieved successfully', products)
-  );
-});
+//   res.json(
+//     new ApiResponse(200, 'Trending products retrieved successfully', products)
+//   );
+// });
 
 export const getNewArrivalProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
@@ -440,8 +431,9 @@ export const searchProducts = asyncHandler(async (req, res) => {
 });
 
 export const getProductFilters = asyncHandler(async (req, res) => {
-  const [brands, colors, sizes, priceRange] = await Promise.all([
+  const [brands, categories, colors, sizes, priceRange] = await Promise.all([
     Product.distinct('brand', { status: 'active', isDeleted: false }),
+    Product.distinct('category', { status: 'active', isDeleted: false }),
     Product.distinct('specifications.color', { status: 'active', isDeleted: false }),
     Product.distinct('specifications.size', { status: 'active', isDeleted: false }),
     Product.aggregate([
@@ -449,8 +441,8 @@ export const getProductFilters = asyncHandler(async (req, res) => {
       {
         $group: {
           _id: null,
-          minPrice: { $min: '$pricing.basePrice' },
-          maxPrice: { $max: '$pricing.basePrice' },
+          minPrice: { $min: '$finalPrice' },
+          maxPrice: { $max: '$finalPrice' },
         },
       },
     ]),
@@ -458,6 +450,7 @@ export const getProductFilters = asyncHandler(async (req, res) => {
 
   const filters = {
     brands: brands.filter(Boolean),
+    categories: categories.filter(Boolean),
     colors: colors.flat().filter(Boolean),
     sizes: sizes.flat().filter(Boolean),
     priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 },

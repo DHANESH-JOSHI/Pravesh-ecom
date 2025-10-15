@@ -1,4 +1,5 @@
 import express, { Application, Request, Response } from 'express';
+import morgan from 'morgan';
 import cors from 'cors';
 import router from '@/routes';
 import { errorHandler, notFound } from '@/middlewares';
@@ -14,6 +15,7 @@ const corsOptions = {
 // parsers
 app.use(express.json());
 app.use(cors(corsOptions));
+app.use(morgan('dev'));
 
 // application routes
 app.use('/api/v1', router)

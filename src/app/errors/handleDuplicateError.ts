@@ -1,22 +1,17 @@
-import { TErrorSources, TGenericErrorResponse } from "@/interface";
-export const handleDuplicateError = (err: any): TGenericErrorResponse => {
+import { ApiError } from "@/interface";
+
+export const handleDuplicateError = (err: any) => {
   // check match
   const match = err.message.match(/"([^"]*)"/);
 
   const extractedMessage = match && match[1];
 
-  const errorSources: TErrorSources = [
-    {
-      path: "",
-      message: `${extractedMessage} is already exists`,
-    },
-  ];
+  const message = `${extractedMessage} is already exists`;
 
   const statusCode = 400;
 
-  return {
+  return new ApiError(
     statusCode,
-    message: "Invalid ID",
-    errorSources,
-  };
+    message,
+  );
 };

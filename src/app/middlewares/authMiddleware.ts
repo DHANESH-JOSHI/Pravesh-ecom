@@ -1,8 +1,8 @@
 import { Response, NextFunction, Request } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "@/modules/auth/auth.model";
-import { appError } from "@/errors";
 import config from "@/config";
+import { ApiError } from "@/interface";
 
 export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -10,7 +10,7 @@ export const auth = (...requiredRoles: string[]) => {
       // Get token from header
       const token = req.headers.authorization?.split(" ")[1];
       if (!token) {
-        return next(new appError("Authentication required. No token provided", 401));
+        return next(new ApiError(400, "Authentication required. No token provided","AUTH_MIDDLEWARE"));
       }
 
       // Verify token
@@ -19,19 +19,19 @@ export const auth = (...requiredRoles: string[]) => {
       let user = await User.findById(decoded.userId)
 
       if (!user) {
-        return next(new appError("User not found", 401));
+        return next(new ApiError(401, "User not found","AUTH_MIDDLEWARE"));
       }
 
       // Attach user to request
       req.user = user;
       // Role-based authorization
       if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
-        return next(new appError("You do not have permission to perform this action", 403));
+        return next(new ApiError(403, "You do not have permission to perform this action","AUTH_MIDDLEWARE"));
       }
 
       next();
     } catch (error) {
-      next(new appError("Invalid or expired token", 401));
+      next(new ApiError(401, "Invalid or expired token","AUTH_MIDDLEWARE"));
     }
   };
 };

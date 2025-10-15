@@ -1,9 +1,11 @@
 import { Wallet } from './wallet.model';
-import { ApiError, ApiResponse } from '@/interface';
+import { getApiErrorClass,getApiResponseClass } from '@/interface';
 import { asyncHandler } from '@/utils';
 import { addFundsValidation } from './wallet.validation';
 import mongoose from 'mongoose';
 import { User } from '../auth/auth.model';
+const ApiError = getApiErrorClass("WALLET");
+const ApiResponse = getApiResponseClass("WALLET");
 
 export const getWalletBalance = asyncHandler(async (req, res) => {
     const userId = req.user?._id;

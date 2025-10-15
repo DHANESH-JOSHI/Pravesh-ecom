@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { IProduct, ProductStatus } from "./product.interface";
+import { DiscountType, IProduct, ProductStatus, StockStatus, UnitType } from "./product.interface";
 
 const ProductSchema = new Schema<IProduct>(
   {
@@ -12,25 +12,26 @@ const ProductSchema = new Schema<IProduct>(
     brand: { type: Schema.Types.ObjectId, ref: "Brand" },
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
 
-    pricing: {
-      basePrice: { type: Number, required: true },
-      discount: {
-        value: { type: Number, default: 0 },
-        type: { type: String, enum: ["percentage", "fixed"], default: "percentage" },
-      }
+    originalPrice: { type: Number, required: true },
+    discountValue: { type: Number, default: 0 },
+    discountType: { type: String, enum: DiscountType, default: DiscountType.Percentage },
+    finalPrice: { type: Number, default: 0 },
+    stock: { type: Number, required: true },
+    minStock: { type: Number, default: 5 },
+    unit: {
+      type: String,
+      enum: UnitType,
+      required: true,
     },
-    inventory: {
-      stock: { type: Number, required: true },
-      unit: {
-        type: String,
-        enum: ["bag", "piece", "kg", "ton", "litre", "bundle", "meter"],
-        required: true,
-      },
-      minStock: { type: Number, default: 1 },
+    stockStatus: {
+      type: String,
+      enum: StockStatus,
+      default: StockStatus.InStock,
     },
 
-    attributes: {
-      type: Schema.Types.Mixed,
+    features: {
+      type: Map,
+      of: [String],
       default: {},
     },
     specifications: {
@@ -42,26 +43,20 @@ const ProductSchema = new Schema<IProduct>(
     images: [{ type: String, required: true }],
     thumbnail: { type: String, required: true },
 
+    status: { type: String, enum: ProductStatus, default: ProductStatus.Active },
     tags: [{ type: String, trim: true }],
     seoTitle: { type: String, trim: true },
     seoDescription: { type: String, trim: true },
     seoKeywords: [{ type: String, trim: true }],
 
     shippingInfo: {
-      weight: { type: Number, default: 0 }, // in kg
-      freeShipping: { type: Boolean, default: false },
-      shippingCost: { type: Number, default: 0 },
-      estimatedDelivery: { type: String, default: "" },
+      type: Map,
+      of: [String],
+      default: {},
     },
 
-    status: {
-      type: String,
-      enum: ["active", "inactive", "out_of_stock", "discontinued"],
-      default: "active",
-    },
 
     isFeatured: { type: Boolean, default: false },
-    isTrending: { type: Boolean, default: false },
     isNewArrival: { type: Boolean, default: false },
     isDiscount: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
@@ -72,47 +67,43 @@ const ProductSchema = new Schema<IProduct>(
   {
     timestamps: true,
     toJSON: {
-      virtuals: true,
       transform: function (doc, ret: any) {
         ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
         ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       }
     },
-    toObject: { virtuals: true }
   }
 );
 
 // Indexes for better query performance
 ProductSchema.index({ name: 'text', description: 'text', tags: 'text', shortDescription: 'text' });
-ProductSchema.index({ 'pricing.basePrice': 1, category: 1 });
+ProductSchema.index({ finalPrice: 1, category: 1 });
 ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ rating: -1, reviewCount: -1 });
 
-// Virtual for calculating final price after discount
-ProductSchema.virtual<IProduct>('finalPrice').get(function () {
-  if (this.pricing.discount.value > 0) {
-    if (this.pricing.discount.type === 'percentage') {
-      return this.pricing.basePrice - (this.pricing.basePrice * this.pricing.discount.value / 100);
+// Pre-save middleware to update final price based on discount
+ProductSchema.pre('save', function (next) {
+  if (this.discountValue > 0) {
+    if (this.discountType === 'percentage') {
+      this.finalPrice = this.originalPrice - (this.originalPrice * this.discountValue / 100);
     } else {
-      return this.pricing.basePrice - this.pricing.discount.value;
+      this.finalPrice = this.originalPrice - this.discountValue;
     }
   }
-  return this.pricing.basePrice;
-});
-
-// Virtual for stock status
-ProductSchema.virtual<IProduct>('stockStatus').get(function () {
-  if (this.inventory.stock === 0) return 'out_of_stock';
-  if (this.inventory.stock <= this.inventory.minStock) return 'low_stock';
-  else if (this.inventory.stock > 0 && this.status === 'out_of_stock') return 'in_stock';
-  return 'in_stock';
+  next();
 });
 
 // Pre-save middleware to update status based on stock
 ProductSchema.pre('save', function (next) {
-  if (this.inventory.stock === 0 && this.status === 'active') {
-    this.status = ProductStatus.OutOfStock;
-  } else if (this.inventory.stock > 0 && this.status === ProductStatus.OutOfStock) {
+  if (this.stock === 0) {
+    this.status = ProductStatus.Inactive;
+    this.stockStatus = StockStatus.OutOfStock;
+  }
+  if (this.stock < this.minStock) {
+    this.stockStatus = StockStatus.LowStock;
+    this.status = ProductStatus.Active;
+  } else if (this.stock >= this.minStock && this.stockStatus !== StockStatus.InStock) {
+    this.stockStatus = StockStatus.InStock;
     this.status = ProductStatus.Active;
   }
   next();

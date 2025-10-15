@@ -2,8 +2,11 @@ import { Brand } from "./brand.model";
 import { brandValidation, brandUpdateValidation } from "./brand.validation";
 import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler } from "@/utils";
-import { ApiError, ApiResponse } from "@/interface";
+import { getApiErrorClass,getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
+const ApiError = getApiErrorClass("BRAND");
+const ApiResponse = getApiResponseClass("BRAND");
+
 
 export const createBrand = asyncHandler(async (req, res) => {
     const { name } = brandValidation.parse(req.body);

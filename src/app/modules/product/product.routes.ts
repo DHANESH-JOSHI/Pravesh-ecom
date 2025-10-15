@@ -6,7 +6,7 @@ import {
   updateProduct,
   deleteProduct,
   getFeaturedProducts,
-  getTrendingProducts,
+  // getTrendingProducts,
   getNewArrivalProducts,
   getDiscountProducts,
   getProductsByCategory,
@@ -26,7 +26,7 @@ router.get('/search', searchProducts);
 
 router.get('/featured', getFeaturedProducts);
 
-router.get('/trending', getTrendingProducts);
+// router.get('/trending', getTrendingProducts);
 
 router.get('/new-arrivals', getNewArrivalProducts);
 
