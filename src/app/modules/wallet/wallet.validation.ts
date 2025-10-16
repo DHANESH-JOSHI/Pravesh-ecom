@@ -9,6 +9,6 @@ const objectIdValidation = z
 
 export const addFundsValidation = z.object({
     userId: objectIdValidation,
-    amount: z.number().positive("Amount must be a positive number"),
+    amount: z.coerce.number().positive("Amount must be a positive number"),
     description: z.string().optional(),
 });

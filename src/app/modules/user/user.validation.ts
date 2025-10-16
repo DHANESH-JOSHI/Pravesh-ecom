@@ -27,7 +27,7 @@ export const updateUserValidation = z.object({
     message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
   }).optional(),
   email: z.union([
-    z.string().email("Invalid email format"),
+    z.email("Invalid email format"),
     z.string().length(0) // Allow empty string
   ]).optional(),
   img: z.string().optional(),
