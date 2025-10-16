@@ -8,6 +8,7 @@ import { cartRouter } from "@/modules/cart/cart.routes";
 import { orderRouter } from '@/modules/order/order.routes';
 import { userRouter } from "@/modules/user/user.routes";
 import { addressRouter } from "@/modules/address/address.routes";
+import { reviewRouter } from "@/modules/review/review.routes";
 const router = Router();
 
 type Route = {
@@ -51,6 +52,10 @@ const moduleRoutes: Route[] = [
   {
     path: '/addresses',
     route: addressRouter
+  },
+  {
+    path: '/reviews',
+    route: reviewRouter
   }
 ];
 
