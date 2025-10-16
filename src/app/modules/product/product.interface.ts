@@ -76,8 +76,8 @@ export interface IProduct extends Document {
 }
 
 export interface IProductFilter {
-  category?: Types.ObjectId;
-  brand?: Types.ObjectId;
+  categoryId?: Types.ObjectId;
+  brandId?: Types.ObjectId;
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;

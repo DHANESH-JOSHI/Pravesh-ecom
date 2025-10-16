@@ -14,7 +14,19 @@ const userSchema = new Schema<IUser>(
     otp: { type: String },
     otpExpires: { type: Date },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform: function (doc, ret: any) {
+        if (ret.createdAt && typeof ret.createdAt !== 'string') {
+          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
+          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+      }
+    }
+  }
 );
 
 

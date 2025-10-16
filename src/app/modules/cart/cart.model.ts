@@ -28,8 +28,16 @@ const CartSchema = new Schema<ICart, ICartModel>(
   },
   {
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    toJSON: {
+      transform: function (doc, ret: any) {
+        if (ret.createdAt && typeof ret.createdAt !== 'string') {
+          ret.createdAt = ret.createdAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
+          ret.updatedAt = ret.updatedAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+      }
+    }
   }
 );
 
