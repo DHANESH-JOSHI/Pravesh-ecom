@@ -6,7 +6,7 @@ import {
     getMyAddresses,
     updateMyAddress
 } from "./address.controller";
-import { auth } from "@/middlewares";
+import { auth, authenticatedActionLimiter } from "@/middlewares";
 
 const router = express.Router();
 
@@ -14,12 +14,13 @@ router.get("/", auth('admin'), getAllAddresses);
 
 router.use(auth('user'));
 
-router.post("/", createAddress);
-
 router.get("/me", getMyAddresses);
 
-router.patch("/:id", updateMyAddress);
+// Apply the user-specific limiter for write operations
+router.post("/", authenticatedActionLimiter, createAddress);
 
-router.delete("/:id", deleteMyAddress);
+router.patch("/:id", authenticatedActionLimiter, updateMyAddress);
+
+router.delete("/:id", authenticatedActionLimiter, deleteMyAddress);
 
 export const addressRouter = router;

@@ -38,6 +38,9 @@ const envSchema = z.object({
     RESEND_DOMAIN: z.string({
         error: "RESEND_DOMAIN is required"
     }),
+    REDIS_URL: z.string({
+        error: "REDIS_URL is required"
+    }),
 });
 
 let envVars: z.infer<typeof envSchema>;

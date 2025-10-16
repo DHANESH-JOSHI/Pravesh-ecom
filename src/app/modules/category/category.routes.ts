@@ -7,18 +7,18 @@ import {
   deleteCategoryById
 } from './category.controller';
 import { upload } from '@/config/cloudinary';
-import { auth } from '@/middlewares';
+import { auth, authenticatedActionLimiter } from '@/middlewares';
 
 const router = express.Router();
 
-router.post('/', auth('admin'), upload.single('image'), createCategory);
+router.post('/', auth('admin'), authenticatedActionLimiter, upload.single('image'), createCategory);
 
 router.get('/', getAllCategories);
 
 router.get('/:id', getCategoryById);
 
-router.put('/:id', auth('admin'), upload.single('image'), updateCategoryById);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single('image'), updateCategoryById);
 
-router.delete('/:id', auth('admin'), deleteCategoryById);
+router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteCategoryById);
 
 export const categoryRouter = router;

@@ -7,18 +7,18 @@ import {
     deleteBrandById
 } from './brand.controller';
 import { upload } from '@/config/cloudinary';
-import { auth } from '@/middlewares';
+import { auth, authenticatedActionLimiter } from '@/middlewares';
 
 const router = express.Router();
 
-router.post('/', auth('admin'), upload.single('image'), createBrand);
+router.post('/', auth('admin'), authenticatedActionLimiter, upload.single('image'), createBrand);
 
 router.get('/', getAllBrands);
 
 router.get('/:id', getBrandById);
 
-router.put('/:id', auth('admin'), upload.single('image'), updateBrandById);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single('image'), updateBrandById);
 
-router.delete('/:id', auth('admin'), deleteBrandById);
+router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteBrandById);
 
 export const brandRouter = router;

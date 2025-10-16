@@ -1,5 +1,5 @@
 import express from 'express';
-import { auth } from '@/middlewares';
+import { auth, authenticatedActionLimiter } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 import {
   createCustomOrder,
@@ -13,18 +13,18 @@ import {
 
 const router = express.Router();
 
-router.post('/', auth('user'), createOrder);
+router.post('/', auth('user'), authenticatedActionLimiter, createOrder);
 
-router.post('/custom', auth('user'), upload.single('image'), createCustomOrder);
+router.post('/custom', auth('user'), authenticatedActionLimiter, upload.single('image'), createCustomOrder);
 
-router.post('/confirm/:orderId', auth('user'), confirmCustomOrder);
+router.post('/confirm/:orderId', auth('user'), authenticatedActionLimiter, confirmCustomOrder);
 
-router.get('/me', auth('user'), getMyOrders);
+router.get('/me', auth('user'), authenticatedActionLimiter, getMyOrders);
 
-router.get('/', auth('admin'), getAllOrders);
+router.get('/', auth('admin'), authenticatedActionLimiter, getAllOrders);
 
-router.patch('/:orderId', auth('admin'), adminUpdateCustomOrder);
+router.patch('/:orderId', auth('admin'), authenticatedActionLimiter, adminUpdateCustomOrder);
 
-router.get('/:orderId', getOrderById);
+router.get('/:orderId', auth(), authenticatedActionLimiter, getOrderById);
 
 export const orderRouter = router;

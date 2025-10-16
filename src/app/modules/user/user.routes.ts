@@ -9,24 +9,24 @@ import {
   updateUser,
   getMe
 } from "./user.controller";
-import { auth } from "@/middlewares";
+import { auth, authenticatedActionLimiter, dataCheckLimiter, emailLimiter } from "@/middlewares";
 
 const router = express.Router();
 
-router.get("/me", auth('user'), getMe);
+router.get("/me", auth('user'), authenticatedActionLimiter, getMe);
 
-router.get("/", auth('admin'), getAllUsers);
+router.get("/", auth('admin'), authenticatedActionLimiter, getAllUsers);
 
-router.get("/:id", auth(), getUserById);
+router.get("/:id", auth(), authenticatedActionLimiter, getUserById);
 
-router.post("/reset-password", auth('user'), resetPassword);
+router.post("/reset-password", auth('user'), emailLimiter, resetPassword);
 
-router.post("/:id/activate", auth('admin'), activateUser);
+router.post("/:id/activate", auth('admin'), authenticatedActionLimiter, activateUser);
 
-router.post("/phone/:phone", checkPhoneExists);
+router.post("/phone/:phone", dataCheckLimiter, checkPhoneExists);
 
-router.post("/email/:email", checkEmailExists);
+router.post("/email/:email", dataCheckLimiter, checkEmailExists);
 
-router.patch("/", auth('user'), updateUser);
+router.patch("/", auth('user'), authenticatedActionLimiter, updateUser);
 
 export const userRouter = router;

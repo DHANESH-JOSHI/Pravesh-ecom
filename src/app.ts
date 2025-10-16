@@ -2,7 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
 import router from '@/routes';
-import { errorHandler, notFound } from '@/middlewares';
+import { apiLimiter, errorHandler, notFound } from '@/middlewares';
 import status from 'http-status';
 const app: Application = express();
 
@@ -19,7 +19,7 @@ app.use(cors(corsOptions));
 app.use(morgan('dev'));
 
 // application routes
-app.use('/api/v1', router)
+app.use('/api/v1', apiLimiter, router)
 
 const entryRoute = (req: Request, res: Response) => {
   const message = 'Server is running...';

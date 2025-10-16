@@ -15,10 +15,11 @@ import {
   getProductBySlug,
 } from './product.controller';
 import { auth } from '@/middlewares';
+import { authenticatedActionLimiter } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 const router = express.Router();
 
-router.post('/', auth('admin'), upload.fields([{ name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 }]), createProduct);
+router.post('/', auth('admin'), authenticatedActionLimiter, upload.fields([{ name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 }]), createProduct);
 
 router.get('/', getAllProducts);
 
@@ -40,8 +41,8 @@ router.get('/category/:categoryId', getProductsByCategory);
 
 router.get('/:id', getProductById);
 
-router.put('/:id', auth('admin'), upload.fields([ { name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 } ]), updateProduct);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.fields([ { name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 } ]), updateProduct);
 
-router.delete('/:id', auth('admin'), deleteProduct);
+router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteProduct);
 
 export const productRouter = router;
