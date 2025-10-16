@@ -4,3 +4,4 @@ dist
 tsconfig.tsbuildinfo
 *.rest
 *.http
+*.md
