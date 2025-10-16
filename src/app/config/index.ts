@@ -26,6 +26,18 @@ const envSchema = z.object({
     JWT_SECRET: z.string({
         error: "JWT_SECRET is required"
     }),
+    SMS_SENDER_ID: z.string({
+        error: "SMS_SENDER_ID is required"
+    }),
+    SMS_AUTH_KEY: z.string({
+        error: "SMS_AUTH_KEY is required"
+    }),
+    RESEND_API_KEY: z.string({
+        error: "RESEND_API_KEY is required"
+    }),
+    RESEND_DOMAIN: z.string({
+        error: "RESEND_DOMAIN is required"
+    }),
 });
 
 let envVars: z.infer<typeof envSchema>;
