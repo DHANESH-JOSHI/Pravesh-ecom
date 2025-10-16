@@ -8,6 +8,7 @@ import { checkoutFromCartValidation, adminUpdateOrderValidation } from './order.
 import mongoose, { Types } from 'mongoose';
 import { Address } from '../address/address.model';
 import status from 'http-status';
+import { Product } from '../product/product.model';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
@@ -89,8 +90,19 @@ export const adminUpdateCustomOrder = asyncHandler(async (req, res) => {
   //calculate total amount if items are provided
   let totalAmount = order.totalAmount;
   if (items && items.length > 0) {
-    totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    order.items = items;
+    for (const item of items) {
+      if (!mongoose.Types.ObjectId.isValid(item.product)) {
+        throw new ApiError(status.BAD_REQUEST, `Invalid product ID: ${item.product}`);
+      }
+      if (item.quantity <= 0) {
+        throw new ApiError(status.BAD_REQUEST, 'Quantity must be a positive number');
+      }
+      const product = await Product.findById(item.product).select('finalPrice');
+      if (!product) {
+        throw new ApiError(status.NOT_FOUND, `Product not found: ${item.product}`);
+      }
+      totalAmount += product.finalPrice * item.quantity;
+    }
     order.totalAmount = totalAmount;
     order.status = OrderStatus.AwaitingPayment;
   }
@@ -147,21 +159,44 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
 
 export const getMyOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).populate('items.product');
-
-  res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', orders));
+  const { populate = 'false', page = 1, limit = 10 } = req.query;
+  const skip = (Number(page) - 1) * Number(limit);
+  let query = Order.find({ user: userId }).sort({ createdAt: -1 });
+  if (populate === 'true') {
+    query = query.populate('items.product shippingAddress');
+  }
+  const [orders, total] = await Promise.all([
+    query.skip(skip).limit(Number(limit)),
+    Order.countDocuments({ user: userId })
+  ]);
+  const totalPages = Math.ceil(total / Number(limit));
+  return res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', {
+    orders,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages
+  }));
 });
 
 
 export const getOrderById = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
-  const order = await Order.findById(orderId).populate('user', 'name email').populate('items.product');
+  const { populate = 'false' } = req.query;
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
+  }
+  let order;
+  if (populate === 'true') {
+    order = await Order.findById(orderId).populate('items.product shippingAddressId');
+  } else {
+    order = await Order.findById(orderId);
+  }
 
   if (!order) {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
-  // Optional: Add check to ensure only the user who placed the order or an admin can view it
   if (req.user?.role !== 'admin' && order.user.toString() !== req.user?._id) {
     throw new ApiError(status.FORBIDDEN, 'You are not authorized to view this order');
   }
@@ -170,6 +205,28 @@ export const getOrderById = asyncHandler(async (req, res) => {
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({}).sort({ createdAt: -1 }).populate('user', 'name email');
-  res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', orders));
-});
+  const { populate = 'false', page = 1, limit = 10 } = req.query;
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  let query = Order.find().sort({ createdAt: -1 });
+
+  if (populate === 'true') {
+    query = query.populate('items.product shippingAddress');
+  }
+
+  const [orders, total] = await Promise.all([
+    query.skip(skip).limit(Number(limit)),
+    Order.countDocuments()
+  ]);
+
+  const totalPages = Math.ceil(total / Number(limit));
+
+  res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', {
+    orders,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages
+  }));
+})

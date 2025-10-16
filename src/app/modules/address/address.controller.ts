@@ -64,12 +64,43 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
 
 export const getMyAddresses = asyncHandler(async (req, res) => {
     const userId = req.user?._id;
-    const addresses = await Address.find({ user: userId, isDeleted: false }).sort({ createdAt: -1 });
-    res.status(status.OK).json(new ApiResponse(status.OK, "Addresses retrieved successfully", addresses));
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+    const [addresses, total] = await Promise.all([
+        Address.find({ user: userId, isDeleted: false })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit)),
+        Address.countDocuments({ user: userId, isDeleted: false }),
+    ]);
+    const totalPages = Math.ceil(total / Number(limit));
+    res.status(status.OK).json(new ApiResponse(status.OK, "Addresses retrieved successfully", {
+        addresses,
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages
+    }));
 })
 
 
 export const getAllAddresses = asyncHandler(async (req, res) => {
-    const addresses = await Address.find({ isDeleted: false }).sort({ createdAt: -1 });
-    res.status(status.OK).json(new ApiResponse(status.OK, "All addresses retrieved successfully", addresses));
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [addresses, total] = await Promise.all([
+        Address.find({ isDeleted: false })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit)),
+        Address.countDocuments({ isDeleted: false }),
+    ]);
+    const totalPages = Math.ceil(total / Number(limit));
+    res.status(status.OK).json(new ApiResponse(status.OK, "All addresses retrieved successfully", {
+        addresses,
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages
+    }));
 })

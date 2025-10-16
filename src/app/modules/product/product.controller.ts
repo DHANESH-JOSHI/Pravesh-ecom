@@ -1,12 +1,13 @@
 import { Product } from './product.model';
 import { asyncHandler } from '@/utils';
 import { cloudinary } from '@/config/cloudinary';
-import { getApiErrorClass,getApiResponseClass } from '@/interface';
+import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { createProductValidation, productsQueryValidation } from './product.validation';
 import { Category } from '../category/category.model';
 import { Brand } from '../brand/brand.model';
 import { IProductQuery, ProductStatus } from './product.interface';
 import status from 'http-status';
+import mongoose from 'mongoose';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
 // Create a new product
@@ -26,14 +27,14 @@ export const createProduct = asyncHandler(async (req, res) => {
     throw new ApiError(status.BAD_REQUEST, 'Product with this SKU already exists');
   }
 
-  if (productData.category) {
-    const existingCategory = await Category.findById(productData.category);
+  if (productData.categoryId) {
+    const existingCategory = await Category.findById(productData.categoryId);
     if (!existingCategory) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid category ID');
     }
   }
-  if (productData.brand) {
-    const existingBrand = await Brand.findById(productData.brand);
+  if (productData.brandId) {
+    const existingBrand = await Brand.findById(productData.brandId);
     if (!existingBrand) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid brand ID');
     }
@@ -61,11 +62,13 @@ export const createProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  const result = await Product.create(productData);
-  const populatedResult = await Product.findById(result._id).populate('category brand');
-
+  const product = await Product.create({
+    ...productData,
+    category: productData.categoryId,
+    brand: productData.brandId,
+  });
   res.status(status.CREATED).json(
-    new ApiResponse(status.CREATED, 'Product created successfully', populatedResult)
+    new ApiResponse(status.CREATED, 'Product created successfully', product)
   );
 });
 
@@ -83,23 +86,32 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .lean();
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
   );
 });
 
 export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
+  const { populate = 'false' } = req.query;
 
-  const product = await Product.findOne({ slug, isDeleted: false })
-    .populate('category', 'brand')
-    .lean();
+  if (!slug || slug.trim() === '') {
+    throw new ApiError(status.BAD_REQUEST, 'Slug is required');
+  }
+
+  let product;
+  if (populate === 'true') {
+    product = await Product.findOne({ slug, isDeleted: false })
+      .populate('category', 'brand')
+  } else {
+    product = await Product.findOne({ slug, isDeleted: false });
+  }
 
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
 });
@@ -110,12 +122,12 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     limit = 10,
     sort = 'createdAt',
     order = 'desc',
-    category,
-    brand,
+    categoryId,
+    brandId,
     minPrice,
     maxPrice,
     inStock,
-    status:productStatus = 'active',
+    status: productStatus = 'active',
     stockStatus = 'in_stock',
     isFeatured,
     isNewArrival,
@@ -129,22 +141,26 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const filter: any = {
     isDeleted,
     stockStatus,
-    status:productStatus,
-    isFeatured,
-    isNewArrival,
-    isDiscount,
-    rating,
-    category,
-    brand,
+    status: productStatus,
   };
+  if (categoryId) filter.category = categoryId;
+  if (brandId) filter.brand = brandId;
+  if (isFeatured !== undefined) filter.isFeatured = isFeatured;
+  if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival;
+  if (isDiscount !== undefined) filter.isDiscount = isDiscount;
+  // Stock availability filter
   if (inStock) {
     filter.stock = { $gt: 0 };
   }
   // Price range filter
   if (minPrice || maxPrice) {
     filter.finalPrice = {};
-    if (minPrice) filter.finalPrice.$gte = Number(minPrice);
-    if (maxPrice) filter.finalPrice.$lte = Number(maxPrice);
+    if (minPrice) {
+      filter.finalPrice.$gte = Number(minPrice);
+    }
+    if (maxPrice) {
+      filter.finalPrice.$lte = Number(maxPrice);
+    }
   }
 
   // Rating filter
@@ -169,14 +185,13 @@ export const getAllProducts = asyncHandler(async (req, res) => {
       .populate('category brand')
       .sort(sortObj)
       .skip(skip)
-      .limit(Number(limit))
-      .lean(),
+      .limit(Number(limit)),
     Product.countDocuments(filter),
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products retrieved successfully', {
       products,
       page: Number(page),
@@ -189,16 +204,22 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
 export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-
-  const product = await Product.findOne({ _id: id, isDeleted: false })
-    .populate('category', 'brand')
-    .lean();
-
+  const { populate = 'false' } = req.query;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
+  }
+  let product;
+  if (populate === 'true') {
+    product = await Product.findOne({ _id: id, isDeleted: false })
+      .populate('category', 'brand')
+  } else {
+    product = await Product.findOne({ _id: id, isDeleted: false });
+  }
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
 });
@@ -210,6 +231,19 @@ export const updateProduct = asyncHandler(async (req, res) => {
   const existingProduct = await Product.findOne({ _id: id, isDeleted: false });
   if (!existingProduct) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
+  }
+
+  if (updateData.categoryId) {
+    const existingCategory = await Category.findById(updateData.categoryId);
+    if (!existingCategory) {
+      throw new ApiError(status.BAD_REQUEST, 'Invalid category ID');
+    }
+  }
+  if (updateData.brandId) {
+    const existingBrand = await Brand.findById(updateData.brandId);
+    if (!existingBrand) {
+      throw new ApiError(status.BAD_REQUEST, 'Invalid brand ID');
+    }
   }
 
   if (updateData.sku && updateData.sku !== existingProduct.sku) {
@@ -273,11 +307,15 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
   const result = await Product.findByIdAndUpdate(
     id,
-    updateData,
+    {
+      ...updateData,
+      category: updateData.categoryId,
+      brand: updateData.brandId,
+    },
     { new: true, runValidators: true }
   ).populate('category', 'brand');
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product updated successfully', result)
   );
 });
@@ -295,7 +333,7 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product deleted successfully', result)
   );
 });
@@ -310,31 +348,12 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
   })
     .populate('category', 'brand')
     .sort({ createdAt: -1 })
-    .limit(Number(limit))
-    .lean();
+    .limit(Number(limit));
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Featured products retrieved successfully', products)
   );
 });
-
-// export const getTrendingProducts = asyncHandler(async (req, res) => {
-//   const { limit = 10 } = req.query;
-
-//   const products = await Product.find({
-//     isTrending: true,
-//     status: 'active',
-//     isDeleted: false,
-//   })
-//     .populate('category', 'brand')
-//     .sort({ rating: -1, reviewCount: -1 })
-//     .limit(Number(limit))
-//     .lean();
-
-//   res.json(
-//     new ApiResponse(status.OK, 'Trending products retrieved successfully', products)
-//   );
-// });
 
 export const getNewArrivalProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
@@ -349,7 +368,7 @@ export const getNewArrivalProducts = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .lean();
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'New arrival products retrieved successfully', products)
   );
 });
@@ -375,14 +394,13 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
       .populate('category', 'brand')
       .sort(sortObj)
       .skip(skip)
-      .limit(Number(limit))
-      .lean(),
+      .limit(Number(limit)),
     Product.countDocuments(filter),
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products retrieved successfully', {
       products,
       page: Number(page),
@@ -413,14 +431,13 @@ export const searchProducts = asyncHandler(async (req, res) => {
       .populate('category', 'brand')
       .sort({ score: { $meta: 'textScore' } })
       .skip(skip)
-      .limit(Number(limit))
-      .lean(),
+      .limit(Number(limit)),
     Product.countDocuments(filter),
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products found successfully', {
       products,
       page: Number(page),
@@ -454,10 +471,10 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     categories: categories.filter(Boolean),
     colors: colors.flat().filter(Boolean),
     sizes: sizes.flat().filter(Boolean),
-    priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 },
+    priceRange: { minPrice: priceRange[0].minPrice, maxPrice: priceRange[0].maxPrice },
   };
 
-  res.json(
+  res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)
   );
 });

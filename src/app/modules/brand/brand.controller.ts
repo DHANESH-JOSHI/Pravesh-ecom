@@ -2,12 +2,11 @@ import { Brand } from "./brand.model";
 import { brandValidation, brandUpdateValidation } from "./brand.validation";
 import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler } from "@/utils";
-import { getApiErrorClass,getApiResponseClass } from "@/interface";
+import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import status from "http-status";
 const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
-
 
 export const createBrand = asyncHandler(async (req, res) => {
     const { name } = brandValidation.parse(req.body);
@@ -32,23 +31,27 @@ export const createBrand = asyncHandler(async (req, res) => {
     });
     await brand.save();
 
-    res
-        .status(status.CREATED)
-        .json(
-            new ApiResponse(status.CREATED, "Brand created successfully", brand)
-        );
+    res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", brand));
 });
 
 export const getAllBrands = asyncHandler(async (req, res) => {
-    const brands = await Brand.find({ isDeleted: false }).sort({
-        createdAt: -1,
-    });
-
-    if (brands.length === 0) {
-        throw new ApiError(status.NOT_FOUND, "No brands found");
-    }
-
-    res.json(new ApiResponse(status.OK, "Brands retrieved successfully", brands));
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+    const [brands, total] = await Promise.all([
+        Brand.find({ isDeleted: false })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit)),
+        Brand.countDocuments({ isDeleted: false }),
+    ]);
+    const totalPages = Math.ceil(total / Number(limit));
+    res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", {
+        brands,
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages
+    }));
 });
 
 export const getBrandById = asyncHandler(async (req, res) => {
@@ -65,11 +68,12 @@ export const getBrandById = asyncHandler(async (req, res) => {
         throw new ApiError(status.NOT_FOUND, "Brand not found");
     }
 
-    res.json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
+    res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
 });
 
 export const updateBrandById = asyncHandler(async (req, res) => {
     const brandId = req.params.id;
+    const { name } = brandUpdateValidation.parse(req.body);
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
         throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
     }
@@ -82,26 +86,21 @@ export const updateBrandById = asyncHandler(async (req, res) => {
         throw new ApiError(status.NOT_FOUND, "Brand not found");
     }
 
-    const updateData: { name?: string; image?: string; } = {};
-
-    if (req.body.name) {
-        if (req.body.name !== brand.name) {
+    if (name) {
+        if (name !== brand.name) {
             const existingBrand = await Brand.findOne({
-                name: req.body.name,
+                name,
                 isDeleted: false,
                 _id: { $ne: brandId },
             });
 
             if (existingBrand) {
-                throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
+                throw new ApiError(status.BAD_REQUEST, "Brand with this name already exists");
             }
         }
-        updateData.name = req.body.name;
     }
 
     if (req.file) {
-        updateData.image = req.file.path;
-
         if (brand.image) {
             const publicId = brand.image.split("/").pop()?.split(".")[0];
             if (publicId) {
@@ -109,23 +108,18 @@ export const updateBrandById = asyncHandler(async (req, res) => {
             }
         }
     }
+    const updatedBrand = await Brand.findByIdAndUpdate(
+        brandId,
+        {
+            name,
+            image: req.file ? req.file.path : brand.image,
+        },
+        { new: true }
+    );
 
-    if (Object.keys(updateData).length > 0) {
-        const validatedData = brandUpdateValidation.parse(updateData);
-
-        const updatedBrand = await Brand.findByIdAndUpdate(
-            brandId,
-            validatedData,
-            { new: true }
-        );
-
-        res.json(
-            new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
-        );
-        return;
-    }
-
-    res.json(new ApiResponse(status.OK, "No changes to update", brand));
+    res.status(status.OK).json(
+        new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
+    );
 });
 
 export const deleteBrandById = asyncHandler(async (req, res) => {

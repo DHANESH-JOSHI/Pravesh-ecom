@@ -9,9 +9,9 @@ import status from 'http-status';
 const ApiError = getApiErrorClass("CART");
 const ApiResponse = getApiResponseClass("CART");
 // Get user's cart
-export const getCart = asyncHandler(async (req, res) => {
+export const getMyCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { populate = 'true' } = req.query;
+  const { populate = 'false' } = req.query;
 
   if (!userId) {
     throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
@@ -31,10 +31,37 @@ export const getCart = asyncHandler(async (req, res) => {
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart retrieved successfully', cart));
 });
 
+export const getAllCarts = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, populate = 'false' } = req.query;
+  const skip = (Number(page) - 1) * Number(limit);
+
+  let cartsQuery = Cart.find()
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(Number(limit));
+
+  if (populate === 'true') {
+    cartsQuery = cartsQuery.populate('user', 'name email').populate('items.product', 'name finalPrice thumbnail');
+  }
+
+  const [carts, total] = await Promise.all([
+    cartsQuery,
+    Cart.countDocuments(),
+  ]);
+  const totalPages = Math.ceil(total / Number(limit));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', {
+    carts,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages
+  }));
+});
+
 // Add item to cart
 export const addToCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { productId, quantity} = addToCartValidation.parse(req.body);
+  const { productId, quantity } = addToCartValidation.parse(req.body);
 
   if (!userId) {
     throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
@@ -81,10 +108,6 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
   const { quantity } = updateCartItemValidation.parse(req.body);
-
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -212,7 +235,7 @@ export const getCartSummary = asyncHandler(async (req, res) => {
 
 export const checkoutCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const cart = await Cart.findOne({ user: userId }).populate('items.product', 'finalPrice');
+  const cart = await Cart.findOne({ user: userId }).populate('items.product', 'finalPrice isDeleted status stock name');
   if (!cart || cart.items.length === 0) {
     throw new ApiError(status.BAD_REQUEST, 'Cart is empty');
   }
