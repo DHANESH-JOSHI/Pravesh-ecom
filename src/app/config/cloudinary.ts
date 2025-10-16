@@ -1,8 +1,9 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
-import { Request } from 'express'; // Import the Request type
+import { Request } from 'express';
 import config from '@/config';
+import { logger } from './logger';
 
 // Configure cloudinary
 cloudinary.config({
@@ -16,16 +17,18 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: (req: Request, file: Express.Multer.File) => {
+      let folderName = 'pravesh-uploads'; // default
       if (req.originalUrl.includes('/products')) {
-        return 'pravesh-products';
+        folderName = 'pravesh-products';
       } else if (req.originalUrl.includes('/categories')) {
-        return 'pravesh-categories';
+        folderName = 'pravesh-categories';
       } else if (req.originalUrl.includes('/brands')) {
-        return 'pravesh-brands';
+        folderName = 'pravesh-brands';
       } else if (req.originalUrl.includes('/orders')) {
-        return 'pravesh-orders';
+        folderName = 'pravesh-orders';
       }
-      return 'pravesh-uploads';
+      logger.info(`[CLOUDINARY]: ${file.originalname} (${file.mimetype}) uploaded to folder: ${folderName}`);
+      return folderName;
     },
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'],
     transformation: [{ width: 1200, height: 600, crop: 'limit' }] // Appropriate for banners
