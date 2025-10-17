@@ -17,15 +17,25 @@ export const loginValidation = z.object({
     password: z.string()
 });
 
+const phoneOrEmailSchema = z
+  .string()
+  .trim()
+  .refine(
+    (val) => validateIndianMobile(val) || z.string().email().safeParse(val).success,
+    {
+      message: "Must be a valid Indian mobile number or a valid email address",
+    }
+  );
+
 export const requestOtpValidation = z.object({
-    phone: z.string().refine(validateIndianMobile, {
-        message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
-    })
+  phoneOrEmail: phoneOrEmailSchema,
 });
 
 export const verifyOtpValidation = z.object({
-    phone: z.string().refine(validateIndianMobile, {
-        message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
-    }),
-    otp: z.string().length(4, "OTP must be 4 digits")
+  phoneOrEmail: phoneOrEmailSchema,
+  otp: z
+    .string()
+    .trim()
+    .length(6, "OTP must be exactly 6 digits")
+    .regex(/^\d+$/, "OTP must contain only numbers"),
 });

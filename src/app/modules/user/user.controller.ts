@@ -5,6 +5,7 @@ import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { logger } from "@/config/logger";
 import status from "http-status";
 import { redis } from "@/config/redis";
+import { UserStatus } from "./user.interface";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
@@ -142,11 +143,11 @@ export const activateUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  if (user.status !== 'pending') {
+  if (user.status !== UserStatus.PENDING) {
     throw new ApiError(status.BAD_REQUEST, "User is already active");
   }
 
-  user.status = 'active';
+  user.status = UserStatus.ACTIVE;
   await user.save();
 
   res.json(new ApiResponse(status.OK, "User activated successfully"));

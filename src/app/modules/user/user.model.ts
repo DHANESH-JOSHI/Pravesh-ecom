@@ -1,16 +1,16 @@
 import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
-import { IUser } from './user.interface';
+import { IUser, UserRole, UserStatus } from './user.interface';
 
 const userSchema = new Schema<IUser>(
   {
-    name: { type: String },
-    password: { type: String },
+    name: { type: String, required: true },
+    password: { type: String, required: true },
     phone: { type: String, required: true },
     email: { type: String },
     img: { type: String },
-    role: { type: String, enum: ['admin', 'vendor', 'user'], default: 'user' },
-    status: { type: String, enum: ['pending', 'active'], default: 'active' },
+    role: { type: String, enum: UserRole, default: UserRole.USER },
+    status: { type: String, enum: UserStatus, default: UserStatus.ACTIVE },
     otp: { type: String },
     otpExpires: { type: Date },
   },
@@ -30,7 +30,7 @@ const userSchema = new Schema<IUser>(
 );
 
 
-userSchema.pre('save', async function (next) {
+userSchema.pre<IUser>('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }

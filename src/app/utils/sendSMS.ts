@@ -10,7 +10,7 @@ const client = axios.create({
   },
 });
 
-export const sendText = async (message: string, phone: string): Promise<void> => {
+export const sendSMS = async (message: string, phone: string): Promise<void> => {
   await client.get("/request", {
     params: {
       sms: message,

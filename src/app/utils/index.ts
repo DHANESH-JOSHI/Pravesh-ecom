@@ -3,5 +3,5 @@ export * from "./asyncHandler";
 export * from "./cacheKeyGenerator";
 export * from './generateOtp'
 export * from './sendEmail'
-export * from './sendText'
+export * from './sendSMS'
 export * from './validatePhone'
