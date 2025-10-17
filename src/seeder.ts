@@ -1,3 +1,4 @@
+import { logger } from '@/config/logger';
 import { User } from '@/modules/user/user.model';
 export const seedDatabase = async () => {
     const adminEmail = 'admin@example.com';
@@ -12,9 +13,9 @@ export const seedDatabase = async () => {
         role: 'admin',
         status: 'active',
       });
-      console.log('Default admin user created.');
+      logger.info('Default admin user created.');
     } else {
-      console.log('Admin user already exists. Skipping.');
+      logger.info('Admin user already exists. Skipping.');
     }
 
     // --- Seed Regular User ---
@@ -30,8 +31,8 @@ export const seedDatabase = async () => {
         role: 'user',
         status: 'active',
       });
-      console.log('Default regular user created.');
+      logger.info('Default regular user created.');
     } else {
-      console.log('Regular user already exists. Skipping.');
+      logger.info('Regular user already exists. Skipping.');
     }
 };

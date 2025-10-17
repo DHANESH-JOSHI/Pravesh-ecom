@@ -35,7 +35,7 @@ export const registerUser = asyncHandler(async (req, res) => {
 export const loginUser = asyncHandler(async (req, res) => {
     const { email, password } = loginValidation.parse(req.body);
 
-    let user = await User.findOne({ email });
+    const user = await User.findOne({ email });
     if (!user) {
         throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
     }

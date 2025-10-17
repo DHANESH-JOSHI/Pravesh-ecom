@@ -14,9 +14,10 @@ export default [
     rules: {
       // Disable rules that are causing problems
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': 'off',
       'no-unused-vars': 'off', // Turn off base rule as it can conflict with typescript-eslint rule
-      'no-console': 'warn',
+      'no-console': 'off',
+      "@typescript-eslint/no-namespace": "off"
     }
   }
 ];

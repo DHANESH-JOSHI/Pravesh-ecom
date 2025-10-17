@@ -42,7 +42,7 @@ export const createProduct = asyncHandler(async (req, res) => {
 
   // Generate slug if not provided
   if (!productData.slug && productData.name) {
-    let base = slugify(productData.name);
+    const base = slugify(productData.name);
     let candidate = base;
     let i = 1;
     // Ensure uniqueness
@@ -258,7 +258,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
   }
 
   if (!updateData.slug && updateData.name && updateData.name !== existingProduct.name) {
-    let base = slugify(updateData.name);
+    const base = slugify(updateData.name);
     let candidate = base;
     let i = 1;
     while (await Product.findOne({ slug: candidate, _id: { $ne: id } })) {
@@ -266,7 +266,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
     updateData.slug = candidate;
   } else if (updateData.slug) {
-    let base = slugify(updateData.slug);
+    const base = slugify(updateData.slug);
     let candidate = base;
     let i = 1;
     while (await Product.findOne({ slug: candidate, _id: { $ne: id } })) {
