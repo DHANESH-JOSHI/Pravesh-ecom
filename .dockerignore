@@ -1,0 +1,7 @@
+dist
+node_modules
+*.http
+*.rest
+*.md
+tsconfig.tsbuildinfo
+.vscode
