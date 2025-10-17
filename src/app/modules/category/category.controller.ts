@@ -34,7 +34,7 @@ export const createCategory = asyncHandler(async (req, res) => {
     image
   });
 
-  await redis.deleteByPattern("categories:*");
+  await redis.deleteByPattern("categories*");
 
   res
     .status(status.CREATED)
@@ -169,7 +169,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  await redis.deleteByPattern("categories:*");
+  await redis.deleteByPattern("categories*");
   await redis.deleteByPattern(`category:${categoryId}*`);
 
   res.status(status.OK).json(
@@ -193,7 +193,7 @@ export const deleteCategoryById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "Category not found");
   }
 
-  await redis.deleteByPattern("categories:*");
+  await redis.deleteByPattern("categories*");
   await redis.deleteByPattern(`category:${categoryId}*`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted successfully", category));

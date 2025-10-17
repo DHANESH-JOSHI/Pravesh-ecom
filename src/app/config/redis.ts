@@ -40,31 +40,18 @@ export const redis = {
     return result > 0;
   },
 
-  async deleteByPattern(pattern: string): Promise<number> {
+  async deleteByPattern(pattern: string): Promise<void> {
     await this.connect();
-    let totalDeletedCount = 0;
     let cursor = '0';
-
     do {
       const { cursor: nextCursor, keys } = await client.scan(cursor, {
         MATCH: pattern,
         COUNT: 100,
       });
-
       cursor = nextCursor;
-
       if (keys.length > 0) {
-        const deletedCount = await client.del(keys); // <-- fix here
-        totalDeletedCount += deletedCount;
+        await client.del(keys);
       }
     } while (cursor !== '0');
-
-    if (totalDeletedCount > 0) {
-      logger.info(`[Redis] Deleted ${totalDeletedCount} keys matching pattern: ${pattern}`);
-    } else {
-      logger.info(`[Redis] No keys found for pattern: ${pattern}`);
-    }
-
-    return totalDeletedCount;
   }
 };

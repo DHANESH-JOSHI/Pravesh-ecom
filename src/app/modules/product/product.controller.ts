@@ -69,7 +69,7 @@ export const createProduct = asyncHandler(async (req, res) => {
     brand: productData.brandId,
   });
 
-  await redis.deleteByPattern('products:*');
+  await redis.deleteByPattern('products*');
   await redis.delete('product_filters');
 
   res.status(status.CREATED).json(
@@ -143,7 +143,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
 
 export const getAllProducts = asyncHandler(async (req, res) => {
   const query = productsQueryValidation.parse(req.query) as IProductQuery;
-  const cacheKey = generateCacheKey('products', query);
+  const cacheKey = generateCacheKey('products',query);
   const cachedProducts = await redis.get(cacheKey);
 
   if (cachedProducts) {
@@ -364,7 +364,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
     { new: true, runValidators: true }
   ).populate('category', 'brand');
 
-  await redis.deleteByPattern('products:*');
+  await redis.deleteByPattern('products*');
   await redis.deleteByPattern(`product:${id}*`);
   await redis.deleteByPattern(`product:${existingProduct.slug}*`);
   await redis.delete('product_filters');
@@ -392,7 +392,7 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  await redis.deleteByPattern('products:*');
+  await redis.deleteByPattern('products*');
   await redis.deleteByPattern(`product:${id}*`);
   await redis.deleteByPattern(`product:${product.slug}*`);
   await redis.delete('product_filters');

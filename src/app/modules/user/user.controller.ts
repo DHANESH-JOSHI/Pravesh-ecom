@@ -47,7 +47,7 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  await redis.deleteByPattern('users:*');
+  await redis.deleteByPattern('users*');
   await redis.delete(`user:${userId}`);
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));

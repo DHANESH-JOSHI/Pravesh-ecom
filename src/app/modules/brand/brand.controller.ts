@@ -32,7 +32,7 @@ export const createBrand = asyncHandler(async (req, res) => {
     });
     await brand.save();
 
-    await redis.deleteByPattern("brands:*");
+    await redis.deleteByPattern("brands*");
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", brand));
 });
@@ -140,7 +140,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
         { new: true }
     );
 
-    await redis.deleteByPattern("brands:*");
+    await redis.deleteByPattern("brands*");
     await redis.deleteByPattern(`brand:${brandId}`);
 
     res.status(status.OK).json(
@@ -163,7 +163,7 @@ export const deleteBrandById = asyncHandler(async (req, res) => {
     brand.isDeleted = true;
     await brand.save();
 
-    await redis.deleteByPattern("brands:*");
+    await redis.deleteByPattern("brands*");
     await redis.deleteByPattern(`brand:${brandId}`);
 
     res.json(new ApiResponse(status.OK, "Brand deleted successfully", brand));

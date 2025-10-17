@@ -28,7 +28,7 @@ export const createReview = asyncHandler(async (req, res) => {
     })
 
     await redis.deleteByPattern(`reviews:product:${productId}*`);
-    await redis.deleteByPattern('reviews:*');
+    await redis.deleteByPattern('reviews*');
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
 })
@@ -153,7 +153,7 @@ export const updateReview = asyncHandler(async (req, res) => {
     await existingReview.save();
 
     await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.deleteByPattern('reviews:*');
+    await redis.deleteByPattern('reviews*');
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
 })
@@ -172,7 +172,7 @@ export const deleteReview = asyncHandler(async (req, res) => {
     await existingReview.deleteOne();
 
     await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.deleteByPattern('reviews:*');
+    await redis.deleteByPattern('reviews*');
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))
 })
