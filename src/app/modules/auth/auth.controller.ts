@@ -80,13 +80,12 @@ export const requestForOtp = asyncHandler(async (req, res) => {
   }
 
   if (!isEmail && user.phone) {
-    await sendSMS(user.phone, `Your OTP for Pravesh login is ${otp}`)
+    await sendSMS(`Your OTP for Pravesh login is ${otp}`,user.phone)
   }
 
   await user.save();
 
   res.json(new ApiResponse(status.OK, "OTP sent successfully", { phoneOrEmail }));
-  return;
 });
 
 // Verify OTP and login

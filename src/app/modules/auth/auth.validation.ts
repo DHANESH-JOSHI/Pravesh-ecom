@@ -21,7 +21,7 @@ const phoneOrEmailSchema = z
   .string()
   .trim()
   .refine(
-    (val) => validateIndianMobile(val) || z.string().email().safeParse(val).success,
+    (val) => z.email().safeParse(val).success || validateIndianMobile(val) ,
     {
       message: "Must be a valid Indian mobile number or a valid email address",
     }
