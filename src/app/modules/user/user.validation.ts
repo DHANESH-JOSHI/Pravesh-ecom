@@ -1,4 +1,4 @@
-import { validateIndianMobile } from "@/utils/validatePhone";
+import { validateIndianMobile } from "@/utils";
 import { z } from "zod";
 
 export const resetPasswordValidation = z.object({
@@ -18,7 +18,7 @@ export const phoneCheckValidation = z.object({
 });
 
 export const emailCheckValidation = z.object({
-  email: z.string().email("Invalid email format")
+  email: z.email("Invalid email format")
 });
 
 export const updateUserValidation = z.object({

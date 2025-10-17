@@ -1,5 +1,5 @@
 import z from "zod";
-import { validateIndianMobile } from "@/utils/validatePhone";
+import { validateIndianMobile } from "@/utils";
 
 export const registerValidation = z.object({
     name: z.string(),
@@ -7,13 +7,13 @@ export const registerValidation = z.object({
     phone: z.string().refine(validateIndianMobile, {
         message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
     }),
-    email: z.string().email("Invalid email format"),
+    email: z.email("Invalid email format"),
     img: z.string().optional(),
     role: z.enum(['admin', 'vendor', 'user']).default('user').optional()
 });
 
 export const loginValidation = z.object({
-    email: z.string().email("Invalid email format"),
+    email: z.email("Invalid email format"),
     password: z.string()
 });
 

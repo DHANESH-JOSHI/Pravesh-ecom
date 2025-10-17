@@ -1,7 +1,8 @@
+import { redis } from "@/config/redis";
 import { Brand } from "./brand.model";
 import { brandValidation, brandUpdateValidation } from "./brand.validation";
 import { cloudinary } from "@/config/cloudinary";
-import { asyncHandler } from "@/utils";
+import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import status from "http-status";
@@ -31,10 +32,19 @@ export const createBrand = asyncHandler(async (req, res) => {
     });
     await brand.save();
 
+    await redis.deleteByPattern("brands:*");
+
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", brand));
 });
 
 export const getAllBrands = asyncHandler(async (req, res) => {
+    const cacheKey = generateCacheKey('brands', req.query);
+    const cachedBrands = await redis.get(cacheKey);
+
+    if (cachedBrands) {
+        return res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", cachedBrands));
+    }
+
     const { page = 1, limit = 10 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
     const [brands, total] = await Promise.all([
@@ -45,17 +55,28 @@ export const getAllBrands = asyncHandler(async (req, res) => {
         Brand.countDocuments({ isDeleted: false }),
     ]);
     const totalPages = Math.ceil(total / Number(limit));
-    res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", {
+    const result = {
         brands,
         page: Number(page),
         limit: Number(limit),
         total,
         totalPages
-    }));
+    };
+
+    await redis.set(cacheKey, result);
+
+    res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", result));
 });
 
 export const getBrandById = asyncHandler(async (req, res) => {
     const brandId = req.params.id;
+    const cacheKey = `brand:${brandId}`;
+    const cachedBrand = await redis.get(cacheKey);
+
+    if (cachedBrand) {
+        return res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", cachedBrand));
+    }
+
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
         throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
     }
@@ -67,6 +88,8 @@ export const getBrandById = asyncHandler(async (req, res) => {
     if (!brand) {
         throw new ApiError(status.NOT_FOUND, "Brand not found");
     }
+
+    await redis.set(cacheKey, brand);
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
 });
@@ -117,6 +140,9 @@ export const updateBrandById = asyncHandler(async (req, res) => {
         { new: true }
     );
 
+    await redis.deleteByPattern("brands:*");
+    await redis.deleteByPattern(`brand:${brandId}`);
+
     res.status(status.OK).json(
         new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
     );
@@ -136,5 +162,9 @@ export const deleteBrandById = asyncHandler(async (req, res) => {
     }
     brand.isDeleted = true;
     await brand.save();
+
+    await redis.deleteByPattern("brands:*");
+    await redis.deleteByPattern(`brand:${brandId}`);
+
     res.json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
 });

@@ -2,7 +2,7 @@ import { asyncHandler, generateToken } from "@/utils";
 import { User } from "../user/user.model";
 import { loginValidation, registerValidation, requestOtpValidation, verifyOtpValidation } from "./auth.validation";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
-import { generateOTP } from "@/utils/generateOtp";
+import { generateOTP } from "@/utils";
 import status from "http-status";
 
 const ApiError = getApiErrorClass("AUTH");

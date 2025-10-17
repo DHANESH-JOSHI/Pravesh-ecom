@@ -1,9 +1,10 @@
 import { User } from "./user.model";
 import { activateUserValidation, emailCheckValidation, phoneCheckValidation, resetPasswordValidation, updateUserValidation } from "./user.validation";
-import { asyncHandler } from "@/utils";
+import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { logger } from "@/config/logger";
 import status from "http-status";
+import { redis } from "@/config/redis";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
@@ -45,24 +46,60 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
+  await redis.deleteByPattern('users:*');
+  await redis.delete(`user:${userId}`);
+
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
   return;
 });
 
 
 export const getAllUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({}, { password: 0 });
+  const { page = 1, limit = 10 } = req.query;
+  const cacheKey = generateCacheKey('users', req.query);
+  const cachedUsers = await redis.get(cacheKey);
+
+  if (cachedUsers) {
+    return res.json(new ApiResponse(status.OK, "Users retrieved successfully", cachedUsers));
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [users, total] = await Promise.all([
+    User.find({}, { password: 0 })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    User.countDocuments(),
+  ]);
 
   if (users.length === 0) {
     throw new ApiError(status.NOT_FOUND, "No users found");
   }
 
-  res.json(new ApiResponse(status.OK, "Users retrieved successfully", users));
+  const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    users,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result);
+
+  res.json(new ApiResponse(status.OK, "Users retrieved successfully", result));
   return;
 });
 
 export const getUserById = asyncHandler(async (req, res) => {
   const userId = req.params.id;
+  const cacheKey = `user:${userId}`;
+  const cachedUser = await redis.get(cacheKey);
+
+  if (cachedUser) {
+    return res.json(new ApiResponse(status.OK, "User retrieved successfully", cachedUser));
+  }
+
   if (!userId) {
     throw new ApiError(status.BAD_REQUEST, "User ID is required");
   }
@@ -71,6 +108,8 @@ export const getUserById = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
+
+  await redis.set(cacheKey, user);
 
   res.json(new ApiResponse(status.OK, "User retrieved successfully", user));
   return;

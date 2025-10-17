@@ -1,5 +1,6 @@
+import { redis } from '@/config/redis';
 import { Product } from './product.model';
-import { asyncHandler } from '@/utils';
+import { asyncHandler, generateCacheKey } from '@/utils';
 import { cloudinary } from '@/config/cloudinary';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { createProductValidation, productsQueryValidation } from './product.validation';
@@ -67,14 +68,26 @@ export const createProduct = asyncHandler(async (req, res) => {
     category: productData.categoryId,
     brand: productData.brandId,
   });
+
+  await redis.deleteByPattern('products:*');
+  await redis.delete('product_filters');
+
   res.status(status.CREATED).json(
     new ApiResponse(status.CREATED, 'Product created successfully', product)
   );
 });
 
 export const getDiscountProducts = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const cacheKey = generateCacheKey('products:discount', req.query);
+  const cachedProducts = await redis.get(cacheKey);
 
+  if (cachedProducts) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Discount products retrieved successfully', cachedProducts)
+    );
+  }
+
+  const { page = 1, limit = 10 } = req.query;
   const products = await Product.find({
     isDiscount: true,
     status: ProductStatus.Active,
@@ -86,6 +99,8 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .lean();
 
+  await redis.set(cacheKey, products);
+
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
   );
@@ -94,6 +109,14 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
 export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
   const { populate = 'false' } = req.query;
+  const cacheKey = `product:${slug}:${populate}`;
+  const cachedProduct = await redis.get(cacheKey);
+
+  if (cachedProduct) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Product retrieved successfully', cachedProduct)
+    );
+  }
 
   if (!slug || slug.trim() === '') {
     throw new ApiError(status.BAD_REQUEST, 'Slug is required');
@@ -111,12 +134,24 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
+  await redis.set(cacheKey, product);
+
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
 });
 
 export const getAllProducts = asyncHandler(async (req, res) => {
+  const query = productsQueryValidation.parse(req.query) as IProductQuery;
+  const cacheKey = generateCacheKey('products', query);
+  const cachedProducts = await redis.get(cacheKey);
+
+  if (cachedProducts) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Products retrieved successfully', cachedProducts)
+    );
+  }
+
   const {
     page = 1,
     limit = 10,
@@ -135,7 +170,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     rating,
     search,
     isDeleted = false,
-  } = productsQueryValidation.parse(req.query) as IProductQuery;
+  } = query;
 
   // Build filter object
   const filter: any = {
@@ -190,21 +225,33 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    products,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result);
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Products retrieved successfully', {
-      products,
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      totalPages,
-    })
+    new ApiResponse(status.OK, 'Products retrieved successfully', result)
   );
 });
 
 export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { populate = 'false' } = req.query;
+  const cacheKey = `product:${id}:${populate}`;
+  const cachedProduct = await redis.get(cacheKey);
+
+  if (cachedProduct) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Product retrieved successfully', cachedProduct)
+    );
+  }
+
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
   }
@@ -218,6 +265,8 @@ export const getProductById = asyncHandler(async (req, res) => {
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
+
+  await redis.set(cacheKey, product);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
@@ -315,6 +364,11 @@ export const updateProduct = asyncHandler(async (req, res) => {
     { new: true, runValidators: true }
   ).populate('category', 'brand');
 
+  await redis.deleteByPattern('products:*');
+  await redis.deleteByPattern(`product:${id}*`);
+  await redis.deleteByPattern(`product:${existingProduct.slug}*`);
+  await redis.delete('product_filters');
+
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product updated successfully', result)
   );
@@ -322,6 +376,11 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
 export const deleteProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  const product = await Product.findById(id);
+  if (!product) {
+    throw new ApiError(status.NOT_FOUND, 'Product not found');
+  }
 
   const result = await Product.findByIdAndUpdate(
     id,
@@ -333,48 +392,116 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
+  await redis.deleteByPattern('products:*');
+  await redis.deleteByPattern(`product:${id}*`);
+  await redis.deleteByPattern(`product:${product.slug}*`);
+  await redis.delete('product_filters');
+
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product deleted successfully', result)
   );
 });
 
 export const getFeaturedProducts = asyncHandler(async (req, res) => {
-  const { limit = 10 } = req.query;
+  const { page = 1, limit = 10 } = req.query;
+  const cacheKey = generateCacheKey('products:featured', req.query);
+  const cachedProducts = await redis.get(cacheKey);
 
-  const products = await Product.find({
+  if (cachedProducts) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Featured products retrieved successfully', cachedProducts)
+    );
+  }
+
+  const filter = {
     isFeatured: true,
     status: 'active',
     isDeleted: false,
-  })
-    .populate('category', 'brand')
-    .sort({ createdAt: -1 })
-    .limit(Number(limit));
+  };
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [products, total] = await Promise.all([
+    Product.find(filter)
+      .populate('category', 'brand')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    Product.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    products,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result);
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Featured products retrieved successfully', products)
+    new ApiResponse(status.OK, 'Featured products retrieved successfully', result)
   );
 });
 
 export const getNewArrivalProducts = asyncHandler(async (req, res) => {
-  const { limit = 10 } = req.query;
+  const { page = 1, limit = 10 } = req.query;
+  const cacheKey = generateCacheKey('products:new-arrival', req.query);
+  const cachedProducts = await redis.get(cacheKey);
 
-  const products = await Product.find({
+  if (cachedProducts) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'New arrival products retrieved successfully', cachedProducts)
+    );
+  }
+
+  const filter = {
     isNewArrival: true,
     status: 'active',
     isDeleted: false,
-  })
-    .populate('category', 'brand')
-    .sort({ createdAt: -1 })
-    .limit(Number(limit))
-    .lean();
+  };
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [products, total] = await Promise.all([
+    Product.find(filter)
+      .populate('category', 'brand')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
+    Product.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    products,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result);
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'New arrival products retrieved successfully', products)
+    new ApiResponse(status.OK, 'New arrival products retrieved successfully', result)
   );
 });
 
 export const getProductsByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
+  const cacheKey = generateCacheKey(`products:category:${categoryId}`, req.query);
+  const cachedProducts = await redis.get(cacheKey);
+
+  if (cachedProducts) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Products retrieved successfully', cachedProducts)
+    );
+  }
+
   const { page = 1, limit = 10, sort = 'createdAt', order = 'desc' } = req.query;
 
   const filter = {
@@ -399,19 +526,31 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    products,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result);
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Products retrieved successfully', {
-      products,
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      totalPages,
-    })
+    new ApiResponse(status.OK, 'Products retrieved successfully', result)
   );
 });
 
 export const searchProducts = asyncHandler(async (req, res) => {
+  const cacheKey = generateCacheKey('products:search', req.query);
+  const cachedProducts = await redis.get(cacheKey);
+
+  if (cachedProducts) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Products found successfully', cachedProducts)
+    );
+  }
+
   const { q, page = 1, limit = 10 } = req.query;
 
   if (!q) {
@@ -436,19 +575,31 @@ export const searchProducts = asyncHandler(async (req, res) => {
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    products,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result);
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Products found successfully', {
-      products,
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      totalPages,
-    })
+    new ApiResponse(status.OK, 'Products found successfully', result)
   );
 });
 
 export const getProductFilters = asyncHandler(async (req, res) => {
+  const cacheKey = 'product_filters';
+  const cachedFilters = await redis.get(cacheKey);
+
+  if (cachedFilters) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Product filters retrieved successfully', cachedFilters)
+    );
+  }
+
   const [brands, categories, colors, sizes, priceRange] = await Promise.all([
     Product.distinct('brand', { status: 'active', isDeleted: false }),
     Product.distinct('category', { status: 'active', isDeleted: false }),
@@ -473,6 +624,8 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     sizes: sizes.flat().filter(Boolean),
     priceRange: { minPrice: priceRange[0].minPrice, maxPrice: priceRange[0].maxPrice },
   };
+
+  await redis.set(cacheKey, filters);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)

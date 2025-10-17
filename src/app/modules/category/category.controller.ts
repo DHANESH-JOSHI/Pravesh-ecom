@@ -1,5 +1,6 @@
+import { redis } from "@/config/redis";
 import { cloudinary } from "@/config/cloudinary";
-import { asyncHandler } from "@/utils";
+import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { Category } from "../category/category.model";
 import { categoryValidation, categoryUpdateValidation } from "./category.validation";
@@ -33,6 +34,8 @@ export const createCategory = asyncHandler(async (req, res) => {
     image
   });
 
+  await redis.deleteByPattern("categories:*");
+
   res
     .status(status.CREATED)
     .json(
@@ -41,6 +44,13 @@ export const createCategory = asyncHandler(async (req, res) => {
 });
 
 export const getAllCategories = asyncHandler(async (req, res) => {
+  const cacheKey = generateCacheKey('categories', req.query);
+  const cachedCategories = await redis.get(cacheKey);
+
+  if (cachedCategories) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", cachedCategories));
+  }
+
   const { page = 1, limit = 10 } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
   const [categories, total] = await Promise.all([
@@ -51,19 +61,29 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     Category.countDocuments({ isDeleted: false }),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
-
-  res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", {
+  const result = {
     categories,
     page: Number(page),
     limit: Number(limit),
     total,
     totalPages
-  }));
+  };
+
+  await redis.set(cacheKey, result);
+
+  res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", result));
 });
 
 export const getCategoryById = asyncHandler(async (req, res) => {
   const categoryId = req.params.id;
   const { populate = 'false' } = req.query;
+  const cacheKey = `category:${categoryId}:${populate}`;
+  const cachedCategory = await redis.get(cacheKey);
+
+  if (cachedCategory) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, "Category retrieved successfully", cachedCategory));
+  }
+
   if (!mongoose.Types.ObjectId.isValid(categoryId)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid category ID");
   }
@@ -83,6 +103,8 @@ export const getCategoryById = asyncHandler(async (req, res) => {
   if (!category) {
     throw new ApiError(status.NOT_FOUND, "Category not found");
   }
+
+  await redis.set(cacheKey, category);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category retrieved successfully", category));
 });
@@ -147,6 +169,9 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
     { new: true }
   );
 
+  await redis.deleteByPattern("categories:*");
+  await redis.deleteByPattern(`category:${categoryId}*`);
+
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
   );
@@ -167,6 +192,9 @@ export const deleteCategoryById = asyncHandler(async (req, res) => {
   if (!category) {
     throw new ApiError(status.NOT_FOUND, "Category not found");
   }
+
+  await redis.deleteByPattern("categories:*");
+  await redis.deleteByPattern(`category:${categoryId}*`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted successfully", category));
 });
