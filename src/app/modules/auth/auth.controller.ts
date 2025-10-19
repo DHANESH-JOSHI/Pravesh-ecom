@@ -4,6 +4,7 @@ import { loginValidation, registerValidation, requestOtpValidation, verifyOtpVal
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { generateOTP } from "@/utils";
 import status from "http-status";
+import { UserStatus } from "../user/user.interface";
 
 const ApiError = getApiErrorClass("AUTH");
 const ApiResponse = getApiResponseClass("AUTH");
@@ -22,13 +23,18 @@ export const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.BAD_REQUEST, "Phone number already exists");
   }
 
+  const otp = generateOTP();
+  const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
-  const user = new User({ name, password, img, phone, email, role });
+  const user = new User({ name, password, img, phone, email, role, otp, otpExpires });
   await user.save();
+
+  await sendEmail(email, 'OTP for Pravesh registration', `Your OTP for Pravesh registration is ${otp}`);
+  await sendSMS(`Your OTP for Pravesh registration is ${otp}`, phone);
 
   const { password: _, ...userObject } = user.toObject();
 
-  res.status(status.CREATED).json(new ApiResponse(status.OK, "User registered successfully", userObject));
+  res.status(status.CREATED).json(new ApiResponse(status.OK, "OTP sent to email and phone for registration verification", userObject));
   return;
 });
 
@@ -39,7 +45,9 @@ export const loginUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
   }
-
+  if (user.status !== UserStatus.ACTIVE) {
+    throw new ApiError(status.UNAUTHORIZED, "User account is not active");
+  }
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
     throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
@@ -80,7 +88,7 @@ export const requestForOtp = asyncHandler(async (req, res) => {
   }
 
   if (!isEmail && user.phone) {
-    await sendSMS(`Your OTP for Pravesh login is ${otp}`,user.phone)
+    await sendSMS(`Your OTP for Pravesh login is ${otp}`, user.phone)
   }
 
   await user.save();
@@ -108,6 +116,9 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     throw new ApiError(status.UNAUTHORIZED, "Invalid or expired OTP");
   }
 
+  if (user.status === UserStatus.PENDING) {
+    user.status = UserStatus.ACTIVE;
+  }
   // Generate token for the user
   const token = generateToken(user);
 
