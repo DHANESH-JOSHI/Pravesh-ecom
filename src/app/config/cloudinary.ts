@@ -26,6 +26,10 @@ const storage = new CloudinaryStorage({
         folderName = 'pravesh-brands';
       } else if (req.originalUrl.includes('/orders')) {
         folderName = 'pravesh-orders';
+      } else if (req.originalUrl.includes('/blogs')) {
+        folderName = 'pravesh-blogs';
+      } else if (req.originalUrl.includes('/banners')) {
+        folderName = 'pravesh-banners';
       }
       logger.info(`[CLOUDINARY]: ${file.originalname} (${file.mimetype}) uploaded to folder: ${folderName}`);
       return folderName;
