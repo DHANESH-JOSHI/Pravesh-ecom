@@ -26,7 +26,7 @@ const CategorySchema: Schema = new Schema<ICategory>(
   {
     timestamps: true,
     toJSON: {
-      transform: function (doc, ret:any) {
+      transform: function (doc, ret: any) {
         if (ret.createdAt && typeof ret.createdAt !== 'string') {
           ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
         }

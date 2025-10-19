@@ -275,7 +275,7 @@ export const getProductById = asyncHandler(async (req, res) => {
 
 export const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const updateData: any = createProductValidation.partial().parse(req.body);
+  const updateData = createProductValidation.partial().parse(req.body);
 
   const existingProduct = await Product.findOne({ _id: id, isDeleted: false });
   if (!existingProduct) {
