@@ -19,41 +19,65 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
   const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
 
-  const cart = await Cart.findOne({ user: userId }).populate('items.product');
-  if (!cart || cart.items.length === 0) {
-    throw new ApiError(status.BAD_REQUEST, 'Your cart is empty');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const cart = await Cart.findOne({ user: userId }).session(session);
+    if (!cart || cart.items.length === 0) {
+      throw new ApiError(status.BAD_REQUEST, 'Your cart is empty');
+    }
+
+    let totalAmount = 0;
+    for (const item of cart.items) {
+      const product = await Product.findById(item.product).session(session);
+      if (!product || product.isDeleted || product.status !== 'active') {
+        throw new ApiError(status.BAD_REQUEST, `Product with ID ${item.product} is not available.`);
+      }
+      if (product.stock < item.quantity) {
+        throw new ApiError(status.BAD_REQUEST, `Not enough stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+      }
+      totalAmount += product.finalPrice * item.quantity;
+    }
+
+    const wallet = await Wallet.findOne({ userId }).session(session);
+    if (!wallet || wallet.balance < totalAmount) {
+      throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
+    }
+    wallet.balance -= totalAmount;
+    wallet.transactions.push({
+      amount: -totalAmount,
+      description: `Order payment`,
+      createdAt: new Date(),
+    });
+    await wallet.save({ session });
+
+    for (const item of cart.items) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { stock: -item.quantity }
+      }, { session });
+    }
+
+    const order = (await Order.create([{
+      user: userId,
+      items: cart.items,
+      totalAmount,
+      shippingAddress: shippingAddressId,
+      status: OrderStatus.Processing,
+    }], { session }))[0];
+
+    cart.items = [];
+    await cart.save({ session });
+
+    await session.commitTransaction();
+    res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
+
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  const totalAmount = await cart.getCartSummary().then(summary => summary.totalPrice);
-
-  let wallet = await Wallet.findOne({ userId });
-  if (!wallet) {
-    // Create a wallet if it doesn't exist, though balance will be 0
-    wallet = await Wallet.create({ userId, balance: 0, transactions: [] });
-  }
-  if (!wallet || wallet.balance < totalAmount) {
-    throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
-  }
-  // Deduct from wallet
-  wallet.balance -= totalAmount;
-  wallet.transactions.push({
-    amount: -totalAmount,
-    description: `Order payment for cart checkout`,
-    createdAt: new Date(),
-  });
-  await wallet.save();
-
-  const order = await Order.create({
-    user: userId,
-    items: cart.items,
-    totalAmount,
-    shippingAddressId,
-    status: OrderStatus.Processing,
-  });
-
-  await cart.clearCart();
-
-  res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
 });
 
 
@@ -87,7 +111,6 @@ export const adminUpdateCustomOrder = asyncHandler(async (req, res) => {
   if (!order || !order.isCustomOrder) {
     throw new ApiError(status.NOT_FOUND, 'Custom order not found');
   }
-  //calculate total amount if items are provided
   let totalAmount = order.totalAmount;
   if (items && items.length > 0) {
     for (const item of items) {
@@ -117,43 +140,56 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { orderId } = req.params;
   const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
-  if (!mongoose.Types.ObjectId.isValid(shippingAddressId)) {
-    throw new ApiError(status.BAD_REQUEST, 'Invalid address ID');
-  }
-  const shippingAddress = await Address.findOne({ _id: shippingAddressId, user: userId, isDeleted: false });
-  if (!shippingAddress) {
-    throw new ApiError(status.NOT_FOUND, 'Shipping address not found or you are not authorized to confirm it');
-  }
-  if (!mongoose.Types.ObjectId.isValid(orderId)) {
-    throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
-  }
-  const order = await Order.findOne({ _id: orderId, user: userId, isCustomOrder: true });
-  if (!order) {
-    throw new ApiError(status.NOT_FOUND, 'Custom order not found or you are not authorized to confirm it');
-  }
 
-  if (order.status !== OrderStatus.AwaitingPayment) {
-    throw new ApiError(status.BAD_REQUEST, 'This order is not awaiting payment. It may not have been priced by an admin yet.');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(shippingAddressId)) {
+      throw new ApiError(status.BAD_REQUEST, 'Invalid address ID');
+    }
+    const shippingAddress = await Address.findOne({ _id: shippingAddressId, user: userId, isDeleted: false }).session(session);
+    if (!shippingAddress) {
+      throw new ApiError(status.NOT_FOUND, 'Shipping address not found or you are not authorized to use it');
+    }
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
+    }
+    const order = await Order.findOne({ _id: orderId, user: userId, isCustomOrder: true }).session(session);
+    if (!order) {
+      throw new ApiError(status.NOT_FOUND, 'Custom order not found or you are not authorized to confirm it');
+    }
+
+    if (order.status !== OrderStatus.AwaitingPayment) {
+      throw new ApiError(status.BAD_REQUEST, 'This order is not awaiting payment.');
+    }
+
+    const wallet = await Wallet.findOne({ userId }).session(session);
+    if (!wallet || wallet.balance < order.totalAmount) {
+      throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
+    }
+
+    wallet.balance -= order.totalAmount;
+    wallet.transactions.push({
+      amount: -order.totalAmount,
+      description: `Payment for custom order #${order._id}`,
+      createdAt: new Date(),
+    });
+    await wallet.save({ session });
+
+    order.status = OrderStatus.Processing;
+    order.shippingAddress = shippingAddress._id as Types.ObjectId;
+    await order.save({ session });
+
+    await session.commitTransaction();
+    res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
+
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  const wallet = await Wallet.findOne({ userId });
-  if (!wallet || wallet.balance < order.totalAmount) {
-    throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
-  }
-  // Deduct from wallet
-  wallet.balance -= order.totalAmount;
-  wallet.transactions.push({
-    amount: -order.totalAmount,
-    description: `Payment for custom order #${order._id}`,
-    createdAt: new Date(),
-  });
-  await wallet.save();
-
-  order.status = OrderStatus.Processing;
-  order.shippingAddress = shippingAddress._id as Types.ObjectId;
-  await order.save();
-
-  res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
 });
 
 

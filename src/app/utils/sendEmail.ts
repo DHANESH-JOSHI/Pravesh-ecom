@@ -1,6 +1,5 @@
 import config from "@/config";
-import { ApiError } from "@/interface";
-import status from "http-status";
+import { logger } from "@/config/logger";
 import { Resend } from "resend";
 
 const resend = new Resend(config.RESEND_API_KEY);
@@ -16,7 +15,7 @@ export const sendEmail = async (
     text,
   });
   if (error) {
-    throw new ApiError(status.INTERNAL_SERVER_ERROR, `Failed to send email to ${to}. Error: ${error.message}`, "EMAIL")
+    logger.error(`[EMAIL] Failed to send email to ${to}. Error: ${error.message}`)
   }
 }
 

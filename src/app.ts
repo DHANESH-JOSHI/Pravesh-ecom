@@ -6,19 +6,16 @@ import { apiLimiter, errorHandler, notFound } from '@/middlewares';
 import status from 'http-status';
 const app: Application = express();
 
-// CORS configuration
 const corsOptions = {
   origin: true,
   credentials: true,
   optionsSuccessStatus: status.OK
 };
 
-// parsers
 app.use(express.json());
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
 
-// application routes
 app.use('/api/v1', apiLimiter, router)
 
 const entryRoute = (req: Request, res: Response) => {
@@ -28,7 +25,6 @@ const entryRoute = (req: Request, res: Response) => {
 
 app.get('/', entryRoute)
 
-//Not Found
 app.use(notFound);
 
 app.use(errorHandler);

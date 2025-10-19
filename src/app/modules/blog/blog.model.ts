@@ -13,11 +13,25 @@ const BlogSchema = new Schema<IBlog>(
     },
     featuredImage: { type: String },
     tags: [{ type: String, trim: true }],
-    isPublished: { type: Boolean, default: false, index: true },
     isDeleted: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform: function (doc, ret: any) {
+        if (ret.createdAt && typeof ret.createdAt !== 'string') {
+          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
+          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        }
+        return ret;
+      }
+    }
+  }
 );
+
+BlogSchema.index({ isPublished: 1, isDeleted: 1, createdAt: -1 });
 
 BlogSchema.pre('save', function (next) {
   if (this.isModified('title')) {

@@ -97,6 +97,6 @@ export interface IProductFilter {
 export interface IProductQuery extends IProductFilter {
   page?: number;
   limit?: number;
-  sort?: string; // e.g.,
+  sort?: string;
   order?: 'asc' | 'desc';
 }

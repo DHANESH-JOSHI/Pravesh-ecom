@@ -11,7 +11,7 @@ import status from 'http-status';
 import mongoose from 'mongoose';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
-// Create a new product
+
 const slugify = (text: string) =>
   text
     .toString()
@@ -22,7 +22,6 @@ const slugify = (text: string) =>
 
 export const createProduct = asyncHandler(async (req, res) => {
   const productData = createProductValidation.parse(req.body);
-  // Check if SKU already exists
   const existingSku = await Product.findOne({ sku: productData.sku, isDeleted: false });
   if (existingSku) {
     throw new ApiError(status.BAD_REQUEST, 'Product with this SKU already exists');
@@ -41,12 +40,10 @@ export const createProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  // Generate slug if not provided
   if (!productData.slug && productData.name) {
     const base = slugify(productData.name);
     let candidate = base;
     let i = 1;
-    // Ensure uniqueness
     while (await Product.findOne({ slug: candidate })) {
       candidate = `${base}-${i++}`;
     }
@@ -99,7 +96,7 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .lean();
 
-  await redis.set(cacheKey, products);
+  await redis.set(cacheKey, products, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
@@ -134,7 +131,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  await redis.set(cacheKey, product);
+  await redis.set(cacheKey, product, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
@@ -143,7 +140,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
 
 export const getAllProducts = asyncHandler(async (req, res) => {
   const query = productsQueryValidation.parse(req.query) as IProductQuery;
-  const cacheKey = generateCacheKey('products',query);
+  const cacheKey = generateCacheKey('products', query);
   const cachedProducts = await redis.get(cacheKey);
 
   if (cachedProducts) {
@@ -172,7 +169,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     isDeleted = false,
   } = query;
 
-  // Build filter object
   const filter: any = {
     isDeleted,
     stockStatus,
@@ -183,11 +179,9 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   if (isFeatured !== undefined) filter.isFeatured = isFeatured;
   if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival;
   if (isDiscount !== undefined) filter.isDiscount = isDiscount;
-  // Stock availability filter
   if (inStock) {
     filter.stock = { $gt: 0 };
   }
-  // Price range filter
   if (minPrice || maxPrice) {
     filter.finalPrice = {};
     if (minPrice) {
@@ -198,21 +192,17 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     }
   }
 
-  // Rating filter
   if (rating) {
     filter.rating = { $gte: Number(rating) };
   }
-  // Search filter
   if (search) {
     filter.$text = { $search: search as string };
   }
 
-  // Sorting
   const sortOrder = order === 'asc' ? 1 : -1;
   const sortObj: any = {};
   sortObj[sort as string] = sortOrder;
 
-  // Pagination
   const skip = (Number(page) - 1) * Number(limit);
 
   const [products, total] = await Promise.all([
@@ -233,7 +223,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products retrieved successfully', result)
@@ -266,7 +256,7 @@ export const getProductById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  await redis.set(cacheKey, product);
+  await redis.set(cacheKey, product, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
@@ -329,7 +319,6 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
     if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
       updateData.thumbnail = files['thumbnail'][0].path;
-      // Delete old thumbnail from Cloudinary
       if (existingProduct.thumbnail) {
         const publicId = existingProduct.thumbnail.split('/').pop()?.split('.')[0];
         if (publicId) {
@@ -340,7 +329,6 @@ export const updateProduct = asyncHandler(async (req, res) => {
 
     if (Array.isArray(files['images']) && files['images'].length > 0) {
       updateData.images = files['images'].map((file) => file.path);
-      // Delete old images from Cloudinary
       if (existingProduct.images && existingProduct.images.length > 0) {
         const deletionPromises = existingProduct.images.map(imageUrl => {
           const publicId = imageUrl.split('/').pop()?.split('.')[0];
@@ -439,7 +427,7 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Featured products retrieved successfully', result)

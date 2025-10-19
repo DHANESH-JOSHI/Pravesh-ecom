@@ -41,6 +41,12 @@ const envSchema = z.object({
   REDIS_URL: z.string({
     error: "REDIS_URL is required"
   }),
+  DEFAULT_ADMIN_PASSWORD: z.string({
+    error: "DEFAULT_ADMIN_PASSWORD is required for seeding"
+  }),
+  DEFAULT_USER_PASSWORD: z.string({
+    error: "DEFAULT_USER_PASSWORD is required for seeding"
+  }),
 });
 
 let envVars: z.infer<typeof envSchema>;

@@ -43,13 +43,13 @@ userSchema.methods.comparePassword = async function (password: string): Promise<
   return bcrypt.compare(password, this.password);
 };
 
-// Add method to compare OTP
 userSchema.methods.compareOtp = function (otp: string): boolean {
   return this.otp === otp && this.otpExpires && this.otpExpires > new Date();
 };
 
 
-// Add index for phone
 userSchema.index({ phone: 1 }, { unique: true });
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
+userSchema.index({ createdAt: -1 });
 
 export const User = mongoose.model<IUser>('User', userSchema);

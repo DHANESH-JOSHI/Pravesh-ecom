@@ -1,12 +1,10 @@
 import { Document, Model, Types } from 'mongoose';
 
-// Cart Item Interface
 export interface ICartItem {
   product: Types.ObjectId;
   quantity: number;
 }
 
-// Main Cart Interface
 export interface ICart extends Document {
   user: Types.ObjectId;
   items: ICartItem[];
@@ -14,7 +12,6 @@ export interface ICart extends Document {
   createdAt: Date;
   updatedAt: Date;
 
-  // Instance methods
   addItem(
     productId: Types.ObjectId,
     quantity: number,
@@ -28,7 +25,6 @@ export interface ICart extends Document {
   getCartSummary(): Promise<{ totalItems: number; totalPrice: number }>;
 }
 
-// Cart Query Filters
 export interface ICartFilter {
   user?: string;
   isDeleted?: boolean;
@@ -38,18 +34,15 @@ export interface ICartFilter {
   };
 }
 
-// Add to Cart Request
 export interface IAddToCartRequest {
   productId: string;
   quantity: number;
 }
 
-// Update Cart Item Request
 export interface IUpdateCartItemRequest {
   quantity: number;
 }
 
-// Cart Summary
 export interface ICartSummary {
   totalItems: number;
   totalPrice: number;
@@ -57,6 +50,5 @@ export interface ICartSummary {
 }
 
 export interface ICartModel extends Model<ICart> {
-  // Static methods
   findUserCart(userId: Types.ObjectId): Promise<ICart | null>;
 }

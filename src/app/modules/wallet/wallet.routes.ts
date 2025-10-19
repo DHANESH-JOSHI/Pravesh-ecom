@@ -1,8 +1,8 @@
 import express from 'express';
 import {
-    getWalletBalance,
-    getTransactions,
-    addFundsToWallet
+  getWalletBalance,
+  getTransactions,
+  addFundsToWallet
 } from './wallet.controller';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
 

@@ -1,10 +1,10 @@
 import express from "express";
 import {
-    createAddress,
-    deleteMyAddress,
-    getAllAddresses,
-    getMyAddresses,
-    updateMyAddress
+  createAddress,
+  deleteMyAddress,
+  getAllAddresses,
+  getMyAddresses,
+  updateMyAddress
 } from "./address.controller";
 import { auth, authenticatedActionLimiter } from "@/middlewares";
 
@@ -16,7 +16,6 @@ router.use(auth('user'));
 
 router.get("/me", getMyAddresses);
 
-// Apply the user-specific limiter for write operations
 router.post("/", authenticatedActionLimiter, createAddress);
 
 router.patch("/:id", authenticatedActionLimiter, updateMyAddress);

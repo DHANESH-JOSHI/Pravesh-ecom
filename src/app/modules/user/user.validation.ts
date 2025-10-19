@@ -1,5 +1,6 @@
 import { validateIndianMobile } from "@/utils";
 import { z } from "zod";
+import { UserRole } from "./user.interface";
 
 export const resetPasswordValidation = z.object({
   newPassword: z.string().min(6)
@@ -28,9 +29,9 @@ export const updateUserValidation = z.object({
   }).optional(),
   email: z.union([
     z.email("Invalid email format"),
-    z.string().length(0) // Allow empty string
+    z.string().length(0)
   ]).optional(),
   img: z.string().optional(),
-  role: z.enum(['admin','vendor', 'user']).optional(),
+  role: z.enum(UserRole).optional(),
 });
 

@@ -2,25 +2,28 @@ import { User } from "./user.model";
 import { activateUserValidation, emailCheckValidation, phoneCheckValidation, resetPasswordValidation, updateUserValidation } from "./user.validation";
 import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
-import { logger } from "@/config/logger";
 import status from "http-status";
 import { redis } from "@/config/redis";
 import { UserStatus } from "./user.interface";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
-// get logged in user profile
 export const getMe = asyncHandler(async (req, res) => {
-  logger.info('Fetching logged in user profile');
+  const userId = req.user?._id;
+  const cacheKey = `user:${userId}`;
+  const cachedUser = await redis.get(cacheKey);
+
+  if (cachedUser) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", cachedUser));
+  }
+  await redis.set(cacheKey, req.user, 600);
   res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", req.user));
 });
 
 export const updateUser = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  // Validate the clean data
   const validatedData = updateUserValidation.parse(req.body);
 
-  // Check if email is being updated with a non-empty value and if it already exists
   if (validatedData.email && validatedData.email.length > 0) {
     const existingUser = await User.findOne({
       email: validatedData.email,
@@ -32,7 +35,6 @@ export const updateUser = asyncHandler(async (req, res) => {
     }
   }
 
-  // If email is empty string, remove it from update data
   if (validatedData.email === '') {
     delete validatedData.email;
   }
@@ -86,7 +88,7 @@ export const getAllUsers = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 600);
 
   res.json(new ApiResponse(status.OK, "Users retrieved successfully", result));
   return;
@@ -110,7 +112,7 @@ export const getUserById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  await redis.set(cacheKey, user);
+  await redis.set(cacheKey, user, 600);
 
   res.json(new ApiResponse(status.OK, "User retrieved successfully", user));
   return;

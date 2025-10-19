@@ -1,4 +1,5 @@
-import { asyncHandler } from '@/utils';
+import { asyncHandler, generateCacheKey } from '@/utils';
+import { redis } from '@/config/redis';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import status from 'http-status';
 import { Banner } from './banner.model';
@@ -11,16 +12,33 @@ const ApiResponse = getApiResponseClass('BANNER');
 export const createBanner = asyncHandler(async (req, res) => {
   const bannerData = createBannerValidation.parse(req.body);
   const banner = await Banner.create(bannerData);
+  await redis.deleteByPattern('banners*');
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Banner created successfully', banner));
 });
 
 export const getActiveBanners = asyncHandler(async (req, res) => {
+  const cacheKey = generateCacheKey('banners:active', req.query);
+  const cachedBanners = await redis.get(cacheKey);
+
+  if (cachedBanners) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved active banners`, cachedBanners));
+  }
+
   const banners = await Banner.find({ isDeleted: false }).sort({ order: 'asc' });
+  await redis.set(cacheKey, banners, 3600);
   res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved ${banners.length} active banners`, banners));
 });
 
 export const getAllBanners = asyncHandler(async (req, res) => {
+  const cacheKey = generateCacheKey('banners:all', req.query);
+  const cachedBanners = await redis.get(cacheKey);
+
+  if (cachedBanners) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved all banners`, cachedBanners));
+  }
+
   const banners = await Banner.find({}).sort({ order: 'asc' });
+  await redis.set(cacheKey, banners, 3600);
   res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved all ${banners.length} banners`, banners));
 });
 
@@ -40,6 +58,8 @@ export const updateBanner = asyncHandler(async (req, res) => {
   }
 
   const updatedBanner = await Banner.findByIdAndUpdate(bannerId, bannerData, { new: true });
+
+  await redis.deleteByPattern('banners*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner updated successfully`, updatedBanner));
 });
@@ -62,6 +82,8 @@ export const deleteBanner = asyncHandler(async (req, res) => {
     { isDeleted: true },
     { new: true }
   );
+
+  await redis.deleteByPattern('banners*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner has been deleted successfully`, existingBanner));
 });

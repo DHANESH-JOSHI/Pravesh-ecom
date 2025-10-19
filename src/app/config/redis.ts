@@ -7,7 +7,7 @@ const client = createClient({ url: config.REDIS_URL });
 client.on('connect', () => logger.info('[Redis] Connecting...'));
 client.on('ready', () => logger.info('[Redis] Connected successfully.'));
 client.on('error', () => logger.error('[Redis] Connection error'));
-client.on('end', () => logger.warn('[Redis] Connection closed.'));
+client.on('end', () => logger.info('[Redis] Connection closed.'));
 
 const CACHE_TTL = 900;
 
@@ -15,7 +15,10 @@ export const redis = {
   async connect() {
     if (!client.isOpen) await client.connect();
   },
-
+  async quit() {
+    if (client.isOpen)
+      await client.quit();
+  },
   async get<T>(key: string): Promise<T | null> {
     await this.connect();
     const data = await client.get(key);

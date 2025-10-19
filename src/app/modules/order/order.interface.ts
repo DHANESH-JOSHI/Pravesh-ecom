@@ -15,8 +15,6 @@ export interface IOrderItem {
   product: Types.ObjectId;
   quantity: number;
   price: number;
-  selectedColor?: string;
-  selectedSize?: string;
 }
 
 export interface IOrder extends Document {

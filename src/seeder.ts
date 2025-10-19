@@ -1,38 +1,39 @@
 import { logger } from '@/config/logger';
 import { User } from '@/modules/user/user.model';
+import config from '@/config';
+
 export const seedDatabase = async () => {
-    const adminEmail = 'admin@example.com';
-    const existingAdmin = await User.findOne({ email: adminEmail });
+  const adminEmail = 'admin@example.com';
+  const existingAdmin = await User.findOne({ email: adminEmail });
 
-    if (!existingAdmin) {
-      await User.create({
-        name: 'Admin User',
-        email: adminEmail,
-        phone: '9999999999',
-        password: 'password123', // The pre-save hook in your model will hash this
-        role: 'admin',
-        status: 'active',
-      });
-      logger.info('Default admin user created.');
-    } else {
-      logger.info('Admin user already exists. Skipping.');
-    }
+  if (!existingAdmin) {
+    await User.create({
+      name: 'admin',
+      email: adminEmail,
+      phone: '9999999999',
+      password: config.DEFAULT_ADMIN_PASSWORD,
+      role: 'admin',
+      status: 'active',
+    });
+    logger.info('Test admin user created.');
+  } else {
+    logger.info('Test admin already exists. Skipping.');
+  }
 
-    // --- Seed Regular User ---
-    const userEmail = 'user@example.com';
-    const existingUser = await User.findOne({ email: userEmail });
+  const userEmail = 'user@example.com';
+  const existingUser = await User.findOne({ email: userEmail });
 
-    if (!existingUser) {
-      await User.create({
-        name: 'Regular User',
-        email: userEmail,
-        phone: '8888888888',
-        password: 'password123', // The pre-save hook will hash this
-        role: 'user',
-        status: 'active',
-      });
-      logger.info('Default regular user created.');
-    } else {
-      logger.info('Regular user already exists. Skipping.');
-    }
+  if (!existingUser) {
+    await User.create({
+      name: 'test_user',
+      email: userEmail,
+      phone: '8888888888',
+      password: config.DEFAULT_USER_PASSWORD,
+      role: 'user',
+      status: 'active',
+    });
+    logger.info('Test user created.');
+  } else {
+    logger.info('Test user already exists. Skipping.');
+  }
 };

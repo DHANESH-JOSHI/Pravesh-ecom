@@ -80,25 +80,49 @@ const ProductSchema = new Schema<IProduct>(
   }
 );
 
-// Indexes for better query performance
 ProductSchema.index({ name: 'text', description: 'text', tags: 'text', shortDescription: 'text' });
-ProductSchema.index({ finalPrice: 1, category: 1 });
+ProductSchema.index({ slug: 1, isDeleted: 1 });
+ProductSchema.index({ sku: 1, isDeleted: 1 });
+ProductSchema.index({ status: 1, isDeleted: 1, isFeatured: 1, createdAt: -1 });
+ProductSchema.index({ status: 1, isDeleted: 1, isNewArrival: 1, createdAt: -1 });
+ProductSchema.index({ status: 1, isDeleted: 1, isDiscount: 1, discountValue: -1 });
+ProductSchema.index({ status: 1, isDeleted: 1, category: 1, finalPrice: 1 });
+ProductSchema.index({ status: 1, isDeleted: 1, brand: 1, finalPrice: 1 });
+ProductSchema.index({ finalPrice: 1 });
 ProductSchema.index({ createdAt: -1 });
-ProductSchema.index({ rating: -1, reviewCount: -1 });
+ProductSchema.index({ rating: -1 });
 
-// Pre-save middleware to update final price based on discount
-ProductSchema.pre('save', function (next) {
-  if (this.discountValue > 0) {
-    if (this.discountType === 'percentage') {
-      this.finalPrice = this.originalPrice - (this.originalPrice * this.discountValue / 100);
+const calculateFinalPrice = (doc: IProduct) => {
+  if (doc.discountValue > 0) {
+    if (doc.discountType === DiscountType.Percentage) {
+      doc.finalPrice = doc.originalPrice - (doc.originalPrice * doc.discountValue / 100);
     } else {
-      this.finalPrice = this.originalPrice - this.discountValue;
+      doc.finalPrice = doc.originalPrice - doc.discountValue;
     }
+  } else {
+    doc.finalPrice = doc.originalPrice;
   }
+};
+
+ProductSchema.pre('save', function (next) {
+  calculateFinalPrice(this);
   next();
 });
 
-// Pre-save middleware to update status based on stock
+ProductSchema.pre('findOneAndUpdate', function (next) {
+  const update = this.getUpdate() as any;
+  if (update.$set.originalPrice || update.$set.discountValue || update.$set.discountType) {
+    this.model.findOne(this.getQuery()).then(doc => {
+      const newDoc = { ...doc.toObject(), ...update.$set };
+      calculateFinalPrice(newDoc);
+      update.$set.finalPrice = newDoc.finalPrice;
+      next();
+    });
+  } else {
+    next();
+  }
+});
+
 ProductSchema.pre('save', function (next) {
   if (this.stock === 0) {
     this.status = ProductStatus.Inactive;

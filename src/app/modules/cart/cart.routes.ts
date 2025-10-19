@@ -1,13 +1,13 @@
 import express from 'express';
 import {
-    getMyCart,
-    addToCart,
-    updateCartItem,
-    removeFromCart,
-    clearCart,
-    getCartSummary,
-    checkoutCart,
-    getAllCarts
+  getMyCart,
+  addToCart,
+  updateCartItem,
+  removeFromCart,
+  clearCart,
+  getCartSummary,
+  checkoutCart,
+  getAllCarts
 } from './cart.controller';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
 

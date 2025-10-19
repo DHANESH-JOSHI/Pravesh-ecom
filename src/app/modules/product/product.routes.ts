@@ -6,7 +6,6 @@ import {
   updateProduct,
   deleteProduct,
   getFeaturedProducts,
-  // getTrendingProducts,
   getNewArrivalProducts,
   getDiscountProducts,
   getProductsByCategory,
@@ -27,8 +26,6 @@ router.get('/search', searchProducts);
 
 router.get('/featured', getFeaturedProducts);
 
-// router.get('/trending', getTrendingProducts);
-
 router.get('/new-arrivals', getNewArrivalProducts);
 
 router.get('/discount', getDiscountProducts);
@@ -41,7 +38,7 @@ router.get('/category/:categoryId', getProductsByCategory);
 
 router.get('/:id', getProductById);
 
-router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.fields([ { name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 } ]), updateProduct);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.fields([{ name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 }]), updateProduct);
 
 router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteProduct);
 

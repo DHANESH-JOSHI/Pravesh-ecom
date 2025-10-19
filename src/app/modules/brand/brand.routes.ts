@@ -1,10 +1,10 @@
 import express from 'express';
 import {
-    createBrand,
-    getAllBrands,
-    getBrandById,
-    updateBrandById,
-    deleteBrandById
+  createBrand,
+  getAllBrands,
+  getBrandById,
+  updateBrandById,
+  deleteBrandById
 } from './brand.controller';
 import { upload } from '@/config/cloudinary';
 import { auth, authenticatedActionLimiter } from '@/middlewares';

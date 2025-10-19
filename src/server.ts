@@ -11,9 +11,27 @@ async function main() {
 
     await redis.connect();
 
-    app.listen(config.PORT, () => {
+    const server = app.listen(config.PORT, () => {
       logger.info(`[APP] Server is running on port ${config.PORT}`)
     })
+
+    let isShuttingDown = false;
+    const shutdown = () => {
+      if (isShuttingDown) return;
+      isShuttingDown = true;
+
+      logger.info('[APP] Shutting down gracefully...');
+      server.close(async () => {
+        logger.info('[APP] HTTP server closed.');
+        await mongoose.disconnect();
+        logger.info('[DB] Mongoose disconnected.');
+        await redis.quit();
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 
   } catch (err) {
     logger.error(`[APP] Application startup error: ${err}`);

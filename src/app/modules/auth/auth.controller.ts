@@ -4,81 +4,92 @@ import { loginValidation, registerValidation, requestOtpValidation, verifyOtpVal
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { generateOTP } from "@/utils";
 import status from "http-status";
+import { Wallet } from '../wallet/wallet.model';
+import mongoose from "mongoose";
 import { UserStatus } from "../user/user.interface";
 
 const ApiError = getApiErrorClass("AUTH");
 const ApiResponse = getApiResponseClass("AUTH");
 
 export const registerUser = asyncHandler(async (req, res) => {
-  const { name, password, img, phone, email, role } = registerValidation.parse(req.body);
+  const { name, password, img, phone, email } = registerValidation.parse(req.body);
 
-  const existingEmail = await User.findOne({ email });
-  if (existingEmail) {
-    throw new ApiError(status.BAD_REQUEST, "Email already exists");
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  let user;
+
+  try {
+    const existingUser = await User.findOne({ $or: [{ email }, { phone }] }).session(session);
+    if (existingUser) {
+      if (existingUser.email === email) {
+        throw new ApiError(status.BAD_REQUEST, "Email already exists");
+      }
+      if (existingUser.phone === phone) {
+        throw new ApiError(status.BAD_REQUEST, "Phone number already exists");
+      }
+    }
+
+    const otp = generateOTP();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
+    const newUser = new User({ name, password, img, phone, email, otp, otpExpires });
+    await newUser.save({ session });
+    user = newUser;
+
+    await Wallet.create([{ userId: user._id }], { session });
+
+    await session.commitTransaction();
+
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  // Check for existing phone
-  const existingPhone = await User.findOne({ phone });
-  if (existingPhone) {
-    throw new ApiError(status.BAD_REQUEST, "Phone number already exists");
-  }
-
-  const otp = generateOTP();
-  const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
-
-  const user = new User({ name, password, img, phone, email, role, otp, otpExpires });
-  await user.save();
-
-  await sendEmail(email, 'OTP for Pravesh registration', `Your OTP for Pravesh registration is ${otp}`);
-  await sendSMS(`Your OTP for Pravesh registration is ${otp}`, phone);
-
-  const { password: _, ...userObject } = user.toObject();
-
+  if (email) await sendEmail(email, 'OTP for Pravesh registration', `Your OTP for Pravesh registration is ${user.otp}`);
+  await sendSMS(`Your OTP for Pravesh registration is ${user.otp}`, phone);
+  const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
   res.status(status.CREATED).json(new ApiResponse(status.OK, "OTP sent to email and phone for registration verification", userObject));
-  return;
 });
 
 export const loginUser = asyncHandler(async (req, res) => {
-  const { email, password } = loginValidation.parse(req.body);
+  const { phoneOrEmail, password } = loginValidation.parse(req.body);
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
+  });
   if (!user) {
-    throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
+    throw new ApiError(status.BAD_REQUEST, "Invalid email or phone");
   }
   if (user.status !== UserStatus.ACTIVE) {
     throw new ApiError(status.UNAUTHORIZED, "User account is not active");
   }
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
-    throw new ApiError(status.BAD_REQUEST, "Invalid email or password");
+    throw new ApiError(status.BAD_REQUEST, "Invalid password");
   }
 
   const token = generateToken(user);
 
-  // remove password
-  const { password: _, ...userObject } = user.toObject();
+  const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
 
   res.json(new ApiResponse(status.OK, "User logged in successfully", { token, ...userObject }));
   return;
 });
 
-// Request OTP handler
 export const requestForOtp = asyncHandler(async (req, res) => {
   const { phoneOrEmail } = requestOtpValidation.parse(req.body);
 
-  let isEmail = false;
-  // Find or create user
-  let user = await User.findOne({ phone: phoneOrEmail })
-  if (!user) {
-    user = await User.findOne({ email: phoneOrEmail })
-    isEmail = true;
-  }
+  const user = await User.findOne({
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
+  });
 
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  // Generate OTP and set expiration
+  const isEmail = user.email === phoneOrEmail;
+
   const otp = generateOTP();
   user.otp = otp;
   user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
@@ -96,22 +107,17 @@ export const requestForOtp = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(status.OK, "OTP sent successfully", { phoneOrEmail }));
 });
 
-// Verify OTP and login
 export const verifyOtp = asyncHandler(async (req, res) => {
   const { phoneOrEmail, otp } = verifyOtpValidation.parse(req.body);
 
-  // Find user by phone
-  let user = await User.findOne({ phone: phoneOrEmail });
-
-  if (!user) {
-    user = await User.findOne({ email: phoneOrEmail })
-  }
+  const user = await User.findOne({
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
+  });
 
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  // Check if OTP is valid and not expired
   if (!user.compareOtp(otp)) {
     throw new ApiError(status.UNAUTHORIZED, "Invalid or expired OTP");
   }
@@ -119,16 +125,13 @@ export const verifyOtp = asyncHandler(async (req, res) => {
   if (user.status === UserStatus.PENDING) {
     user.status = UserStatus.ACTIVE;
   }
-  // Generate token for the user
   const token = generateToken(user);
 
-  // Clear OTP after successful verification
   user.otp = undefined;
   user.otpExpires = undefined;
   await user.save();
 
-  // Remove password from response
-  const { password: _, ...userObject } = user.toObject();
+  const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
 
   res.json(new ApiResponse(status.OK, "OTP verified successfully", { token, ...userObject }));
   return;

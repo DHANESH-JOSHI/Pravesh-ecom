@@ -38,4 +38,5 @@ const CategorySchema: Schema = new Schema<ICategory>(
   }
 );
 
+CategorySchema.index({ createdAt: -1 });
 export const Category = mongoose.model<ICategory>('Category', CategorySchema);

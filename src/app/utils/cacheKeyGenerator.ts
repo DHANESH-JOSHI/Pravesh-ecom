@@ -5,6 +5,6 @@ export const generateCacheKey = (prefix: string, query: Record<string, any>): st
     if (Array.isArray(val)) return `${key}=${val.map(v => `${v}`).join(',')}`;
     return `${key}=${query[key]}`;
   }).join('&')
-  if(sortedKeys.length === 0) return prefix;
+  if (sortedKeys.length === 0) return prefix;
   return `${prefix}?${sortedKeys}`;
 };

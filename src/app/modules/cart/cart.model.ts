@@ -41,7 +41,6 @@ const CartSchema = new Schema<ICart, ICartModel>(
   }
 );
 
-// Instance method to add an item
 CartSchema.methods.addItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
@@ -53,16 +52,13 @@ CartSchema.methods.addItem = async function (
   );
 
   if (existingItemIndex > -1) {
-    // Item already exists, update quantity
     this.items[existingItemIndex].quantity += quantity;
   } else {
-    // Add new item
     this.items.push({ product: productId, quantity });
   }
   return this.save();
 };
 
-// Instance method to update an item's quantity
 CartSchema.methods.updateItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
@@ -78,7 +74,6 @@ CartSchema.methods.updateItem = async function (
   }
 
   if (quantity <= 0) {
-    // If quantity is 0 or less, remove the item
     this.items.splice(itemIndex, 1);
   } else {
     this.items[itemIndex].quantity = quantity;
@@ -86,7 +81,6 @@ CartSchema.methods.updateItem = async function (
   return this.save();
 };
 
-// Instance method to remove an item
 CartSchema.methods.removeItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
@@ -98,7 +92,6 @@ CartSchema.methods.removeItem = async function (
   return this.save();
 };
 
-// Instance method to clear the cart
 CartSchema.methods.clearCart = async function (this: ICart) {
   this.items = [];
   return this.save();

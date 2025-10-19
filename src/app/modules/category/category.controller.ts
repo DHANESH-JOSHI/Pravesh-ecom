@@ -69,7 +69,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", result));
 });
@@ -104,7 +104,7 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "Category not found");
   }
 
-  await redis.set(cacheKey, category);
+  await redis.set(cacheKey, category, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category retrieved successfully", category));
 });

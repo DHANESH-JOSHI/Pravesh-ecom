@@ -4,35 +4,41 @@ import { User } from "@/modules/user/user.model";
 import config from "@/config";
 import { ApiError } from "@/interface";
 import status from "http-status";
+import { redis } from "@/config/redis";
+import { IUser } from "@/modules/user/user.interface";
 
 export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Get token from header
       const token = req.headers.authorization?.split(" ")[1];
       if (!token) {
         return next(new ApiError(status.BAD_REQUEST, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
       }
 
-      // Verify token
       const decoded = jwt.verify(token, config.JWT_SECRET) as { userId: string };
 
-      const user = await User.findById(decoded.userId)
+      const cacheKey = `user:${decoded.userId}`;
+      let user: IUser | null = await redis.get(cacheKey);
+
+      if (!user) {
+        user = await User.findById(decoded.userId);
+        if (user) {
+          await redis.set(cacheKey, user, 600);
+        }
+      }
 
       if (!user) {
         return next(new ApiError(status.UNAUTHORIZED, "User not found", "AUTH_MIDDLEWARE"));
       }
+      const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
+      req.user = userObject as IUser;
 
-      // Attach user to request
-      req.user = user;
-      // Role-based authorization
       if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
         return next(new ApiError(status.FORBIDDEN, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
       }
-
       next();
     } catch (error) {
       next(new ApiError(status.UNAUTHORIZED, "Invalid or expired token", "AUTH_MIDDLEWARE"));
     }
-  };
+  }
 };

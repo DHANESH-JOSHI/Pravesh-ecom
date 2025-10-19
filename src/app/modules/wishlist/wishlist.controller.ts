@@ -1,4 +1,5 @@
 import { asyncHandler } from '@/utils';
+import { redis } from '@/config/redis';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import status from 'http-status';
 import { Wishlist } from './wishlist.model';
@@ -11,6 +12,12 @@ const ApiResponse = getApiResponseClass('WISHLIST');
 
 export const getWishlist = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
+  const cacheKey = `wishlist:${userId}`;
+  const cachedWishlist = await redis.get(cacheKey);
+
+  if (cachedWishlist) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Wishlist retrieved successfully', cachedWishlist));
+  }
 
   let wishlist = await Wishlist.findOne({ userId }).populate({
     path: 'items',
@@ -20,6 +27,8 @@ export const getWishlist = asyncHandler(async (req, res) => {
   if (!wishlist) {
     wishlist = await Wishlist.create({ userId, items: [] });
   }
+
+  await redis.set(cacheKey, wishlist, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Wishlist retrieved successfully', wishlist));
 });
@@ -44,6 +53,8 @@ export const addProductToWishlist = asyncHandler(async (req, res) => {
     }
   }
 
+  await redis.delete(`wishlist:${userId}`);
+
   res.status(status.OK).json(new ApiResponse(status.OK, `Product '${product.name}' added to wishlist`, wishlist));
 });
 
@@ -67,6 +78,8 @@ export const removeProductFromWishlist = asyncHandler(async (req, res) => {
   }
 
   await wishlist.save();
+
+  await redis.delete(`wishlist:${userId}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Product removed from wishlist successfully', wishlist));
 });

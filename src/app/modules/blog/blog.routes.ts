@@ -4,16 +4,18 @@ import { createBlogPost, deletePost, getAllPosts, getPostBySlug, getPublishedPos
 
 const router = express.Router();
 
-// Public routes
 router.get('/', getPublishedPosts);
+
 router.get('/:slug', getPostBySlug);
 
-// Admin routes
 router.use(auth('admin'), authenticatedActionLimiter);
 
 router.post('/', createBlogPost);
-router.get('/all', getAllPosts); // Changed from '/admin/all' to just '/all' under the admin-protected path
+
+router.get('/all', getAllPosts);
+
 router.patch('/:postId', updatePost);
+
 router.delete('/:postId', deletePost);
 
 export const blogRouter = router;

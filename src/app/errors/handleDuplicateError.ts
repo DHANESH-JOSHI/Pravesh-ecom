@@ -2,7 +2,6 @@ import { ApiError } from "@/interface";
 import status from "http-status";
 
 export const handleDuplicateError = (err: any) => {
-  // check match
   const match = err.message.match(/"([^"]*)"/);
 
   const extractedMessage = match && match[1];
