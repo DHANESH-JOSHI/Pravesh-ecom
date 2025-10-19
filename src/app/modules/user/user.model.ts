@@ -10,7 +10,7 @@ const userSchema = new Schema<IUser>(
     email: { type: String },
     img: { type: String },
     role: { type: String, enum: UserRole, default: UserRole.USER },
-    status: { type: String, enum: UserStatus, default: UserStatus.ACTIVE },
+    status: { type: String, enum: UserStatus, default: UserStatus.PENDING },
     otp: { type: String },
     otpExpires: { type: Date },
   },
