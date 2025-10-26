@@ -19,18 +19,18 @@ router.post('/', auth('user'), authenticatedActionLimiter, createOrder);
 
 router.post('/custom', auth('user'), authenticatedActionLimiter, upload.single('image'), createCustomOrder);
 
-router.post('/confirm/:orderId', auth('user'), authenticatedActionLimiter, confirmCustomOrder);
+router.post('/confirm/:id', auth('user'), authenticatedActionLimiter, confirmCustomOrder);
 
 router.get('/me', auth('user'), authenticatedActionLimiter, getMyOrders);
 
 router.get('/', auth('admin'), authenticatedActionLimiter, getAllOrders);
 
-router.patch('/:orderId', auth('admin'), authenticatedActionLimiter, updateCustomOrder);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, updateCustomOrder);
 
-router.patch('/:orderId/status', auth('admin'), authenticatedActionLimiter, updateOrderStatus);
+router.patch('/:id/status', auth('admin'), authenticatedActionLimiter, updateOrderStatus);
 
-router.patch('/:orderId/cancel', auth('user'), authenticatedActionLimiter, cancelOrder);
+router.patch('/:id/cancel', auth('user'), authenticatedActionLimiter, cancelOrder);
 
-router.get('/:orderId', auth(), authenticatedActionLimiter, getOrderById);
+router.get('/:id', auth(), authenticatedActionLimiter, getOrderById);
 
 export const orderRouter = router;

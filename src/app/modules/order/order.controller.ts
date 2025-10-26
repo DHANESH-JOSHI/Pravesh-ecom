@@ -104,7 +104,7 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
 });
 
 export const updateCustomOrder = asyncHandler(async (req, res) => {
-  const { orderId } = req.params;
+  const { id:orderId } = req.params;
   const { items, status: orderStatus, feedback } = adminUpdateOrderValidation.parse(req.body);
 
   const order = await Order.findById(orderId);
@@ -138,7 +138,7 @@ export const updateCustomOrder = asyncHandler(async (req, res) => {
 
 export const confirmCustomOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { orderId } = req.params;
+  const { id: orderId } = req.params;
   const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
 
   const session = await mongoose.startSession();
@@ -217,7 +217,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 
 
 export const getOrderById = asyncHandler(async (req, res) => {
-  const { orderId } = req.params;
+  const { id: orderId } = req.params;
   const { populate = 'false' } = req.query;
   if (!mongoose.Types.ObjectId.isValid(orderId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
@@ -268,7 +268,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
 });
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
-  const { orderId } = req.params;
+  const { id:orderId } = req.params;
   const { status: newStatus } = req.body as { status: OrderStatus };
 
   if (!Object.values(OrderStatus).includes(newStatus)) {
@@ -306,7 +306,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
 export const cancelOrder = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  const { orderId } = req.params;
+  const { id:orderId } = req.params;
 
   const order = await Order.findById(orderId);
   if (!order) {
