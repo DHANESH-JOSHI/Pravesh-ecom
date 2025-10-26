@@ -9,6 +9,7 @@ import mongoose, { Types } from 'mongoose';
 import { Address } from '../address/address.model';
 import status from 'http-status';
 import { Product } from '../product/product.model';
+import { redis } from '@/config/redis';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
@@ -80,7 +81,6 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 });
 
-
 export const createCustomOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
@@ -103,7 +103,7 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
 });
 
-export const adminUpdateCustomOrder = asyncHandler(async (req, res) => {
+export const updateCustomOrder = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   const { items, status: orderStatus, feedback } = adminUpdateOrderValidation.parse(req.body);
 
@@ -265,4 +265,64 @@ export const getAllOrders = asyncHandler(async (req, res) => {
     total,
     totalPages
   }));
-})
+});
+
+export const updateOrderStatus = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const { status: newStatus } = req.body as { status: OrderStatus };
+
+  if (!Object.values(OrderStatus).includes(newStatus)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid order status');
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw new ApiError(status.NOT_FOUND, 'Order not found');
+  }
+
+  const oldStatus = order.status;
+  order.status = newStatus;
+  await order.save();
+
+  if (newStatus === OrderStatus.Delivered && oldStatus !== OrderStatus.Delivered) {
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.product,
+        {
+          $inc: {
+            salesCount: 1,
+            totalSold: item.quantity,
+          }
+        });
+    }
+    await redis.deleteByPattern('products:best-selling*');
+    await redis.deleteByPattern('products:trending*');
+    await redis.deleteByPattern('products*')
+  }
+
+  res.status(status.OK).json(
+    new ApiResponse(status.OK, 'Order status updated successfully', order)
+  );
+});
+
+export const cancelOrder = asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  const { orderId } = req.params;
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw new ApiError(status.NOT_FOUND, 'Order not found');
+  }
+  if (order.user !== userId) {
+    throw new ApiError(status.FORBIDDEN, 'You are not authorized to cancel this order');
+  }
+  if (order.status === OrderStatus.Shipped || order.status === OrderStatus.Delivered) {
+    throw new ApiError(status.BAD_REQUEST, 'Order cannot be canceled after shipping');
+  }
+
+  order.status = OrderStatus.Cancelled;
+  await order.save();
+
+  res.status(status.OK).json(
+    new ApiResponse(status.OK, 'Order canceled successfully', order)
+  );
+});

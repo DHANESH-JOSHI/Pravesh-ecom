@@ -20,7 +20,7 @@ const OrderSchema = new Schema<IOrder>(
     status: {
       type: String,
       enum: Object.values(OrderStatus),
-      default: OrderStatus.Pending,
+      default: OrderStatus.Processing,
     },
     isCustomOrder: {
       type: Boolean,
