@@ -1,4 +1,4 @@
-import { asyncHandler, generateToken, sendEmail, sendSMS } from "@/utils";
+import { asyncHandler, generateTokens, sendEmail, sendSMS, verifyToken } from "@/utils";
 import { User } from "../user/user.model";
 import { loginValidation, registerValidation, requestOtpValidation, verifyOtpValidation } from "./auth.validation";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
@@ -7,6 +7,7 @@ import status from "http-status";
 import { Wallet } from '../wallet/wallet.model';
 import mongoose from "mongoose";
 import { UserStatus } from "../user/user.interface";
+import { resetPasswordValidation } from "../user/user.validation";
 
 const ApiError = getApiErrorClass("AUTH");
 const ApiResponse = getApiResponseClass("AUTH");
@@ -57,6 +58,7 @@ export const loginUser = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({
     $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
+    isDeleted: false
   });
   if (!user) {
     throw new ApiError(status.BAD_REQUEST, "Invalid email or phone");
@@ -68,12 +70,15 @@ export const loginUser = asyncHandler(async (req, res) => {
   if (!isMatch) {
     throw new ApiError(status.BAD_REQUEST, "Invalid password");
   }
+  const { accessToken, refreshToken } = generateTokens(user);
+  const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
 
-  const token = generateToken(user);
-
-  const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
-
-  res.json(new ApiResponse(status.OK, "User logged in successfully", { token, ...userObject }));
+  res.
+    cookie('accessToken', accessToken,
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+    cookie('refreshToken', refreshToken,
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
   return;
 });
 
@@ -82,6 +87,7 @@ export const requestForOtp = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({
     $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
+    isDeleted: false
   });
 
   if (!user) {
@@ -107,11 +113,12 @@ export const requestForOtp = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(status.OK, "OTP sent successfully", { phoneOrEmail }));
 });
 
-export const verifyOtp = asyncHandler(async (req, res) => {
+export const loginUsingOtp = asyncHandler(async (req, res) => {
   const { phoneOrEmail, otp } = verifyOtpValidation.parse(req.body);
 
   const user = await User.findOne({
     $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
+    isDeleted: false
   });
 
   if (!user) {
@@ -125,7 +132,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
   if (user.status === UserStatus.PENDING) {
     user.status = UserStatus.ACTIVE;
   }
-  const token = generateToken(user);
+  const { accessToken, refreshToken } = generateTokens(user);
 
   user.otp = undefined;
   user.otpExpires = undefined;
@@ -133,6 +140,54 @@ export const verifyOtp = asyncHandler(async (req, res) => {
 
   const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
 
-  res.json(new ApiResponse(status.OK, "OTP verified successfully", { token, ...userObject }));
+  res.
+    cookie('accessToken', accessToken,
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+    cookie('refreshToken', refreshToken,
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
   return;
 });
+
+export const logout = asyncHandler(async (req, res) => {
+  res.clearCookie('accessToken').clearCookie('refreshToken').json(new ApiResponse(status.OK, "Logged out successfully"));
+  return;
+});
+
+export const refreshTokens = asyncHandler(async (req, res) => {
+  const { refreshToken } = req.cookies;
+
+  const decodedToken = verifyToken(refreshToken);
+  if (!decodedToken) {
+    throw new ApiError(status.UNAUTHORIZED, "Invalid refresh token");
+  }
+  const user = await User.findById(decodedToken.userId);
+
+  if (!user) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+
+  const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens(user);
+
+  res.
+    cookie('accessToken', newAccessToken,
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+    cookie('refreshToken', newRefreshToken,
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+    .json(new ApiResponse(status.OK, "Tokens refreshed successfully", { accessToken: newAccessToken, refreshToken: newRefreshToken }));
+  return;
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { phoneOrEmail, newPassword } = resetPasswordValidation.parse(req.body)
+  const user = await User.findOne({ phoneOrEmail, isDeleted: false });
+  if (!user) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+  user.password = newPassword;
+  await user.save();
+  res.json(new ApiResponse(status.OK, "Password reset successfully"));
+  return;
+})
+
+

@@ -1,7 +1,7 @@
 import z from "zod";
 import { validateIndianMobile } from "@/utils";
 
-const phoneOrEmailSchema = z
+export const phoneOrEmailSchema = z
   .string()
   .trim()
   .refine(
