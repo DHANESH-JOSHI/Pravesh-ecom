@@ -2,14 +2,15 @@ import express from "express";
 import {
   getAllUsers,
   getUserById,
-  resetPassword,
-  activateUser,
+  recoverUser,
   checkPhoneExists,
   checkEmailExists,
   updateUser,
-  getMe
+  deleteUser,
+  getMe,
+  updatePassword
 } from "./user.controller";
-import { auth, authenticatedActionLimiter, dataCheckLimiter, emailLimiter } from "@/middlewares";
+import { auth, authenticatedActionLimiter, dataCheckLimiter } from "@/middlewares";
 
 const router = express.Router();
 
@@ -19,9 +20,11 @@ router.get("/", auth('admin'), authenticatedActionLimiter, getAllUsers);
 
 router.get("/:id", auth(), authenticatedActionLimiter, getUserById);
 
-router.post("/reset-password", auth('user'), emailLimiter, resetPassword);
+router.patch("/password", auth('user'), updatePassword);
 
-router.post("/:id/activate", auth('admin'), authenticatedActionLimiter, activateUser);
+router.post("/:id/recover", auth('admin'), authenticatedActionLimiter, recoverUser);
+
+router.delete("/:id", auth('admin'), authenticatedActionLimiter, deleteUser);
 
 router.post("/phone/:phone", dataCheckLimiter, checkPhoneExists);
 

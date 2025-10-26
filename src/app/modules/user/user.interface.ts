@@ -20,6 +20,7 @@ export interface IUser extends Document {
   role: UserRole;
   otp?: string;
   otpExpires?: Date;
+  isDeleted: boolean;
   comparePassword(password: string): Promise<boolean>;
   compareOtp(otp: string): boolean;
 }

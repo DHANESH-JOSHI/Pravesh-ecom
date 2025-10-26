@@ -1,10 +1,9 @@
 import { User } from "./user.model";
-import { activateUserValidation, emailCheckValidation, phoneCheckValidation, resetPasswordValidation, updateUserValidation } from "./user.validation";
+import { emailCheckValidation, phoneCheckValidation, updatePasswordValidation, updateUserValidation } from "./user.validation";
 import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { redis } from "@/config/redis";
-import { UserStatus } from "./user.interface";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
@@ -118,18 +117,21 @@ export const getUserById = asyncHandler(async (req, res) => {
   return;
 });
 
-export const resetPassword = asyncHandler(async (req, res) => {
+export const updatePassword = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) {
     throw new ApiError(status.UNAUTHORIZED, "User not authenticated");
   }
-  const { newPassword } = resetPasswordValidation.parse(req.body);
+  const { currentPassword, newPassword } = updatePasswordValidation.parse(req.body);
 
   const user = await User.findById(userId);
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
-
+  const isPasswordCorrect = await user.comparePassword(currentPassword)
+  if (!isPasswordCorrect) {
+    throw new ApiError(status.UNAUTHORIZED, "Incorrect password");
+  }
   user.password = newPassword;
   await user.save();
 
@@ -137,22 +139,36 @@ export const resetPassword = asyncHandler(async (req, res) => {
   return;
 });
 
-export const activateUser = asyncHandler(async (req, res) => {
-  const { phone } = activateUserValidation.parse(req.body);
+export const recoverUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-  const user = await User.findOne({ phone });
+  const user = await User.findById(id)
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  if (user.status !== UserStatus.PENDING) {
+  if (!user.isDeleted) {
     throw new ApiError(status.BAD_REQUEST, "User is already active");
   }
 
-  user.status = UserStatus.ACTIVE;
+  user.isDeleted = false;
   await user.save();
 
-  res.json(new ApiResponse(status.OK, "User activated successfully"));
+  res.json(new ApiResponse(status.OK, "User recovered successfully"));
+  return;
+});
+
+export const deleteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const user = await User.findOne({ _id: id, isDeleted: false });
+  if (!user) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+
+  user.isDeleted = true;
+  await user.save();
+
+  res.json(new ApiResponse(status.OK, "User deleted successfully"));
   return;
 });
 
@@ -165,7 +181,7 @@ export const checkPhoneExists = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "Phone number not found");
   }
 
-  res.json(new ApiResponse(status.OK, "Phone number exists", { exists: true, phone: user.phone }));
+  res.json(new ApiResponse(status.OK, "Phone number exists", true));
   return;
 });
 
@@ -178,6 +194,7 @@ export const checkEmailExists = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "Email not found");
   }
 
-  res.json(new ApiResponse(status.OK, "Email exists", { exists: true, email: user.email }));
+  res.json(new ApiResponse(status.OK, "Email exists", true));
   return;
 });
+

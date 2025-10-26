@@ -13,6 +13,7 @@ const userSchema = new Schema<IUser>(
     status: { type: String, enum: UserStatus, default: UserStatus.PENDING },
     otp: { type: String },
     otpExpires: { type: Date },
+    isDeleted: { type: Boolean, default: false }
   },
   {
     timestamps: true,
