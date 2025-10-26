@@ -1,4 +1,4 @@
-import { Document, Schema } from "mongoose";
+import { Document, Types } from "mongoose";
 
 export interface ITransaction {
   amount: number;
@@ -6,7 +6,7 @@ export interface ITransaction {
   createdAt: Date;
 }
 export interface IWallet extends Document {
-  userId: Schema.Types.ObjectId;
+  user: Types.ObjectId;
   balance: number;
   transactions: ITransaction[];
 }

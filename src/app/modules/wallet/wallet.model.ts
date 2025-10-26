@@ -20,7 +20,7 @@ const TransactionSchema = new Schema<ITransaction>(
 
 const WalletSchema = new Schema<IWallet>(
   {
-    userId: {
+    user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       unique: true,

@@ -31,7 +31,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(status.NOT_FOUND, 'User not found');
   }
-  const wallet = await Wallet.findOne({ userId: user._id });
+  const wallet = await Wallet.findOne({ user: user._id });
   if (!wallet) {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found for the specified user');
   }
@@ -46,7 +46,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
   await wallet.save();
 
   res.json(new ApiResponse(status.OK, 'Funds added to wallet successfully', {
-    userId: wallet.userId,
+    userId: wallet.user,
     newBalance: wallet.balance
   }));
 });
