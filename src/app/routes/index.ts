@@ -45,7 +45,7 @@ const moduleRoutes: Route[] = [
     route: walletRouter
   },
   {
-    path: '/carts',
+    path: '/cart',
     route: cartRouter
   },
   {
