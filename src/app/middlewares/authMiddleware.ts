@@ -6,16 +6,17 @@ import { ApiError } from "@/interface";
 import status from "http-status";
 import { redis } from "@/config/redis";
 import { IUser } from "@/modules/user/user.interface";
+import { Payload } from "@/utils";
 
 export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const token = req.headers.authorization?.split(" ")[1];
+      const token = req.cookies?.accessToken;
       if (!token) {
         return next(new ApiError(status.BAD_REQUEST, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
       }
 
-      const decoded = jwt.verify(token, config.JWT_SECRET) as { userId: string };
+      const decoded = jwt.verify(token, config.JWT_SECRET) as Payload;
 
       const cacheKey = `user:${decoded.userId}`;
       let user: IUser | null = await redis.get(cacheKey);
