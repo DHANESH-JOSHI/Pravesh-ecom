@@ -1,6 +1,5 @@
 import { logger } from '@/config/logger';
 import { User } from '@/modules/user/user.model';
-import config from '@/config';
 
 export const seedDatabase = async () => {
   const adminEmail = 'admin@example.com';
@@ -11,7 +10,7 @@ export const seedDatabase = async () => {
       name: 'admin',
       email: adminEmail,
       phone: '9999999999',
-      password: config.DEFAULT_ADMIN_PASSWORD,
+      password: "your_default_admin_password",
       role: 'admin',
       status: 'active',
     });
@@ -28,7 +27,7 @@ export const seedDatabase = async () => {
       name: 'test_user',
       email: userEmail,
       phone: '8888888888',
-      password: config.DEFAULT_USER_PASSWORD,
+      password: "your_default_user_password",
       role: 'user',
       status: 'active',
     });
