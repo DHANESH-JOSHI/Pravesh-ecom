@@ -1,0 +1,10 @@
+.git
+.env.local
+.env.*.local
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+docker-compose.yml
+Dockerfile
+.dockerignore
+bun.lock
