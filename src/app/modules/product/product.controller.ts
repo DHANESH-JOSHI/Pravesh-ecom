@@ -384,6 +384,8 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`product:${id}*`);
   await redis.deleteByPattern(`product:${product.slug}*`);
   await redis.delete('product_filters');
+  await redis.deleteByPattern('products:best-selling*');
+  await redis.deleteByPattern('products:trending*');
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product deleted successfully', result)
@@ -617,5 +619,99 @@ export const getProductFilters = asyncHandler(async (req, res) => {
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)
+  );
+});
+
+export const getBestSellingProducts = asyncHandler(async (req, res) => {
+  const { limit = 10, page = 1 } = req.query;
+
+  const cacheKey = generateCacheKey('products:best-selling', req.query);
+  const cachedResult = await redis.get(cacheKey);
+
+  if (cachedResult) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Best selling products retrieved successfully', cachedResult)
+    );
+  }
+
+  const pageNumber = parseInt(page as string);
+  const limitNumber = parseInt(limit as string);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const filter = {
+    isDeleted: false,
+    status: ProductStatus.Active,
+    totalSold: { $gt: 0 }
+  };
+
+  const [bestSellers, total] = await Promise.all([
+    Product.find(filter)
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug')
+      .sort({ totalSold: -1 })
+      .skip(skip)
+      .limit(limitNumber)
+      .select('-__v'),
+    Product.countDocuments(filter)
+  ]);
+
+  const totalPages = Math.ceil(total / limitNumber);
+  const result = {
+    products: bestSellers,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+  await redis.set(cacheKey, result, 300);
+  res.status(status.OK).json(
+    new ApiResponse(status.OK, 'Best selling products retrieved successfully', result)
+  );
+});
+
+export const getTrendingProducts = asyncHandler(async (req, res) => {
+  const { limit = 10, page = 1 } = req.query;
+
+  const cacheKey = generateCacheKey('products:trending', req.query);
+  const cachedResult = await redis.get(cacheKey);
+
+  if (cachedResult) {
+    return res.status(status.OK).json(
+      new ApiResponse(status.OK, 'Trending products retrieved successfully', cachedResult)
+    );
+  }
+
+  const pageNumber = parseInt(page as string);
+  const limitNumber = parseInt(limit as string);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const filter = {
+    isDeleted: false,
+    status: ProductStatus.Active,
+    salesCount: { $gt: 0 }
+  };
+
+  const [trending, total] = await Promise.all([
+    Product.find(filter)
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug')
+      .sort({ salesCount: -1, updatedAt: -1 })
+      .skip(skip)
+      .limit(limitNumber)
+      .select('-__v'),
+    Product.countDocuments(filter)
+  ]);
+
+  const totalPages = Math.ceil(total / limitNumber);
+  const result = {
+    products: trending,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+  await redis.set(cacheKey, result, 300);
+  res.status(status.OK).json(
+    new ApiResponse(status.OK, 'Trending products retrieved successfully', result)
   );
 });

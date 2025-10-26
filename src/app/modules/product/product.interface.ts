@@ -69,6 +69,9 @@ export interface IProduct extends Document {
   rating?: number;
   reviewCount?: number;
 
+  totalSold?: number;
+  salesCount?: number;
+
   shippingInfo?: Record<string, any>;
 
   createdAt?: Date;

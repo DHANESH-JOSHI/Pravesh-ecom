@@ -63,6 +63,9 @@ const ProductSchema = new Schema<IProduct>(
 
     rating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
+
+    totalSold: { type: Number, default: 0 },
+    salesCount: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -91,6 +94,8 @@ ProductSchema.index({ status: 1, isDeleted: 1, brand: 1, finalPrice: 1 });
 ProductSchema.index({ finalPrice: 1 });
 ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ rating: -1 });
+ProductSchema.index({ totalSold: -1 });
+ProductSchema.index({ salesCount: -1 });
 
 const calculateFinalPrice = (doc: IProduct) => {
   if (doc.discountValue > 0) {
@@ -103,11 +108,6 @@ const calculateFinalPrice = (doc: IProduct) => {
     doc.finalPrice = doc.originalPrice;
   }
 };
-
-ProductSchema.pre('save', function (next) {
-  calculateFinalPrice(this);
-  next();
-});
 
 ProductSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate() as any;
@@ -124,6 +124,7 @@ ProductSchema.pre('findOneAndUpdate', function (next) {
 });
 
 ProductSchema.pre('save', function (next) {
+  calculateFinalPrice(this);
   if (this.stock === 0) {
     this.status = ProductStatus.Inactive;
     this.stockStatus = StockStatus.OutOfStock;

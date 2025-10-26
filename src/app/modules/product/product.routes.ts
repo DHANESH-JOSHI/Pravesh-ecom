@@ -12,6 +12,8 @@ import {
   searchProducts,
   getProductFilters,
   getProductBySlug,
+  getBestSellingProducts,
+  getTrendingProducts,
 } from './product.controller';
 import { auth } from '@/middlewares';
 import { authenticatedActionLimiter } from '@/middlewares';
@@ -31,6 +33,10 @@ router.get('/new-arrivals', getNewArrivalProducts);
 router.get('/discount', getDiscountProducts);
 
 router.get('/filters', getProductFilters);
+
+router.get('/best-selling', getBestSellingProducts);
+
+router.get('/trending', getTrendingProducts);
 
 router.get('/slug/:slug', getProductBySlug);
 
