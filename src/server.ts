@@ -3,14 +3,12 @@ import { logger } from "./app/config/logger";
 import mongoose from 'mongoose';
 import app from './app';
 import { redis } from "@/config/redis";
+import { connectDB } from "@/config/db";
 
 async function main() {
   try {
-    await mongoose.connect(config.DATABASE_URL as string);
-    logger.info('[DB] Database connected successfully');
-
+    await connectDB()
     await redis.connect();
-
     const server = app.listen(config.PORT, () => {
       logger.info(`[APP] Server is running on port ${config.PORT}`)
     })
