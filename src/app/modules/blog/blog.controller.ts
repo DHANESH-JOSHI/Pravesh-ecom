@@ -10,7 +10,7 @@ import { cloudinary } from '@/config/cloudinary';
 const ApiError = getApiErrorClass('BLOG');
 const ApiResponse = getApiResponseClass('BLOG');
 
-export const createBlogPost = asyncHandler(async (req, res) => {
+export const createBlog = asyncHandler(async (req, res) => {
   const blogData = createBlogValidation.parse(req.body);
   if (!req.file) {
     throw new ApiError(status.BAD_REQUEST, 'Featured image is required');
@@ -21,12 +21,12 @@ export const createBlogPost = asyncHandler(async (req, res) => {
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Blog post created successfully', blog));
 });
 
-export const getPublishedPosts = asyncHandler(async (req, res) => {
+export const getPublishedBlogs = asyncHandler(async (req, res) => {
   const cacheKey = generateCacheKey('blogs:published', req.query);
-  const cachedPosts = await redis.get(cacheKey);
+  const cachedBlogs = await redis.get(cacheKey);
 
-  if (cachedPosts) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved published posts`, cachedPosts));
+  if (cachedBlogs) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved published posts`, cachedBlogs));
   }
 
   const posts = await Blog.find({ isPublished: true, isDeleted: false }).sort({ createdAt: -1 });
@@ -34,93 +34,93 @@ export const getPublishedPosts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved ${posts.length} published posts`, posts));
 });
 
-export const getPostBySlug = asyncHandler(async (req, res) => {
+export const getBlogBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
   const cacheKey = `blog:${slug}`;
-  const cachedPost = await redis.get(cacheKey);
+  const cachedBlog = await redis.get(cacheKey);
 
-  if (cachedPost) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, 'Blog post retrieved successfully', cachedPost));
+  if (cachedBlog) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', cachedBlog));
   }
 
   const post = await Blog.findOne({ slug, isPublished: true, isDeleted: false });
 
   if (!post) {
-    throw new ApiError(status.NOT_FOUND, 'Blog post not found');
+    throw new ApiError(status.NOT_FOUND, 'Blog not found');
   }
 
   await redis.set(cacheKey, post, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, 'Blog post retrieved successfully', post));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', post));
 });
 
-export const getAllPosts = asyncHandler(async (req, res) => {
+export const getAllBlogs = asyncHandler(async (req, res) => {
   const cacheKey = generateCacheKey('blogs', req.query);
-  const cachedPosts = await redis.get(cacheKey);
+  const cachedBlogs = await redis.get(cacheKey);
 
-  if (cachedPosts) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved all posts`, cachedPosts));
+  if (cachedBlogs) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved all blogs`, cachedBlogs));
   }
 
   const posts = await Blog.find({ isDeleted: false }).sort({ createdAt: -1 });
   await redis.set(cacheKey, posts, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved all ${posts.length} posts`, posts));
+  res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved all ${posts.length} blogs`, posts));
 });
 
-export const updatePost = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(postId)) {
-    throw new ApiError(status.BAD_REQUEST, 'Invalid post ID');
+export const updateBlog = asyncHandler(async (req, res) => {
+  const { id: blogId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(blogId)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid blog ID');
   }
   const postData = updateBlogValidation.parse(req.body);
 
-  const existingPost = await Blog.findOne({ _id: postId, isDeleted: false });
+  const existingBlog = await Blog.findOne({ _id: blogId, isDeleted: false });
 
-  if (!existingPost) {
-    throw new ApiError(status.NOT_FOUND, 'Blog post not found or has been deleted');
+  if (!existingBlog) {
+    throw new ApiError(status.NOT_FOUND, 'Blog not found or has been deleted');
   }
 
   if (req.file) {
     postData.featuredImage = req.file.path;
-    if (existingPost.featuredImage) {
-      const publicId = existingPost.featuredImage.split("/").pop()?.split(".")[0];
+    if (existingBlog.featuredImage) {
+      const publicId = existingBlog.featuredImage.split("/").pop()?.split(".")[0];
       if (publicId) {
         await cloudinary.uploader.destroy(`pravesh-blogs/${publicId}`);
       }
     }
   }
 
-  const updatedPost = await Blog.findByIdAndUpdate(
-    existingPost._id,
+  const updatedBlog = await Blog.findByIdAndUpdate(
+    existingBlog._id,
     postData,
     { new: true }
   );
 
   await redis.deleteByPattern('blogs*');
-  await redis.deleteByPattern(`blog:${existingPost.slug}`);
+  await redis.deleteByPattern(`blog:${existingBlog.slug}`);
 
-  res.status(status.OK).json(new ApiResponse(status.OK, `Post updated successfully`, updatedPost));
+  res.status(status.OK).json(new ApiResponse(status.OK, `Blog updated successfully`, updatedBlog));
 });
 
-export const deletePost = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(postId)) {
-    throw new ApiError(status.BAD_REQUEST, 'Invalid post ID');
+export const deleteBlog = asyncHandler(async (req, res) => {
+  const { id:blogId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(blogId)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid blog ID');
   }
 
-  const existingPost = await Blog.findOne({ _id: postId, isDeleted: false });
+  const existingBlog = await Blog.findOne({ _id: blogId, isDeleted: false });
 
-  if (!existingPost) {
-    throw new ApiError(status.NOT_FOUND, 'Blog post not found');
+  if (!existingBlog) {
+    throw new ApiError(status.NOT_FOUND, 'Blog not found');
   }
 
-  const deletedPost = await Blog.findByIdAndUpdate(
-    existingPost._id,
+  const deletedBlog = await Blog.findByIdAndUpdate(
+    existingBlog._id,
     { isDeleted: true, isPublished: false },
     { new: true }
   );
 
   await redis.deleteByPattern('blogs*');
-  await redis.deleteByPattern(`blog:${existingPost.slug}`);
+  await redis.deleteByPattern(`blog:${existingBlog.slug}`);
 
-  res.status(status.OK).json(new ApiResponse(status.OK, `Post deleted successfully`, deletedPost));
+  res.status(status.OK).json(new ApiResponse(status.OK, `Blog deleted successfully`, deletedBlog));
 });

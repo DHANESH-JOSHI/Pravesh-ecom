@@ -6,13 +6,9 @@ const BlogSchema = new Schema<IBlog>(
     title: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, trim: true },
     content: { type: String, required: true },
-    author: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
     featuredImage: { type: String },
     tags: [{ type: String, trim: true }],
+    isPublished: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
   },
   {

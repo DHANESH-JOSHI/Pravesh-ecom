@@ -1,21 +1,21 @@
 import express from 'express';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
-import { createBlogPost, deletePost, getAllPosts, getPostBySlug, getPublishedPosts, updatePost } from './blog.controller';
+import { createBlog, deleteBlog, getAllBlogs, getBlogBySlug, getPublishedBlogs, updateBlog } from './blog.controller';
 
 const router = express.Router();
 
-router.get('/', getPublishedPosts);
+router.get('/', getPublishedBlogs);
 
-router.get('/:slug', getPostBySlug);
+router.get('/:slug', getBlogBySlug);
 
 router.use(auth('admin'), authenticatedActionLimiter);
 
-router.post('/', createBlogPost);
+router.post('/', createBlog);
 
-router.get('/all', getAllPosts);
+router.get('/all', getAllBlogs);
 
-router.patch('/:postId', updatePost);
+router.patch('/:id', updateBlog);
 
-router.delete('/:postId', deletePost);
+router.delete('/:id', deleteBlog);
 
 export const blogRouter = router;
