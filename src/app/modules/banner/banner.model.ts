@@ -4,9 +4,9 @@ import { BannerType, IBanner } from './banner.interface';
 const BannerSchema = new Schema<IBanner>(
   {
     title: { type: String, required: true },
-    imageUrl: { type: String, required: true },
+    image: { type: String, required: true },
     targetUrl: { type: String },
-    targetType: {
+    type: {
       type: String,
       enum: BannerType,
       required: true,

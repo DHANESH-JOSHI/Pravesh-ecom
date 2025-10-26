@@ -1,6 +1,7 @@
 import express from 'express';
 import { createBanner, deleteBanner, getActiveBanners, getAllBanners, updateBanner } from './banner.controller';
 import { authenticatedActionLimiter, auth } from '@/middlewares';
+import { upload } from '@/config/cloudinary';
 
 const router = express.Router();
 
@@ -10,10 +11,10 @@ router.use(auth('admin'))
 
 router.get('/all', getAllBanners);
 
-router.post('/', authenticatedActionLimiter, createBanner);
+router.post('/', authenticatedActionLimiter, upload.single('image'), createBanner);
 
-router.patch('/:bannerId', authenticatedActionLimiter, updateBanner);
+router.patch('/:id', authenticatedActionLimiter, upload.single('image'), updateBanner);
 
-router.delete('/:bannerId', authenticatedActionLimiter, deleteBanner);
+router.delete('/:id', authenticatedActionLimiter, deleteBanner);
 
 export const bannerRouter = router;

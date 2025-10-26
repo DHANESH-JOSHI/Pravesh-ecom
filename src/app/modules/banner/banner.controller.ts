@@ -5,12 +5,14 @@ import status from 'http-status';
 import { Banner } from './banner.model';
 import { createBannerValidation, updateBannerValidation } from './banner.validation';
 import mongoose from 'mongoose';
+import { cloudinary } from '@/config/cloudinary';
 
 const ApiError = getApiErrorClass('BANNER');
 const ApiResponse = getApiResponseClass('BANNER');
 
 export const createBanner = asyncHandler(async (req, res) => {
   const bannerData = createBannerValidation.parse(req.body);
+  bannerData.image = req.file?.path;
   const banner = await Banner.create(bannerData);
   await redis.deleteByPattern('banners*');
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Banner created successfully', banner));
@@ -43,7 +45,7 @@ export const getAllBanners = asyncHandler(async (req, res) => {
 });
 
 export const updateBanner = asyncHandler(async (req, res) => {
-  const { bannerId } = req.params;
+  const { id: bannerId } = req.params;
   if (!mongoose.Types.ObjectId.isValid(bannerId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid banner ID');
   }
@@ -56,6 +58,15 @@ export const updateBanner = asyncHandler(async (req, res) => {
   if (banner.isDeleted) {
     throw new ApiError(status.BAD_REQUEST, 'Cannot update a deleted banner');
   }
+  if (req.file) {
+    bannerData.image = req.file.path;
+    if (banner.image) {
+      const publicId = banner.image.split("/").pop()?.split(".")[0];
+      if (publicId) {
+        await cloudinary.uploader.destroy(`pravesh-banners/${publicId}`);
+      }
+    }
+  }
 
   const updatedBanner = await Banner.findByIdAndUpdate(bannerId, bannerData, { new: true });
 
@@ -65,7 +76,7 @@ export const updateBanner = asyncHandler(async (req, res) => {
 });
 
 export const deleteBanner = asyncHandler(async (req, res) => {
-  const { bannerId } = req.params;
+  const { id: bannerId } = req.params;
   if (!mongoose.Types.ObjectId.isValid(bannerId)) {
     throw new ApiError(status.BAD_REQUEST, 'The provided banner ID is not a valid format.');
   }

@@ -11,9 +11,9 @@ export enum BannerType {
 
 export interface IBanner extends Document {
   title: string;
-  imageUrl: string;
+  image: string;
   targetUrl?: string;
-  targetType: BannerType;
+  type: BannerType;
   targetId?: Types.ObjectId;
   isDeleted: boolean;
   order: number;
