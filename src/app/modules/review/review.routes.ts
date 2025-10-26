@@ -7,7 +7,7 @@ router.get('/', auth('admin'), authenticatedActionLimiter, getAllReviews);
 
 router.get('/me', auth('user'), authenticatedActionLimiter, getMyReviews);
 
-router.get('/:productId', getProductReviews);
+router.get('/product/:productId', getProductReviews);
 
 router.post('/', auth('user'), authenticatedActionLimiter, createReview);
 
