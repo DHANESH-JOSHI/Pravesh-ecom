@@ -6,13 +6,13 @@ const router = express.Router();
 
 router.get('/', getPublishedBlogs);
 
+router.get('/all', getAllBlogs);
+
 router.get('/:slug', getBlogBySlug);
 
 router.use(auth('admin'), authenticatedActionLimiter);
 
 router.post('/', createBlog);
-
-router.get('/all', getAllBlogs);
 
 router.patch('/:id', updateBlog);
 

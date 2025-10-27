@@ -14,7 +14,7 @@ import { auth, authenticatedActionLimiter, dataCheckLimiter } from "@/middleware
 
 const router = express.Router();
 
-router.get("/me", auth('user'), authenticatedActionLimiter, getMe);
+router.get("/me", auth(), authenticatedActionLimiter, getMe);
 
 router.get("/", auth('admin'), authenticatedActionLimiter, getAllUsers);
 
