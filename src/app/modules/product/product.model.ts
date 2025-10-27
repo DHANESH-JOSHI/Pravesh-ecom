@@ -30,9 +30,8 @@ const ProductSchema = new Schema<IProduct>(
     },
 
     features: {
-      type: Map,
-      of: [String],
-      default: {},
+      type: [String],
+      default: [],
     },
     specifications: {
       type: Map,

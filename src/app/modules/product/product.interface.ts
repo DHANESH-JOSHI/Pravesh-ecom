@@ -51,7 +51,7 @@ export interface IProduct extends Document {
   unit: UnitType;
   stockStatus: StockStatus;
   specifications?: Record<string, any>;
-  features?: Record<string, any>;
+  features?: string[];
   images: string[];
   thumbnail: string;
 

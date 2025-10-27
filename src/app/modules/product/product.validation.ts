@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Types } from "mongoose";
-import { ProductStatus, StockStatus } from './product.interface';
+import { DiscountType, ProductStatus, StockStatus, UnitType } from './product.interface';
 
 const objectIdValidation = z
   .string()
@@ -22,11 +22,11 @@ const createProductValidation = z.object({
 
   originalPrice: z.coerce.number().min(0, 'Base price must be positive'),
   discountValue: z.coerce.number().min(0, 'Discount cannot be negative').default(0),
-  discountType: z.enum(['percentage', 'fixed']).default('percentage'),
+  discountType: z.enum(DiscountType).default(DiscountType.Percentage),
   finalPrice: z.coerce.number().min(0).optional(),
 
   stock: z.coerce.number().min(0, 'Stock cannot be negative'),
-  unit: z.enum(['bag', 'piece', 'kg', 'ton', 'litre', 'bundle', 'meter']),
+  unit: z.enum(UnitType),
   minStock: z.coerce.number().min(0).optional(),
 
   features: z.preprocess((val) => {
@@ -34,9 +34,7 @@ const createProductValidation = z.object({
       try { return JSON.parse(val); } catch (e) { return val; }
     }
     return val;
-  }, z.record(z.any(), z.any()).refine(val => typeof val === 'object' && val !== null, {
-    message: "Features must be a valid JSON object string.",
-  }).optional()),
+  }, z.array(z.string()).optional()),
   specifications: z.preprocess((val) => {
     if (typeof val === 'string') {
       try { return JSON.parse(val); } catch (e) { return val; }
