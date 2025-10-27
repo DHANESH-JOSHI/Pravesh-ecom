@@ -97,14 +97,14 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     shippingAddress: { street: 'N/A', city: 'N/A', state: 'N/A', postalCode: 'N/A', country: 'N/A' },
     status: OrderStatus.AwaitingConfirmation,
     isCustomOrder: true,
-    customOrderImage,
+    image: customOrderImage,
   });
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
 });
 
 export const updateCustomOrder = asyncHandler(async (req, res) => {
-  const { id:orderId } = req.params;
+  const { id: orderId } = req.params;
   const { items, status: orderStatus, feedback } = adminUpdateOrderValidation.parse(req.body);
 
   const order = await Order.findById(orderId);
@@ -268,7 +268,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
 });
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
-  const { id:orderId } = req.params;
+  const { id: orderId } = req.params;
   const { status: newStatus } = req.body as { status: OrderStatus };
 
   if (!Object.values(OrderStatus).includes(newStatus)) {
@@ -306,7 +306,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
 export const cancelOrder = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  const { id:orderId } = req.params;
+  const { id: orderId } = req.params;
 
   const order = await Order.findById(orderId);
   if (!order) {

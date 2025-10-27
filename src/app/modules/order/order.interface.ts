@@ -23,6 +23,7 @@ export interface IOrder extends Document {
   shippingAddress: Types.ObjectId;
   status: OrderStatus;
   isCustomOrder: boolean;
+  image?: string;
   feedback?: string;
   createdAt: Date;
   updatedAt: Date;
