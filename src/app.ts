@@ -1,6 +1,7 @@
 import express, { Application, Request, Response } from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import router from '@/routes';
 import { apiLimiter, errorHandler, notFound } from '@/middlewares';
 import status from 'http-status';
@@ -14,6 +15,7 @@ const corsOptions = {
 };
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
 
