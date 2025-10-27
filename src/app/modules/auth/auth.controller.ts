@@ -6,7 +6,7 @@ import { generateOTP } from "@/utils";
 import status from "http-status";
 import { Wallet } from '../wallet/wallet.model';
 import mongoose from "mongoose";
-import { UserStatus } from "../user/user.interface";
+import { UserRole, UserStatus } from "../user/user.interface";
 import { resetPasswordValidation } from "../user/user.validation";
 
 const ApiError = getApiErrorClass("AUTH");
@@ -55,13 +55,11 @@ export const registerUser = asyncHandler(async (req, res) => {
 
 export const loginUser = asyncHandler(async (req, res) => {
   const { phoneOrEmail, password } = loginValidation.parse(req.body);
-
   const user = await User.findOne({
-    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
-    isDeleted: false
-  });
-  if (!user) {
-    throw new ApiError(status.BAD_REQUEST, "Invalid email or phone");
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
+  })
+  if (!user || user.isDeleted) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
   }
   if (user.status !== UserStatus.ACTIVE) {
     throw new ApiError(status.UNAUTHORIZED, "User account is not active");
@@ -82,15 +80,42 @@ export const loginUser = asyncHandler(async (req, res) => {
   return;
 });
 
+export const loginAsAdmin = asyncHandler(async (req, res) => {
+  const { phoneOrEmail, password } = loginValidation.parse(req.body);
+  const user = await User.findOne({
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
+  })
+  if (!user || user.isDeleted) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+
+  if (user.role !== UserRole.ADMIN) {
+    throw new ApiError(status.UNAUTHORIZED, "User is not an admin");
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    throw new ApiError(status.BAD_REQUEST, "Invalid password");
+  }
+  const { accessToken, refreshToken } = generateTokens(user);
+  const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
+
+  res.
+    cookie('accessToken', accessToken,
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+    cookie('refreshToken', refreshToken,
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
+  return;
+});
+
 export const requestForOtp = asyncHandler(async (req, res) => {
   const { phoneOrEmail } = requestOtpValidation.parse(req.body);
 
   const user = await User.findOne({
-    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
-    isDeleted: false
-  });
-
-  if (!user) {
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
+  })
+  if (!user || user.isDeleted) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
@@ -113,15 +138,51 @@ export const requestForOtp = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(status.OK, "OTP sent successfully", { phoneOrEmail }));
 });
 
+export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
+  const { phoneOrEmail, otp } = verifyOtpValidation.parse(req.body);
+
+  const user = await User.findOne({
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
+  })
+  if (!user || user.isDeleted) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+
+  if (user.role !== UserRole.ADMIN) {
+    throw new ApiError(status.FORBIDDEN, "Unauthorized");
+  }
+
+  if (!user.compareOtp(otp)) {
+    throw new ApiError(status.UNAUTHORIZED, "Invalid or expired OTP");
+  }
+
+  if (user.status === UserStatus.PENDING) {
+    user.status = UserStatus.ACTIVE;
+  }
+  const { accessToken, refreshToken } = generateTokens(user);
+
+  user.otp = undefined;
+  user.otpExpires = undefined;
+  await user.save();
+
+  const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
+
+  res.
+    cookie('accessToken', accessToken,
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+    cookie('refreshToken', refreshToken,
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
+  return;
+})
+
 export const loginUsingOtp = asyncHandler(async (req, res) => {
   const { phoneOrEmail, otp } = verifyOtpValidation.parse(req.body);
 
   const user = await User.findOne({
-    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }],
-    isDeleted: false
-  });
-
-  if (!user) {
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
+  })
+  if (!user || user.isDeleted) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
@@ -180,8 +241,10 @@ export const refreshTokens = asyncHandler(async (req, res) => {
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const { phoneOrEmail, newPassword } = resetPasswordValidation.parse(req.body)
-  const user = await User.findOne({ phoneOrEmail, isDeleted: false });
-  if (!user) {
+  const user = await User.findOne({
+    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
+  })
+  if (!user || user.isDeleted) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
   user.password = newPassword;

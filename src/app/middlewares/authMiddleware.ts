@@ -13,7 +13,7 @@ export const auth = (...requiredRoles: string[]) => {
     try {
       const token = req.cookies?.accessToken;
       if (!token) {
-        return next(new ApiError(status.BAD_REQUEST, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
+        return next(new ApiError(status.UNAUTHORIZED, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
       }
 
       const decoded = jwt.verify(token, config.JWT_SECRET) as Payload;
@@ -31,11 +31,12 @@ export const auth = (...requiredRoles: string[]) => {
       if (!user) {
         return next(new ApiError(status.UNAUTHORIZED, "User not found", "AUTH_MIDDLEWARE"));
       }
-      const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
+      const userObj = (user as any).toJSON ? (user as any).toJSON() : user;
+      const { password: _, otp, otpExpires, ...userObject } = userObj;
       req.user = userObject as IUser;
 
       if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
-        return next(new ApiError(status.FORBIDDEN, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
+        return next(new ApiError(status.UNAUTHORIZED, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
       }
       next();
     } catch (error) {
