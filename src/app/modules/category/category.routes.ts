@@ -4,7 +4,8 @@ import {
   getAllCategories,
   getCategoryById,
   updateCategoryById,
-  deleteCategoryById
+  deleteCategoryById,
+  getChildCategories
 } from './category.controller';
 import { upload } from '@/config/cloudinary';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
@@ -14,6 +15,8 @@ const router = express.Router();
 router.post('/', auth('admin'), authenticatedActionLimiter, upload.single('image'), createCategory);
 
 router.get('/', getAllCategories);
+
+router.get('/children/:parentCategoryId', getChildCategories);
 
 router.get('/:id', getCategoryById);
 

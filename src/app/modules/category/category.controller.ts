@@ -51,14 +51,17 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", cachedCategories));
   }
 
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, query } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
+
+  const searchFilter = query ? { title: { $regex: query, $options: 'i' }, isDeleted: false } : { isDeleted: false };
+
   const [categories, total] = await Promise.all([
-    Category.find({ isDeleted: false })
+    Category.find(searchFilter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)).populate('parentCategory'),
-    Category.countDocuments({ isDeleted: false }),
+    Category.countDocuments(searchFilter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
@@ -72,6 +75,25 @@ export const getAllCategories = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", result));
+});
+
+export const getChildCategories = asyncHandler(async (req, res) => {
+  const parentCategoryId = req.params.parentCategoryId;
+  const cacheKey = `categories:children:${parentCategoryId}`;
+  const cachedCategories = await redis.get(cacheKey);
+
+  if (cachedCategories) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, "Child categories retrieved successfully", cachedCategories));
+  }
+
+  const childCategories = await Category.find({
+    parentCategory: parentCategoryId,
+    isDeleted: false
+  });
+
+  await redis.set(cacheKey, childCategories, 3600);
+
+  res.status(status.OK).json(new ApiResponse(status.OK, "Child categories retrieved successfully", childCategories));
 });
 
 export const getCategoryById = asyncHandler(async (req, res) => {
