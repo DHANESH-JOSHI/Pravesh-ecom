@@ -1,12 +1,10 @@
 import express from 'express';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
-import { createBlog, deleteBlog, getAllBlogs, getBlogBySlug, getPublishedBlogs, updateBlog } from './blog.controller';
+import { createBlog, deleteBlog, getAllBlogs, getBlogBySlug, updateBlog } from './blog.controller';
 
 const router = express.Router();
 
-router.get('/', getPublishedBlogs);
-
-router.get('/all', getAllBlogs);
+router.get('/', getAllBlogs);
 
 router.get('/:slug', getBlogBySlug);
 

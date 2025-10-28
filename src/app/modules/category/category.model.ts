@@ -39,4 +39,7 @@ const CategorySchema: Schema = new Schema<ICategory>(
 );
 
 CategorySchema.index({ createdAt: -1 });
+CategorySchema.index({ title: 'text' });
+CategorySchema.index({ parentCategory: -1 });
+CategorySchema.index({ isDeleted: -1 });
 export const Category = mongoose.model<ICategory>('Category', CategorySchema);

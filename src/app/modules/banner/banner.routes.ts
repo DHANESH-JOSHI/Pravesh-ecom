@@ -1,15 +1,13 @@
 import express from 'express';
-import { createBanner, deleteBanner, getActiveBanners, getAllBanners, updateBanner } from './banner.controller';
+import { createBanner, deleteBanner, getAllBanners, updateBanner } from './banner.controller';
 import { authenticatedActionLimiter, auth } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 
 const router = express.Router();
 
-router.get('/', getActiveBanners);
+router.get('/', getAllBanners);
 
 router.use(auth('admin'))
-
-router.get('/all', getAllBanners);
 
 router.post('/', authenticatedActionLimiter, upload.single('image'), createBanner);
 
