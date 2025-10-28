@@ -2,11 +2,14 @@ import express from 'express';
 import {
   getWalletBalance,
   getTransactions,
-  addFundsToWallet
+  addFundsToWallet,
+  getAllWallets
 } from './wallet.controller';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
 
 const router = express.Router();
+
+router.get('/', auth('admin'), authenticatedActionLimiter, getAllWallets);
 
 router.post('/add', auth('admin'), authenticatedActionLimiter, addFundsToWallet);
 

@@ -12,6 +12,7 @@ import { reviewRouter } from "@/modules/review/review.routes";
 import { bannerRouter } from "@/modules/banner/banner.routes";
 import { wishlistRouter } from "@/modules/wishlist/wishlist.routes";
 import { blogRouter } from "@/modules/blog/blog.routes";
+import dashboardRouter from "@/modules/dashboard/dashboard.routes";
 const router = Router();
 
 type Route = {
@@ -71,6 +72,10 @@ const moduleRoutes: Route[] = [
   {
     path: '/blogs',
     route: blogRouter
+  },
+  {
+    path: '/dashboard',
+    route: dashboardRouter
   }
 ];
 

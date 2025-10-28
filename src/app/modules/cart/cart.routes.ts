@@ -7,30 +7,30 @@ import {
   clearCart,
   getCartSummary,
   checkoutCart,
-  getAllCarts
+  getAllCarts,
+  getCartById,
 } from './cart.controller';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
 
 const router = express.Router();
 
-router.get('/', auth('admin'), authenticatedActionLimiter, getAllCarts)
-
-router.use(auth('user'));
-
 router.use(authenticatedActionLimiter);
+router.get('/', auth('admin'), getAllCarts)
 
-router.get('/summary', getCartSummary);
+router.get('/me', auth('user'),getMyCart);
 
-router.get('/me', getMyCart);
+router.get('/summary', auth('user'),getCartSummary);
 
-router.post('/add', addToCart);
+router.get('/:id', auth('admin'), getCartById)
 
-router.patch('/item/:productId', updateCartItem);
+router.post('/add', auth('user'),addToCart);
 
-router.delete('/item/:productId', removeFromCart);
+router.patch('/item/:productId', auth('user'),updateCartItem);
 
-router.delete('/clear', clearCart);
+router.delete('/item/:productId', auth('user'),removeFromCart);
 
-router.post('/checkout', checkoutCart);
+router.delete('/clear', auth('user'),clearCart);
+
+router.post('/checkout', auth('user'),checkoutCart);
 
 export const cartRouter = router;
