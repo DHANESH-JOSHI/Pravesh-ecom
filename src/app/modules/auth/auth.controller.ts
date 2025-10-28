@@ -61,6 +61,9 @@ export const loginUser = asyncHandler(async (req, res) => {
   if (!user || user.isDeleted) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
+  if (user.role !== UserRole.USER) {
+    throw new ApiError(status.UNAUTHORIZED, "User role is not user");
+  }
   if (user.status !== UserStatus.ACTIVE) {
     throw new ApiError(status.UNAUTHORIZED, "User account is not active");
   }
@@ -104,7 +107,7 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
     cookie('accessToken', accessToken,
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
     .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
   return;
 });
@@ -171,7 +174,7 @@ export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
     cookie('accessToken', accessToken,
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
     .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
   return;
 })
@@ -184,6 +187,10 @@ export const loginUsingOtp = asyncHandler(async (req, res) => {
   })
   if (!user || user.isDeleted) {
     throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+
+  if (user.role !== UserRole.USER) {
+    throw new ApiError(status.UNAUTHORIZED, "User role is not user");
   }
 
   if (!user.compareOtp(otp)) {
