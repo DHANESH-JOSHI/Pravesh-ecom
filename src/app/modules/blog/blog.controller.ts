@@ -21,19 +21,6 @@ export const createBlog = asyncHandler(async (req, res) => {
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Blog post created successfully', blog));
 });
 
-export const getPublishedBlogs = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey('blogs:published', req.query);
-  const cachedBlogs = await redis.get(cacheKey);
-
-  if (cachedBlogs) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved published posts`, cachedBlogs));
-  }
-
-  const posts = await Blog.find({ isPublished: true, isDeleted: false }).sort({ createdAt: -1 });
-  await redis.set(cacheKey, posts, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved ${posts.length} published posts`, posts));
-});
-
 export const getBlogBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
   const cacheKey = `blog:${slug}`;
@@ -54,16 +41,45 @@ export const getBlogBySlug = asyncHandler(async (req, res) => {
 });
 
 export const getAllBlogs = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, search, isPublished, isDeleted } = req.query;
   const cacheKey = generateCacheKey('blogs', req.query);
   const cachedBlogs = await redis.get(cacheKey);
 
   if (cachedBlogs) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved all blogs`, cachedBlogs));
+    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved blogs`, cachedBlogs));
   }
 
-  const posts = await Blog.find({ isDeleted: false }).sort({ createdAt: -1 });
-  await redis.set(cacheKey, posts, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved all ${posts.length} blogs`, posts));
+  const filter: any = {};
+  if (search) {
+    filter.$or = [
+      { title: { $regex: search, $options: 'i' } },
+      { slug: { $regex: search, $options: 'i' } }
+    ];
+  }
+  if (isPublished !== undefined) filter.isPublished = isPublished === 'true';
+  if (isDeleted !== undefined) {
+    filter.isDeleted = isDeleted === 'true';
+  } else {
+    filter.isDeleted = false;
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [posts, total] = await Promise.all([
+    Blog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
+    Blog.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    blogs: posts,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result, 3600);
+  res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved blogs`, result));
 });
 
 export const updateBlog = asyncHandler(async (req, res) => {

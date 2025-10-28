@@ -121,7 +121,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
 
 
 export const getAllReviews = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, rating, user, product, search } = req.query;
   const cacheKey = generateCacheKey('reviews', req.query);
   const cachedReviews = await redis.get(cacheKey);
 
@@ -129,15 +129,21 @@ export const getAllReviews = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "All reviews retrieved successfully", cachedReviews))
   }
 
+  const filter: any = {};
+  if (rating) filter.rating = Number(rating);
+  if (user) filter.user = user;
+  if (product) filter.product = product;
+  if (search) filter.comment = { $regex: search, $options: 'i' };
+
   const skip = (Number(page) - 1) * Number(limit);
   const [reviews, total] = await Promise.all([
-    Review.find()
+    Review.find(filter)
       .populate('user', 'name email')
       .populate('product', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
-    Review.countDocuments()
+    Review.countDocuments(filter)
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));

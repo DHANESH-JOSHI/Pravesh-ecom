@@ -31,10 +31,13 @@ export const getMyCart = asyncHandler(async (req, res) => {
 });
 
 export const getAllCarts = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, populate = 'false' } = req.query;
+  const { page = 1, limit = 10, populate = 'false', user } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
-  let cartsQuery = Cart.find()
+  const filter: any = {};
+  if (user) filter.user = user;
+
+  let cartsQuery = Cart.find(filter)
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(Number(limit));
@@ -45,7 +48,7 @@ export const getAllCarts = asyncHandler(async (req, res) => {
 
   const [carts, total] = await Promise.all([
     cartsQuery,
-    Cart.countDocuments(),
+    Cart.countDocuments(filter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
   res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', {

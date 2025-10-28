@@ -45,17 +45,23 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", cachedBrands));
   }
 
-  const { page = 1, limit = 10, query } = req.query;
+  const { page = 1, limit = 10, search, isDeleted } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
-  const searchFilter = query ? { name: { $regex: query, $options: 'i' }, isDeleted: false } : { isDeleted: false };
+  const filter: any = {};
+  if (search) filter.name = { $regex: search, $options: 'i' };
+  if (isDeleted !== undefined) {
+    filter.isDeleted = isDeleted === 'true';
+  } else {
+    filter.isDeleted = false;
+  }
 
   const [brands, total] = await Promise.all([
-    Brand.find(searchFilter)
+    Brand.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
-    Brand.countDocuments(searchFilter),
+    Brand.countDocuments(filter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
   const result = {

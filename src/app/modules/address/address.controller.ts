@@ -109,7 +109,7 @@ export const getMyAddresses = asyncHandler(async (req, res) => {
 
 
 export const getAllAddresses = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, search } = req.query;
   const cacheKey = generateCacheKey('addresses', req.query);
   const cachedAddresses = await redis.get(cacheKey);
 
@@ -117,14 +117,25 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "All addresses retrieved successfully", cachedAddresses));
   }
 
+  const filter: any = { isDeleted: false };
+  if (search) {
+    filter.$or = [
+      { fullname: { $regex: search, $options: 'i' } },
+      { phone: { $regex: search, $options: 'i' } },
+      { city: { $regex: search, $options: 'i' } },
+      { state: { $regex: search, $options: 'i' } },
+      { postalCode: { $regex: search, $options: 'i' } },
+      { country: { $regex: search, $options: 'i' } }
+    ];
+  }
   const skip = (Number(page) - 1) * Number(limit);
 
   const [addresses, total] = await Promise.all([
-    Address.find({ isDeleted: false })
+    Address.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
-    Address.countDocuments({ isDeleted: false }),
+    Address.countDocuments(filter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
   const result = {

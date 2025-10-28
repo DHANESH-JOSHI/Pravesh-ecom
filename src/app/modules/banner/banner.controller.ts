@@ -18,20 +18,8 @@ export const createBanner = asyncHandler(async (req, res) => {
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Banner created successfully', banner));
 });
 
-export const getActiveBanners = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey('banners:active', req.query);
-  const cachedBanners = await redis.get(cacheKey);
-
-  if (cachedBanners) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved active banners`, cachedBanners));
-  }
-
-  const banners = await Banner.find({ isDeleted: false }).sort({ order: 'asc' });
-  await redis.set(cacheKey, banners, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved ${banners.length} active banners`, banners));
-});
-
 export const getAllBanners = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, search, type, isDeleted } = req.query;
   const cacheKey = generateCacheKey('banners:all', req.query);
   const cachedBanners = await redis.get(cacheKey);
 
@@ -39,9 +27,28 @@ export const getAllBanners = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved all banners`, cachedBanners));
   }
 
-  const banners = await Banner.find({}).sort({ order: 'asc' });
-  await redis.set(cacheKey, banners, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved all ${banners.length} banners`, banners));
+  const filter: any = {};
+  if (search) filter.title = { $regex: search, $options: 'i' };
+  if (type) filter.type = type;
+  if (isDeleted !== undefined) filter.isDeleted = isDeleted === 'true';
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [banners, total] = await Promise.all([
+    Banner.find(filter).sort({ order: 'asc' }).skip(skip).limit(Number(limit)),
+    Banner.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    banners,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages,
+  };
+
+  await redis.set(cacheKey, result, 3600);
+  res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved banners`, result));
 });
 
 export const updateBanner = asyncHandler(async (req, res) => {

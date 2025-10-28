@@ -68,7 +68,7 @@ export const createProduct = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern('products*');
   await redis.delete('product_filters');
-
+  await redis.delete('dashboard:stats')
   res.status(status.CREATED).json(
     new ApiResponse(status.CREATED, 'Product created successfully', product)
   );
@@ -356,6 +356,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`product:${id}*`);
   await redis.deleteByPattern(`product:${existingProduct.slug}*`);
   await redis.delete('product_filters');
+  await redis.delete('dashboard:stats')
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product updated successfully', result)
@@ -386,6 +387,7 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   await redis.delete('product_filters');
   await redis.deleteByPattern('products:best-selling*');
   await redis.deleteByPattern('products:trending*');
+  await redis.delete('dashboard:stats')
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product deleted successfully', result)
@@ -590,9 +592,12 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     );
   }
 
+  const brandIds = await Product.distinct('brand', { status: 'active', isDeleted: false });
+  const categoryIds = await Product.distinct('category', { status: 'active', isDeleted: false });
+
   const [brands, categories, colors, sizes, priceRange] = await Promise.all([
-    Product.distinct('brand', { status: 'active', isDeleted: false }),
-    Product.distinct('category', { status: 'active', isDeleted: false }),
+    Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name _id'),
+    Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title _id'),
     Product.distinct('specifications.color', { status: 'active', isDeleted: false }),
     Product.distinct('specifications.size', { status: 'active', isDeleted: false }),
     Product.aggregate([
@@ -608,8 +613,8 @@ export const getProductFilters = asyncHandler(async (req, res) => {
   ]);
 
   const filters = {
-    brands: brands.filter(Boolean),
-    categories: categories.filter(Boolean),
+    brands,
+    categories,
     colors: colors.flat().filter(Boolean),
     sizes: sizes.flat().filter(Boolean),
     priceRange: { minPrice: priceRange[0].minPrice, maxPrice: priceRange[0].maxPrice },

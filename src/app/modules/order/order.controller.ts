@@ -241,11 +241,16 @@ export const getOrderById = asyncHandler(async (req, res) => {
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
-  const { populate = 'false', page = 1, limit = 10 } = req.query;
+  const { populate = 'false', page = 1, limit = 10, status: orderStatus, user, isCustomOrder } = req.query;
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  let query = Order.find().sort({ createdAt: -1 });
+  const filter: any = {};
+  if (orderStatus) filter.status = orderStatus;
+  if (user) filter.user = user;
+  if (isCustomOrder !== undefined) filter.isCustomOrder = isCustomOrder === 'true';
+
+  let query = Order.find(filter).sort({ createdAt: -1 });
 
   if (populate === 'true') {
     query = query.populate('items.product shippingAddress');
@@ -253,7 +258,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
 
   const [orders, total] = await Promise.all([
     query.skip(skip).limit(Number(limit)),
-    Order.countDocuments()
+    Order.countDocuments(filter)
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
@@ -290,7 +295,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         {
           $inc: {
             salesCount: 1,
-            totalSold: item.quantity,
+            totalSold: 1,
           }
         });
     }
@@ -298,6 +303,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     await redis.deleteByPattern('products:trending*');
     await redis.deleteByPattern('products*')
   }
+
+  await redis.delete('dashboard:stats')
+  await redis.deleteByPattern("orders*")
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order status updated successfully', order)
@@ -321,6 +329,9 @@ export const cancelOrder = asyncHandler(async (req, res) => {
 
   order.status = OrderStatus.Cancelled;
   await order.save();
+
+  await redis.delete('dashboard:stats')
+  await redis.deleteByPattern('orders*')
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order canceled successfully', order)

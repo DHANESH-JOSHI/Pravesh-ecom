@@ -50,6 +50,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern('users*');
   await redis.delete(`user:${userId}`);
+  await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
   return;
@@ -57,7 +58,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 
 
 export const getAllUsers = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, search, role, status: userStatus, isDeleted } = req.query;
   const cacheKey = generateCacheKey('users', req.query);
   const cachedUsers = await redis.get(cacheKey);
 
@@ -65,18 +66,29 @@ export const getAllUsers = asyncHandler(async (req, res) => {
     return res.json(new ApiResponse(status.OK, "Users retrieved successfully", cachedUsers));
   }
 
+  const filter: any = {};
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { phone: { $regex: search, $options: 'i' } }
+    ];
+  }
+  if (role) filter.role = role;
+  if (userStatus) filter.status = userStatus;
+  if (isDeleted !== undefined) {
+    filter.isDeleted = isDeleted === 'true';
+  } else {
+    filter.isDeleted = false;
+  }
   const skip = (Number(page) - 1) * Number(limit);
   const [users, total] = await Promise.all([
-    User.find({}, { password: 0 })
+    User.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
-    User.countDocuments(),
+    User.countDocuments(filter),
   ]);
-
-  if (users.length === 0) {
-    throw new ApiError(status.NOT_FOUND, "No users found");
-  }
 
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
@@ -153,6 +165,7 @@ export const recoverUser = asyncHandler(async (req, res) => {
 
   user.isDeleted = false;
   await user.save();
+  await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User recovered successfully"));
   return;
@@ -167,6 +180,8 @@ export const deleteUser = asyncHandler(async (req, res) => {
 
   user.isDeleted = true;
   await user.save();
+
+  await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User deleted successfully"));
   return;
