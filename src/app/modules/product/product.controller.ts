@@ -158,7 +158,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     brandId,
     minPrice,
     maxPrice,
-    inStock,
     status: productStatus = 'active',
     stockStatus = 'in_stock',
     isFeatured,
@@ -179,9 +178,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   if (isFeatured !== undefined) filter.isFeatured = isFeatured;
   if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival;
   if (isDiscount !== undefined) filter.isDiscount = isDiscount;
-  if (inStock) {
-    filter.stock = { $gt: 0 };
-  }
   if (minPrice || maxPrice) {
     filter.finalPrice = {};
     if (minPrice) {

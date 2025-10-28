@@ -57,9 +57,6 @@ export interface IProduct extends Document {
 
   status: ProductStatus;
   tags?: string[];
-  seoTitle?: string;
-  seoDescription?: string;
-  seoKeywords?: string[];
 
   isFeatured?: boolean;
   isNewArrival?: boolean;
@@ -71,8 +68,6 @@ export interface IProduct extends Document {
 
   totalSold?: number;
   salesCount?: number;
-
-  shippingInfo?: Record<string, any>;
 
   createdAt?: Date;
   updatedAt?: Date;

@@ -44,16 +44,6 @@ const ProductSchema = new Schema<IProduct>(
 
     status: { type: String, enum: ProductStatus, default: ProductStatus.Active },
     tags: [{ type: String, trim: true }],
-    seoTitle: { type: String, trim: true },
-    seoDescription: { type: String, trim: true },
-    seoKeywords: [{ type: String, trim: true }],
-
-    shippingInfo: {
-      type: Map,
-      of: [String],
-      default: {},
-    },
-
 
     isFeatured: { type: Boolean, default: false },
     isNewArrival: { type: Boolean, default: false },

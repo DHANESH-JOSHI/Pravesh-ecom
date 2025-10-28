@@ -50,32 +50,9 @@ const createProductValidation = z.object({
     }
     return val;
   }, z.array(z.string()).optional()),
-  seoTitle: z.string().optional(),
-  seoDescription: z.string().optional(),
-  seoKeywords: z.preprocess((val) => {
-    if (typeof val === 'string') {
-      return val.split(',').map(item => item.trim());
-    }
-    return val;
-  }, z.array(z.string()).optional()),
-
-  shippingInfo: z.preprocess((val) => {
-    if (typeof val === 'string') {
-      try { return JSON.parse(val); } catch (e) { return val; }
-    }
-    return val;
-  }, z.record(z.string(), z.any()).refine(val => typeof val === 'object' && val !== null, {
-    message: "Shipping info must be a valid JSON object string.",
-  }).optional()),
-
   stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),
-  isDiscount: z.coerce.boolean().optional(),
-  isDeleted: z.coerce.boolean().optional(),
-
-  rating: z.coerce.number().min(0).optional(),
-  reviewCount: z.coerce.number().min(0).optional(),
 });
 
 const productsQueryValidation = z.object({
@@ -87,7 +64,6 @@ const productsQueryValidation = z.object({
   brandId: objectIdValidation.optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
-  inStock: z.coerce.boolean().optional(),
   status: z.enum(ProductStatus).optional(),
   stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
