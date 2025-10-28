@@ -5,6 +5,7 @@ import { Address } from "./address.model";
 import status from "http-status";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
+import { User } from "../user/user.model";
 const ApiError = getApiErrorClass("ADDRESS");
 const ApiResponse = getApiResponseClass("ADDRESS");
 
@@ -70,7 +71,7 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
   await existingAddress.save();
 
   await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.deleteByPattern('addresses:all*');
+  await redis.deleteByPattern('addresses*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address deleted successfully"));
 })
@@ -109,7 +110,7 @@ export const getMyAddresses = asyncHandler(async (req, res) => {
 
 
 export const getAllAddresses = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, search } = req.query;
+  const { page = 1, limit = 10, search, user, isDeleted } = req.query;
   const cacheKey = generateCacheKey('addresses', req.query);
   const cachedAddresses = await redis.get(cacheKey);
 
@@ -118,6 +119,20 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
   }
 
   const filter: any = { isDeleted: false };
+  if (isDeleted !== undefined) {
+    filter.isDeleted = isDeleted === 'true';
+  } else {
+    filter.isDeleted = false;
+  }
+  if (user) {
+    if (mongoose.Types.ObjectId.isValid(user as string)) {
+      filter.user = user;
+    } else {
+      const users = await User.find({ name: { $regex: user, $options: 'i' } }).select('_id');
+      const userIds = users.map(u => u._id);
+      filter.user = { $in: userIds };
+    }
+  }
   if (search) {
     filter.$or = [
       { fullname: { $regex: search, $options: 'i' } },

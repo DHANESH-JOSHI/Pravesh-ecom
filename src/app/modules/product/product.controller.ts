@@ -165,14 +165,18 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     isDiscount,
     rating,
     search,
-    isDeleted = false,
+    isDeleted,
   } = query;
 
   const filter: any = {
-    isDeleted,
     stockStatus,
     status: productStatus,
   };
+  if (isDeleted !== undefined) {
+    filter.isDeleted = isDeleted;
+  } else {
+    filter.isDeleted = false;
+  }
   if (categoryId) filter.category = categoryId;
   if (brandId) filter.brand = brandId;
   if (isFeatured !== undefined) filter.isFeatured = isFeatured;
@@ -472,7 +476,7 @@ export const getNewArrivalProducts = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'New arrival products retrieved successfully', result)
@@ -522,7 +526,7 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products retrieved successfully', result)
@@ -571,7 +575,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result);
+  await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products found successfully', result)
@@ -616,7 +620,7 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     priceRange: { minPrice: priceRange[0].minPrice, maxPrice: priceRange[0].maxPrice },
   };
 
-  await redis.set(cacheKey, filters);
+  await redis.set(cacheKey, filters, 3600);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)

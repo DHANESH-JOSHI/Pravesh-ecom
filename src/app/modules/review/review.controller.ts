@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { Product } from "../product/product.model";
+import { User } from "../user/user.model";
 import { Review } from "./review.model";
 import { redis } from "@/config/redis";
 const ApiError = getApiErrorClass("REVIEW")
@@ -131,8 +132,27 @@ export const getAllReviews = asyncHandler(async (req, res) => {
 
   const filter: any = {};
   if (rating) filter.rating = Number(rating);
-  if (user) filter.user = user;
-  if (product) filter.product = product;
+
+  if (user) {
+    if (mongoose.Types.ObjectId.isValid(user as string)) {
+      filter.user = user;
+    } else {
+      const users = await User.find({ name: { $regex: user, $options: 'i' } }).select('_id');
+      const userIds = users.map(u => u._id);
+      filter.user = { $in: userIds };
+    }
+  }
+
+  if (product) {
+    if (mongoose.Types.ObjectId.isValid(product as string)) {
+      filter.product = product;
+    } else {
+      const products = await Product.find({ name: { $regex: product, $options: 'i' } }).select('_id');
+      const productIds = products.map(p => p._id);
+      filter.product = { $in: productIds };
+    }
+  }
+
   if (search) filter.comment = { $regex: search, $options: 'i' };
 
   const skip = (Number(page) - 1) * Number(limit);

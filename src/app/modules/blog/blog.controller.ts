@@ -113,6 +113,9 @@ export const updateBlog = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern('blogs*');
   await redis.deleteByPattern(`blog:${existingBlog.slug}`);
+  if (updatedBlog && updatedBlog.slug !== existingBlog.slug) {
+    await redis.deleteByPattern(`blog:${updatedBlog.slug}`);
+  }
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog updated successfully`, updatedBlog));
 });

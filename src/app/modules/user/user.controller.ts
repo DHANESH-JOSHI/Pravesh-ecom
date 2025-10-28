@@ -15,8 +15,14 @@ export const getMe = asyncHandler(async (req, res) => {
   if (cachedUser) {
     return res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", cachedUser));
   }
-  await redis.set(cacheKey, req.user, 600);
-  res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", req.user));
+
+  const user = await User.findById(userId, { password: 0 });
+  if (!user) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+
+  await redis.set(cacheKey, user, 600);
+  res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", user));
 });
 
 export const updateUser = asyncHandler(async (req, res) => {
@@ -49,7 +55,7 @@ export const updateUser = asyncHandler(async (req, res) => {
   }
 
   await redis.deleteByPattern('users*');
-  await redis.delete(`user:${userId}`);
+  await redis.deleteByPattern(`user:*`);
   await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
@@ -165,6 +171,8 @@ export const recoverUser = asyncHandler(async (req, res) => {
 
   user.isDeleted = false;
   await user.save();
+  await redis.deleteByPattern(`user:*`);
+  await redis.deleteByPattern('users*');
   await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User recovered successfully"));
@@ -181,6 +189,8 @@ export const deleteUser = asyncHandler(async (req, res) => {
   user.isDeleted = true;
   await user.save();
 
+  await redis.deleteByPattern(`user:*`);
+  await redis.deleteByPattern('users*');
   await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User deleted successfully"));
@@ -189,10 +199,19 @@ export const deleteUser = asyncHandler(async (req, res) => {
 
 export const checkPhoneExists = asyncHandler(async (req, res) => {
   const { phone } = phoneCheckValidation.parse(req.params);
+  const cacheKey = `user:phone:${phone}`;
+  const cachedResult = await redis.get(cacheKey);
+
+  if (cachedResult !== null) {
+    return res.json(new ApiResponse(status.OK, "Phone number exists", cachedResult));
+  }
 
   const user = await User.findOne({ phone });
 
-  if (!user) {
+  const exists = !!user;
+  await redis.set(cacheKey, exists, 300);
+
+  if (!exists) {
     throw new ApiError(status.NOT_FOUND, "Phone number not found");
   }
 
@@ -202,10 +221,19 @@ export const checkPhoneExists = asyncHandler(async (req, res) => {
 
 export const checkEmailExists = asyncHandler(async (req, res) => {
   const { email } = emailCheckValidation.parse(req.params);
+  const cacheKey = `user:email:${email}`;
+  const cachedResult = await redis.get(cacheKey);
+
+  if (cachedResult !== null) {
+    return res.json(new ApiResponse(status.OK, "Email exists", cachedResult));
+  }
 
   const user = await User.findOne({ email });
 
-  if (!user) {
+  const exists = !!user;
+  await redis.set(cacheKey, exists, 300);
+
+  if (!exists) {
     throw new ApiError(status.NOT_FOUND, "Email not found");
   }
 

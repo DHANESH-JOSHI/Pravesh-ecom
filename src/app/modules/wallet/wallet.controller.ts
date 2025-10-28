@@ -1,23 +1,80 @@
 import { Wallet } from './wallet.model';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
-import { asyncHandler } from '@/utils';
+import { asyncHandler, generateCacheKey } from '@/utils';
 import { addFundsValidation } from './wallet.validation';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
 import status from 'http-status';
+import { redis } from '@/config/redis';
 const ApiError = getApiErrorClass("WALLET");
 const ApiResponse = getApiResponseClass("WALLET");
+
+export const getAllWallets = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, user } = req.query;
+  const cacheKey = generateCacheKey('wallets', req.query);
+  const cachedWallets = await redis.get(cacheKey);
+
+  if (cachedWallets) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', cachedWallets));
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const filter: any = {};
+  if (user) {
+    if (mongoose.Types.ObjectId.isValid(user as string)) {
+      filter.user = user;
+    } else {
+      const users = await User.find({ name: { $regex: user, $options: 'i' } }).select('_id');
+      const userIds = users.map(u => u._id);
+      filter.user = { $in: userIds };
+    }
+  }
+
+  const [wallets, total] = await Promise.all([
+    Wallet.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .populate('user', '_id name email'),
+    Wallet.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / Number(limit));
+  const result = {
+    wallets,
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    totalPages
+  };
+
+  await redis.set(cacheKey, result, 300);
+
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', result));
+});
 
 export const getWalletBalance = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) {
     throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
   }
+
+  const cacheKey = `wallet:balance:${userId}`;
+  const cachedBalance = await redis.get(cacheKey);
+  if (cachedBalance) {
+    return res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', cachedBalance));
+  }
+
   const wallet = await Wallet.findOne({ userId });
   if (!wallet) {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found');
   }
-  res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', { balance: wallet.balance }));
+
+  const result = { balance: wallet.balance };
+  await redis.set(cacheKey, result, 300);
+
+  res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', result));
 });
 
 export const addFundsToWallet = asyncHandler(async (req, res) => {
@@ -45,6 +102,11 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 
   await wallet.save();
 
+  // Invalidate caches
+  await redis.deleteByPattern(`wallet:balance:${userId}`);
+  await redis.deleteByPattern(`wallet:transactions:${userId}`);
+  await redis.deleteByPattern('wallets*');
+
   res.json(new ApiResponse(status.OK, 'Funds added to wallet successfully', {
     userId: wallet.user,
     newBalance: wallet.balance
@@ -56,9 +118,19 @@ export const getTransactions = asyncHandler(async (req, res) => {
   if (!userId) {
     throw new ApiError(status.UNAUTHORIZED, 'Unauthorized');
   }
+
+  const cacheKey = `wallet:transactions:${userId}`;
+  const cachedTransactions = await redis.get(cacheKey);
+  if (cachedTransactions) {
+    return res.json(new ApiResponse(status.OK, 'Transactions retrieved', cachedTransactions));
+  }
+
   const wallet = await Wallet.findOne({ userId: userId });
   if (!wallet) {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found');
   }
+
+  await redis.set(cacheKey, wallet.transactions, 300);
+
   res.json(new ApiResponse(status.OK, 'Transactions retrieved', wallet.transactions));
 });

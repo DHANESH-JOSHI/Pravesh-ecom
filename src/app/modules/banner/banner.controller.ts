@@ -30,7 +30,11 @@ export const getAllBanners = asyncHandler(async (req, res) => {
   const filter: any = {};
   if (search) filter.title = { $regex: search, $options: 'i' };
   if (type) filter.type = type;
-  if (isDeleted !== undefined) filter.isDeleted = isDeleted === 'true';
+  if (isDeleted !== undefined) {
+    filter.isDeleted = isDeleted === 'true';
+  } else {
+    filter.isDeleted = false;
+  }
 
   const skip = (Number(page) - 1) * Number(limit);
   const [banners, total] = await Promise.all([

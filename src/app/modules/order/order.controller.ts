@@ -1,4 +1,4 @@
-import { asyncHandler } from '@/utils';
+import { asyncHandler, generateCacheKey } from '@/utils';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { Order } from './order.model';
 import { Cart } from '../cart/cart.model';
@@ -10,6 +10,7 @@ import { Address } from '../address/address.model';
 import status from 'http-status';
 import { Product } from '../product/product.model';
 import { redis } from '@/config/redis';
+import { User } from '../user/user.model';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
@@ -71,6 +72,12 @@ export const createOrder = asyncHandler(async (req, res) => {
     await cart.save({ session });
 
     await session.commitTransaction();
+
+    // Invalidate caches
+    await redis.deleteByPattern(`orders:user:${userId}*`);
+    await redis.deleteByPattern('orders*');
+    await redis.delete('dashboard:stats');
+
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
 
   } catch (error) {
@@ -99,6 +106,11 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     isCustomOrder: true,
     image: customOrderImage,
   });
+
+  // Invalidate caches
+  await redis.deleteByPattern(`orders:user:${userId}*`);
+  await redis.deleteByPattern('orders*');
+  await redis.delete('dashboard:stats');
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
 });
@@ -132,6 +144,11 @@ export const updateCustomOrder = asyncHandler(async (req, res) => {
   if (orderStatus) order.status = orderStatus;
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
+
+  // Invalidate caches
+  await redis.deleteByPattern(`order:${orderId}*`);
+  await redis.deleteByPattern('orders*');
+  await redis.delete('dashboard:stats');
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order updated successfully', order));
 });
@@ -182,6 +199,13 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
     await order.save({ session });
 
     await session.commitTransaction();
+
+    // Invalidate caches
+    await redis.deleteByPattern(`orders:user:${userId}*`);
+    await redis.deleteByPattern(`order:${orderId}*`);
+    await redis.deleteByPattern('orders*');
+    await redis.delete('dashboard:stats');
+
     res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
 
   } catch (error) {
@@ -195,6 +219,13 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
 
 export const getMyOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
+  const cacheKey = generateCacheKey(`orders:user:${userId}`, req.query);
+  const cachedOrders = await redis.get(cacheKey);
+
+  if (cachedOrders) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', cachedOrders));
+  }
+
   const { populate = 'false', page = 1, limit = 10 } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
   let query = Order.find({ user: userId }).sort({ createdAt: -1 });
@@ -206,70 +237,85 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     Order.countDocuments({ user: userId })
   ]);
   const totalPages = Math.ceil(total / Number(limit));
-  return res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', {
+  const result = {
     orders,
     page: Number(page),
     limit: Number(limit),
     total,
     totalPages
-  }));
+  };
+
+  await redis.set(cacheKey, result, 600);
+
+  return res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', result));
 });
 
 
 export const getOrderById = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
-  const { populate = 'false' } = req.query;
+  const cacheKey = `order:${orderId}`;
+  const cachedOrder = await redis.get(cacheKey);
+
+  if (cachedOrder) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Order retrieved successfully', cachedOrder));
+  }
+
   if (!mongoose.Types.ObjectId.isValid(orderId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
   }
-  let order;
-  if (populate === 'true') {
-    order = await Order.findById(orderId).populate('items.product shippingAddressId');
-  } else {
-    order = await Order.findById(orderId);
-  }
+  const order = await Order.findById(orderId).populate('user', '_id name email').populate('items.product shippingAddress');
 
   if (!order) {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
-  if (req.user?.role !== 'admin' && order.user.toString() !== req.user?._id) {
-    throw new ApiError(status.FORBIDDEN, 'You are not authorized to view this order');
-  }
+  await redis.set(cacheKey, order, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Order retrieved successfully', order));
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
-  const { populate = 'false', page = 1, limit = 10, status: orderStatus, user, isCustomOrder } = req.query;
+  const cacheKey = generateCacheKey('orders', req.query);
+  const cachedOrders = await redis.get(cacheKey);
+
+  if (cachedOrders) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', cachedOrders));
+  }
+
+  const { page = 1, limit = 10, status: orderStatus, user, isCustomOrder } = req.query;
 
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {};
   if (orderStatus) filter.status = orderStatus;
-  if (user) filter.user = user;
+  if (user) {
+    if (mongoose.Types.ObjectId.isValid(user as string)) {
+      filter.user = user;
+    } else {
+      const users = await User.find({ name: { $regex: user, $options: 'i' } }).select('_id');
+      const userIds = users.map(u => u._id);
+      filter.user = { $in: userIds };
+    }
+  }
   if (isCustomOrder !== undefined) filter.isCustomOrder = isCustomOrder === 'true';
 
-  let query = Order.find(filter).sort({ createdAt: -1 });
-
-  if (populate === 'true') {
-    query = query.populate('items.product shippingAddress');
-  }
-
   const [orders, total] = await Promise.all([
-    query.skip(skip).limit(Number(limit)),
+    Order.find(filter).sort({ createdAt: -1 }).populate('user', 'name').select('-items').skip(skip).limit(Number(limit)),
     Order.countDocuments(filter)
   ]);
 
   const totalPages = Math.ceil(total / Number(limit));
-
-  res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', {
+  const result = {
     orders,
     page: Number(page),
     limit: Number(limit),
     total,
     totalPages
-  }));
+  };
+
+  await redis.set(cacheKey, result, 600);
+
+  res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', result));
 });
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
@@ -330,8 +376,10 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   order.status = OrderStatus.Cancelled;
   await order.save();
 
-  await redis.delete('dashboard:stats')
-  await redis.deleteByPattern('orders*')
+  await redis.deleteByPattern(`orders:user:${userId}*`);
+  await redis.deleteByPattern(`order:${orderId}*`);
+  await redis.deleteByPattern('orders*');
+  await redis.delete('dashboard:stats');
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order canceled successfully', order)
