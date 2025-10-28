@@ -7,8 +7,8 @@ export const createBannerValidation = z.object({
   targetUrl: z.string().optional(),
   type: z.enum(BannerType).optional(),
   targetId: z.string().optional(),
-  isDeleted: z.boolean().optional().default(false),
-  order: z.number().int().optional().default(0),
+  isDeleted: z.coerce.boolean().optional().default(false),
+  order: z.coerce.number().optional().default(0),
 });
 
 export const updateBannerValidation = createBannerValidation.partial();

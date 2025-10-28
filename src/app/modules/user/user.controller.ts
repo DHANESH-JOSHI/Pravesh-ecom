@@ -64,7 +64,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 
 
 export const getAllUsers = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, search, role, status: userStatus, isDeleted } = req.query;
+  const { page = 1, limit = 10, search, role, status: userStatus,isDeleted } = req.query;
   const cacheKey = generateCacheKey('users', req.query);
   const cachedUsers = await redis.get(cacheKey);
 
