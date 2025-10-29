@@ -16,6 +16,7 @@ export const createBanner = asyncHandler(async (req, res) => {
   const banner = await Banner.create(bannerData);
   await redis.deleteByPattern('banners*');
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Banner created successfully', banner));
+  return;
 });
 
 export const getAllBanners = asyncHandler(async (req, res) => {
@@ -53,6 +54,7 @@ export const getAllBanners = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 3600);
   res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved banners`, result));
+  return;
 });
 
 export const updateBanner = asyncHandler(async (req, res) => {
@@ -84,6 +86,7 @@ export const updateBanner = asyncHandler(async (req, res) => {
   await redis.deleteByPattern('banners*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner updated successfully`, updatedBanner));
+  return;
 });
 
 export const deleteBanner = asyncHandler(async (req, res) => {
@@ -108,4 +111,5 @@ export const deleteBanner = asyncHandler(async (req, res) => {
   await redis.deleteByPattern('banners*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner has been deleted successfully`, existingBanner));
+  return;
 });
