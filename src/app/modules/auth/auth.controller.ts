@@ -51,6 +51,7 @@ export const registerUser = asyncHandler(async (req, res) => {
   await sendSMS(`Your OTP for Pravesh registration is ${user.otp}`, phone);
   const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
   res.status(status.CREATED).json(new ApiResponse(status.OK, "OTP sent to email and phone for registration verification", userObject));
+  return;
 });
 
 export const loginUser = asyncHandler(async (req, res) => {
@@ -139,6 +140,7 @@ export const requestForOtp = asyncHandler(async (req, res) => {
   await user.save();
 
   res.json(new ApiResponse(status.OK, "OTP sent successfully", { phoneOrEmail }));
+  return;
 });
 
 export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
