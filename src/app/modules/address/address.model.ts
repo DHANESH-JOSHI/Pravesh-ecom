@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import { IAddress } from './address.interface';
 
-const AddressSchema = new Schema<IAddress>(
+const addressSchema = new Schema<IAddress>(
   {
     user: {
       type: Schema.Types.ObjectId,
@@ -51,6 +51,7 @@ const AddressSchema = new Schema<IAddress>(
   {
     timestamps: true,
     toJSON: {
+      virtuals: true,
       transform: function (doc, ret: any) {
         if (ret.createdAt && typeof ret.createdAt !== 'string') {
           ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -61,9 +62,19 @@ const AddressSchema = new Schema<IAddress>(
         return ret;
       },
     },
+    toObject: {
+      virtuals: true,
+    },
   }
 );
 
-AddressSchema.index({ createdAt: -1 });
+addressSchema.virtual('orders', {
+  ref: 'Order',
+  localField: '_id',
+  foreignField: 'shippingAddress',
+  justOne: false
+})
 
-export const Address = mongoose.model<IAddress>('Address', AddressSchema);
+addressSchema.index({ createdAt: -1 });
+
+export const Address = mongoose.model<IAddress>('Address', addressSchema);
