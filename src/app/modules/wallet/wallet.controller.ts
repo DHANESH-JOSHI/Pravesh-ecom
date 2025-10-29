@@ -17,7 +17,6 @@ export const getAllWallets = asyncHandler(async (req, res) => {
   if (cachedWallets) {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', cachedWallets));
   }
-
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {};
@@ -25,7 +24,14 @@ export const getAllWallets = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = user;
     } else {
-      const users = await User.find({ name: { $regex: user, $options: 'i' } }).select('_id');
+      const users = await User.find({
+        $or: [
+          { name: { $regex: user, $options: 'i' } },
+          { email: { $regex: user, $options: 'i' } },
+          { phone: { $regex: user, $options: 'i' } }
+        ]
+      }).select('_id');
+
       const userIds = users.map(u => u._id);
       filter.user = { $in: userIds };
     }
