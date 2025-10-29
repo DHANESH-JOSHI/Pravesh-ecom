@@ -313,4 +313,5 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, stats, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Dashboard stats retrieved successfully", stats));
+  return;
 });
