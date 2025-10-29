@@ -12,6 +12,7 @@ export interface IAddress extends Document {
   postalCode: string;
   country: string;
   isDeleted: boolean;
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

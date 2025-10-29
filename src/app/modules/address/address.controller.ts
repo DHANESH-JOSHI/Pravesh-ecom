@@ -108,6 +108,25 @@ export const getMyAddresses = asyncHandler(async (req, res) => {
   res.status(status.OK).json(new ApiResponse(status.OK, "Addresses retrieved successfully", result));
 })
 
+export const setDefaultAddress = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { id } = req.params;
+  const address = await Address.findById(id);
+  if (!address) {
+    return res.status(status.NOT_FOUND).json(new ApiResponse(status.NOT_FOUND, "Address not found"));
+  }
+  if (address.user !== userId) {
+    throw new ApiError(status.FORBIDDEN, "You are not authorized to set this address as default");
+  }
+  await Address.updateMany(
+    { user: userId },
+    { $set: { isDefault: false } }
+  );
+  address.isDefault = true;
+  await address.save();
+  res.status(status.OK).json(new ApiResponse(status.OK, "Default address set successfully"));
+  return;
+})
 
 export const getAllAddresses = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, user, isDeleted } = req.query;

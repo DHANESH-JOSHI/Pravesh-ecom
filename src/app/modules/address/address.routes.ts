@@ -4,6 +4,7 @@ import {
   deleteMyAddress,
   getAllAddresses,
   getMyAddresses,
+  setDefaultAddress,
   updateMyAddress
 } from "./address.controller";
 import { auth, authenticatedActionLimiter } from "@/middlewares";
@@ -17,6 +18,8 @@ router.use(auth('user'));
 router.get("/me", getMyAddresses);
 
 router.post("/", authenticatedActionLimiter, createAddress);
+
+router.patch('/:id/default', authenticatedActionLimiter, setDefaultAddress);
 
 router.patch("/:id", authenticatedActionLimiter, updateMyAddress);
 

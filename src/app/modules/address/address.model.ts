@@ -47,6 +47,10 @@ const addressSchema = new Schema<IAddress>(
       type: Boolean,
       default: false,
     },
+    isDefault: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -67,6 +71,15 @@ const addressSchema = new Schema<IAddress>(
     },
   }
 );
+
+addressSchema.pre('save', async function (next) {
+  if (!this.isNew) return next();
+  const addressCount = await Address.countDocuments({ user: this.user });
+  if (!this.isDefault && addressCount === 0) {
+    this.isDefault = true;
+  }
+  next();
+});
 
 addressSchema.virtual('orders', {
   ref: 'Order',
