@@ -1,7 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import { DiscountType, IProduct, ProductStatus, StockStatus, UnitType } from "./product.interface";
 
-const ProductSchema = new Schema<IProduct>(
+const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true, index: true },
     slug: { type: String, unique: true, trim: true, sparse: true },
@@ -59,6 +59,7 @@ const ProductSchema = new Schema<IProduct>(
   {
     timestamps: true,
     toJSON: {
+      virtuals: true,
       transform: function (doc, ret: any) {
         if (ret.createdAt && typeof ret.createdAt !== 'string') {
           ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -69,22 +70,32 @@ const ProductSchema = new Schema<IProduct>(
         return ret;
       }
     },
+    toObject: {
+      virtuals: true,
+    },
   }
 );
 
-ProductSchema.index({ name: 'text', description: 'text', tags: 'text', shortDescription: 'text' });
-ProductSchema.index({ slug: 1, isDeleted: 1 });
-ProductSchema.index({ sku: 1, isDeleted: 1 });
-ProductSchema.index({ status: 1, isDeleted: 1, isFeatured: 1, createdAt: -1 });
-ProductSchema.index({ status: 1, isDeleted: 1, isNewArrival: 1, createdAt: -1 });
-ProductSchema.index({ status: 1, isDeleted: 1, isDiscount: 1, discountValue: -1 });
-ProductSchema.index({ status: 1, isDeleted: 1, category: 1, finalPrice: 1 });
-ProductSchema.index({ status: 1, isDeleted: 1, brand: 1, finalPrice: 1 });
-ProductSchema.index({ finalPrice: 1 });
-ProductSchema.index({ createdAt: -1 });
-ProductSchema.index({ rating: -1 });
-ProductSchema.index({ totalSold: -1 });
-ProductSchema.index({ salesCount: -1 });
+productSchema.virtual('reviews', {
+  ref: 'Review',
+  localField: '_id',
+  foreignField: 'product',
+  justOne: false,
+});
+
+productSchema.index({ name: 'text', description: 'text', tags: 'text', shortDescription: 'text' });
+productSchema.index({ slug: 1, isDeleted: 1 });
+productSchema.index({ sku: 1, isDeleted: 1 });
+productSchema.index({ status: 1, isDeleted: 1, isFeatured: 1, createdAt: -1 });
+productSchema.index({ status: 1, isDeleted: 1, isNewArrival: 1, createdAt: -1 });
+productSchema.index({ status: 1, isDeleted: 1, isDiscount: 1, discountValue: -1 });
+productSchema.index({ status: 1, isDeleted: 1, category: 1, finalPrice: 1 });
+productSchema.index({ status: 1, isDeleted: 1, brand: 1, finalPrice: 1 });
+productSchema.index({ finalPrice: 1 });
+productSchema.index({ createdAt: -1 });
+productSchema.index({ rating: -1 });
+productSchema.index({ totalSold: -1 });
+productSchema.index({ salesCount: -1 });
 
 const calculateFinalPrice = (doc: IProduct) => {
   if (doc.discountValue > 0) {
@@ -98,7 +109,7 @@ const calculateFinalPrice = (doc: IProduct) => {
   }
 };
 
-ProductSchema.pre('findOneAndUpdate', function (next) {
+productSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate() as any;
   if (update.$set.originalPrice || update.$set.discountValue || update.$set.discountType) {
     this.model.findOne(this.getQuery()).then(doc => {
@@ -112,7 +123,7 @@ ProductSchema.pre('findOneAndUpdate', function (next) {
   }
 });
 
-ProductSchema.pre('save', function (next) {
+productSchema.pre('save', function (next) {
   calculateFinalPrice(this);
   if (this.stock === 0) {
     this.status = ProductStatus.Inactive;
@@ -128,4 +139,4 @@ ProductSchema.pre('save', function (next) {
   next();
 });
 
-export const Product = mongoose.model<IProduct>('Product', ProductSchema);
+export const Product = mongoose.model<IProduct>('Product', productSchema);

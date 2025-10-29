@@ -72,6 +72,7 @@ export const createProduct = asyncHandler(async (req, res) => {
   res.status(status.CREATED).json(
     new ApiResponse(status.CREATED, 'Product created successfully', product)
   );
+  return;
 });
 
 export const getDiscountProducts = asyncHandler(async (req, res) => {
@@ -101,6 +102,7 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
   );
+  return;
 });
 
 export const getProductBySlug = asyncHandler(async (req, res) => {
@@ -136,6 +138,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
+  return;
 });
 
 export const getAllProducts = asyncHandler(async (req, res) => {
@@ -228,6 +231,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products retrieved successfully', result)
   );
+  return;
 });
 
 export const getProductById = asyncHandler(async (req, res) => {
@@ -261,6 +265,7 @@ export const getProductById = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
   );
+  return;
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
@@ -361,6 +366,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product updated successfully', result)
   );
+  return;
 });
 
 export const deleteProduct = asyncHandler(async (req, res) => {
@@ -436,6 +442,7 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Featured products retrieved successfully', result)
   );
+  return;
 });
 
 export const getNewArrivalProducts = asyncHandler(async (req, res) => {
@@ -481,6 +488,7 @@ export const getNewArrivalProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'New arrival products retrieved successfully', result)
   );
+  return;
 });
 
 export const getProductsByCategory = asyncHandler(async (req, res) => {
@@ -531,6 +539,7 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products retrieved successfully', result)
   );
+  return;
 });
 
 export const searchProducts = asyncHandler(async (req, res) => {
@@ -580,6 +589,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Products found successfully', result)
   );
+  return;
 });
 
 export const getProductFilters = asyncHandler(async (req, res) => {
@@ -625,6 +635,7 @@ export const getProductFilters = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)
   );
+  return;
 });
 
 export const getBestSellingProducts = asyncHandler(async (req, res) => {
@@ -672,6 +683,7 @@ export const getBestSellingProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Best selling products retrieved successfully', result)
   );
+  return;
 });
 
 export const getTrendingProducts = asyncHandler(async (req, res) => {
@@ -719,4 +731,5 @@ export const getTrendingProducts = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Trending products retrieved successfully', result)
   );
+  return;
 });
