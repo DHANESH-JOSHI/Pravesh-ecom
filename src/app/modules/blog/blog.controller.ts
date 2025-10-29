@@ -19,6 +19,7 @@ export const createBlog = asyncHandler(async (req, res) => {
   const blog = await Blog.create(blogData);
   await redis.deleteByPattern('blogs*');
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Blog post created successfully', blog));
+  return;
 });
 
 export const getBlogBySlug = asyncHandler(async (req, res) => {
@@ -38,6 +39,7 @@ export const getBlogBySlug = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, post, 3600);
   res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', post));
+  return;
 });
 
 export const getAllBlogs = asyncHandler(async (req, res) => {
@@ -80,6 +82,7 @@ export const getAllBlogs = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 3600);
   res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved blogs`, result));
+  return;
 });
 
 export const updateBlog = asyncHandler(async (req, res) => {
@@ -118,6 +121,7 @@ export const updateBlog = asyncHandler(async (req, res) => {
   }
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog updated successfully`, updatedBlog));
+  return;
 });
 
 export const deleteBlog = asyncHandler(async (req, res) => {
@@ -142,4 +146,5 @@ export const deleteBlog = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`blog:${existingBlog.slug}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog deleted successfully`, deletedBlog));
+  return;
 });
