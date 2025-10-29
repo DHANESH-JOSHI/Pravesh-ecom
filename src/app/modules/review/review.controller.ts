@@ -36,8 +36,27 @@ const updateProductRating = async (productId: mongoose.Types.ObjectId, session?:
   }, { session });
 
   await redis.deleteByPattern(`product:${productId}*`);
+  return;
 };
 
+export const getReviewById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const cacheKey = `review:${id}`;
+  const cachedReview = await redis.get(cacheKey);
+
+  if (cachedReview) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Review retrieved successfully', cachedReview));
+  }
+
+  const review = await Review.findById(id).populate('user', 'name email').populate('product', 'name');
+
+  if (!review) {
+    throw new ApiError(status.NOT_FOUND, "Review not found");
+  }
+
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Review retrieved successfully', review));
+  return;
+});
 
 export const createReview = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
@@ -70,6 +89,7 @@ export const createReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
+    return;
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -118,6 +138,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Reviews retrieved successfully", result))
+  return;
 })
 
 
@@ -185,6 +206,7 @@ export const getAllReviews = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "All reviews retrieved successfully", result))
+  return;
 })
 
 export const getMyReviews = asyncHandler(async (req, res) => {
@@ -220,6 +242,7 @@ export const getMyReviews = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Your reviews retrieved successfully", result))
+  return;
 })
 
 export const updateReview = asyncHandler(async (req, res) => {
@@ -250,6 +273,7 @@ export const updateReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
+    return;
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -283,6 +307,7 @@ export const deleteReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))
+    return;
   } catch (error) {
     await session.abortTransaction();
     throw error;

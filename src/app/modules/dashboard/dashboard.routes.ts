@@ -1,11 +1,11 @@
 import express from 'express';
-import { auth } from '@/middlewares';
+import { auth, authenticatedActionLimiter } from '@/middlewares';
 import { getDashboardStats } from './dashboard.controller';
 
 const router = express.Router();
 
 router.use(auth('admin'));
 
-router.get('/stats', getDashboardStats);
+router.get('/stats', authenticatedActionLimiter, getDashboardStats);
 
 export default router;

@@ -108,7 +108,7 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
 export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
   const { populate = 'false' } = req.query;
-  const cacheKey = `product:${slug}:${populate}`;
+  const cacheKey = generateCacheKey(`product:${slug}`, req.query);
   const cachedProduct = await redis.get(cacheKey);
 
   if (cachedProduct) {
@@ -237,7 +237,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { populate = 'false' } = req.query;
-  const cacheKey = `product:${id}:${populate}`;
+  const cacheKey = generateCacheKey(`product:${id}`, req.query);
   const cachedProduct = await redis.get(cacheKey);
 
   if (cachedProduct) {
@@ -250,11 +250,10 @@ export const getProductById = asyncHandler(async (req, res) => {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
   }
   let product;
-  if (populate === 'true') {
-    product = await Product.findOne({ _id: id, isDeleted: false })
-      .populate('category', 'brand')
+  if (populate == 'true') {
+    product = await Product.findById(id).populate('category', 'brand')
   } else {
-    product = await Product.findOne({ _id: id, isDeleted: false });
+    product = await Product.findById(id);
   }
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');

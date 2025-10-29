@@ -31,6 +31,7 @@ export const getWishlist = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, wishlist, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Wishlist retrieved successfully', wishlist));
+  return;
 });
 
 export const addProductToWishlist = asyncHandler(async (req, res) => {
@@ -56,6 +57,7 @@ export const addProductToWishlist = asyncHandler(async (req, res) => {
   await redis.delete(`wishlist:${userId}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Product '${product.name}' added to wishlist`, wishlist));
+  return;
 });
 
 export const removeProductFromWishlist = asyncHandler(async (req, res) => {
@@ -82,4 +84,5 @@ export const removeProductFromWishlist = asyncHandler(async (req, res) => {
   await redis.delete(`wishlist:${userId}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Product removed from wishlist successfully', wishlist));
+  return;
 });

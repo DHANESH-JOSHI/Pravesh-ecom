@@ -15,6 +15,7 @@ import { auth, authenticatedActionLimiter } from '@/middlewares';
 const router = express.Router();
 
 router.use(authenticatedActionLimiter);
+
 router.get('/', auth('admin'), getAllCarts)
 
 router.get('/me', auth('user'),getMyCart);

@@ -81,7 +81,8 @@ export const getAllBrands = asyncHandler(async (req, res) => {
 
 export const getBrandById = asyncHandler(async (req, res) => {
   const brandId = req.params.id;
-  const cacheKey = `brand:${brandId}`;
+  const { populate = 'false' } = req.query;
+  const cacheKey = generateCacheKey(`brand:${brandId}`, req.query);
   const cachedBrand = await redis.get(cacheKey);
 
   if (cachedBrand) {
@@ -91,10 +92,19 @@ export const getBrandById = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(brandId)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
   }
-  const brand = await Brand.findOne({
-    _id: brandId,
-    isDeleted: false,
-  });
+
+  let brand;
+  if (populate == 'true') {
+    brand = await Brand.findOne({
+      _id: brandId,
+      isDeleted: false,
+    }).populate('products');
+  } else {
+    brand = await Brand.findOne({
+      _id: brandId,
+      isDeleted: false,
+    });
+  }
 
   if (!brand) {
     throw new ApiError(status.NOT_FOUND, "Brand not found");

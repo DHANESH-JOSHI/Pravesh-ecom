@@ -26,6 +26,50 @@ export const createAddress = asyncHandler(async (req, res) => {
   await redis.deleteByPattern('addresses*');
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Address created successfully", address));
+  return;
+})
+
+export const getAddressById = asyncHandler(async (req, res) => {
+  const { populate = 'false' } = req.query;
+  const addressId = req.params.id;
+  const cacheKey = generateCacheKey(`address:${addressId}`, req.query)
+  const cacheValue = await redis.get(cacheKey);
+  if (cacheValue) {
+    res.status(status.OK).json(new ApiResponse(status.OK, "Address retrieved successfully", cacheValue));
+    return;
+  }
+  if (!mongoose.Types.ObjectId.isValid(addressId)) {
+    throw new ApiError(status.BAD_REQUEST, "Invalid address ID");
+  }
+  let address;
+  if (populate == 'true') {
+    address = await Address.findOne({
+      _id: addressId,
+      isDeleted: false,
+    }).populate([
+      {
+        path: 'user',
+        select: '_id name email'
+      },
+      {
+        path: 'orders',
+        options: {
+          limit: 10,
+          sort: { createdAt: -1 }
+        }
+      }
+    ]);
+  } else {
+    address = await Address.findOne({
+      _id: addressId,
+      isDeleted: false,
+    }).populate('user', '_id name email');
+  }
+  if (!address) {
+    throw new ApiError(status.NOT_FOUND, "Address not found or you are not authorized to access it");
+  }
+  res.status(status.OK).json(new ApiResponse(status.OK, "Address retrieved successfully", address));
+  return;
 })
 
 export const updateMyAddress = asyncHandler(async (req, res) => {
@@ -51,6 +95,7 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
   await redis.deleteByPattern('addresses*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address updated successfully", updatedAddress));
+  return;
 })
 
 export const deleteMyAddress = asyncHandler(async (req, res) => {
@@ -190,4 +235,5 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "All addresses retrieved successfully", result));
+  return;
 })

@@ -20,7 +20,7 @@ router.get("/", auth('admin'), authenticatedActionLimiter, getAllUsers);
 
 router.get("/:id", auth(), authenticatedActionLimiter, getUserById);
 
-router.patch("/password", auth('user'), updatePassword);
+router.patch("/password", auth('user'), authenticatedActionLimiter,updatePassword);
 
 router.post("/:id/recover", auth('admin'), authenticatedActionLimiter, recoverUser);
 

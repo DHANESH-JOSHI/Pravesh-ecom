@@ -65,7 +65,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 
 
 export const getAllUsers = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, search, role, status: userStatus,isDeleted } = req.query;
+  const { page = 1, limit = 10, search, role, status: userStatus, isDeleted } = req.query;
   const cacheKey = generateCacheKey('users', req.query);
   const cachedUsers = await redis.get(cacheKey);
 
@@ -114,17 +114,41 @@ export const getAllUsers = asyncHandler(async (req, res) => {
 
 export const getUserById = asyncHandler(async (req, res) => {
   const userId = req.params.id;
-  const cacheKey = `user:${userId}`;
+  const { populate = 'false' } = req.query;
+  const cacheKey = generateCacheKey(`user:${userId}`, req.query);
   const cachedUser = await redis.get(cacheKey);
 
   if (cachedUser) {
     return res.json(new ApiResponse(status.OK, "User retrieved successfully", cachedUser));
   }
-
-  if (!userId) {
-    throw new ApiError(status.BAD_REQUEST, "User ID is required");
+  let user;
+  if (populate == 'true') {
+    user = await User.findById(userId, { password: 0 }).populate([
+      {
+        path: 'reviews',
+        options: { limit: 5, sort: { createdAt: -1 } },
+      },
+      {
+        path: 'addresses',
+        options: { limit: 5 },
+      },
+      {
+        path: 'orders',
+        options: { limit: 5, sort: { createdAt: -1 } },
+      },
+      {
+        path: 'wallet',
+      },
+      {
+        path: 'cart',
+      },
+      {
+        path: 'wishlist',
+      },
+    ]);
+  } else {
+    user = await User.findById(userId, { password: 0 });
   }
-  const user = await User.findById(userId, { password: 0 });
 
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");

@@ -58,6 +58,7 @@ export const getAllWallets = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 300);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', result));
+  return;
 });
 
 export const getWalletBalance = asyncHandler(async (req, res) => {
@@ -81,6 +82,7 @@ export const getWalletBalance = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 300);
 
   res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', result));
+  return;
 });
 
 export const addFundsToWallet = asyncHandler(async (req, res) => {
@@ -117,6 +119,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
     userId: wallet.user,
     newBalance: wallet.balance
   }));
+  return;
 });
 
 export const getTransactions = asyncHandler(async (req, res) => {
@@ -139,4 +142,5 @@ export const getTransactions = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, wallet.transactions, 300);
 
   res.json(new ApiResponse(status.OK, 'Transactions retrieved', wallet.transactions));
+  return;
 });

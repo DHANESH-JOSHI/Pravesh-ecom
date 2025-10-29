@@ -1,11 +1,13 @@
 import express from 'express';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
-import { createReview, deleteReview, getAllReviews, getMyReviews, getProductReviews, updateReview } from './review.controller';
+import { createReview, deleteReview, getAllReviews, getMyReviews, getProductReviews, getReviewById, updateReview } from './review.controller';
 const router = express.Router();
 
 router.get('/', auth('admin'), authenticatedActionLimiter, getAllReviews);
 
 router.get('/me', auth('user'), authenticatedActionLimiter, getMyReviews);
+
+router.get('/:id', auth('admin'), authenticatedActionLimiter, getReviewById)
 
 router.get('/product/:productId', getProductReviews);
 

@@ -2,6 +2,7 @@ import express from "express";
 import {
   createAddress,
   deleteMyAddress,
+  getAddressById,
   getAllAddresses,
   getMyAddresses,
   setDefaultAddress,
@@ -11,18 +12,18 @@ import { auth, authenticatedActionLimiter } from "@/middlewares";
 
 const router = express.Router();
 
-router.get("/", auth('admin'), getAllAddresses);
+router.get("/", auth('admin'), authenticatedActionLimiter, getAllAddresses);
 
-router.use(auth('user'));
+router.get("/me", auth('user'), authenticatedActionLimiter, getMyAddresses);
 
-router.get("/me", getMyAddresses);
+router.get('/:id', auth(), authenticatedActionLimiter, getAddressById)
 
-router.post("/", authenticatedActionLimiter, createAddress);
+router.post("/", auth('user'), authenticatedActionLimiter, createAddress);
 
-router.patch('/:id/default', authenticatedActionLimiter, setDefaultAddress);
+router.patch('/:id/default', auth('user'), authenticatedActionLimiter, setDefaultAddress);
 
-router.patch("/:id", authenticatedActionLimiter, updateMyAddress);
+router.patch("/:id", auth('user'), authenticatedActionLimiter, updateMyAddress);
 
-router.delete("/:id", authenticatedActionLimiter, deleteMyAddress);
+router.delete("/:id", auth('user'), authenticatedActionLimiter, deleteMyAddress);
 
 export const addressRouter = router;

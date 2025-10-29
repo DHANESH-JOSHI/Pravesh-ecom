@@ -108,7 +108,7 @@ export const getChildCategories = asyncHandler(async (req, res) => {
 export const getCategoryById = asyncHandler(async (req, res) => {
   const categoryId = req.params.id;
   const { populate = 'false' } = req.query;
-  const cacheKey = `category:${categoryId}:${populate}`;
+  const cacheKey = generateCacheKey(`category:${categoryId}`,req.query);
   const cachedCategory = await redis.get(cacheKey);
 
   if (cachedCategory) {
@@ -119,16 +119,16 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     throw new ApiError(status.BAD_REQUEST, "Invalid category ID");
   }
   let category;
-  if (populate === 'true') {
+  if (populate == 'true') {
     category = await Category.findOne({
       _id: categoryId,
       isDeleted: false,
-    }).populate('parentCategory');
+    }).populate('parentCategory children');
   } else {
     category = await Category.findOne({
       _id: categoryId,
       isDeleted: false,
-    });
+    }).populate('parentCategory', '_id title');
   }
 
   if (!category) {
