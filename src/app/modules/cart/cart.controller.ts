@@ -22,12 +22,36 @@ export const getCartById = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid cart ID');
   }
-  const cart = await Cart.findById(id).populate('user items.product')
+  const cart = await Cart.findById(id).populate([
+    {
+      path: 'user',
+      select: '_id name email',
+      populate: {
+        path: 'wallet',
+        select: 'balance'
+      }
+    },
+    {
+      path: 'items.product',
+      select: '_id name thumbnail originalPrice finalPrice',
+      populate: [
+        {
+          path: 'category',
+          select: 'title _id'
+        },
+        {
+          path: 'brand',
+          select: 'name _id'
+        }
+      ]
+    }
+  ])
   if (!cart) {
     throw new ApiError(status.NOT_FOUND, 'Cart not found');
   }
   await redis.set(cacheKey, cart, 900);
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart retrieved successfully', cart));
+  return;
 });
 
 export const getMyCart = asyncHandler(async (req, res) => {
@@ -58,13 +82,14 @@ export const getMyCart = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, cart, 900);
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart retrieved successfully', cart));
+  return;
 });
 
 export const getAllCarts = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, user } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
-  const cacheKey = generateCacheKey('carts',req.query);
+  const cacheKey = generateCacheKey('carts', req.query);
   const cachedResult = await redis.get(cacheKey);
   if (cachedResult) {
     res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', cachedResult));
@@ -76,7 +101,14 @@ export const getAllCarts = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = user;
     } else {
-      const users = await User.find({ name: { $regex: user, $options: 'i' } }).select('_id');
+      const users = await User.find({
+        $or: [
+          { name: { $regex: user, $options: 'i' } },
+          { email: { $regex: user, $options: 'i' } },
+          { phone: { $regex: user, $options: 'i' } }
+        ]
+      }).select('_id');
+
       const userIds = users.map(u => u._id);
       filter.user = { $in: userIds };
     }
@@ -85,7 +117,7 @@ export const getAllCarts = asyncHandler(async (req, res) => {
   const cartsQuery = Cart.find(filter)
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(Number(limit)).populate('user', '_id name').populate('items.product', 'finalPrice');
+    .limit(Number(limit)).populate('user', '_id name email').populate('items.product', 'finalPrice');
   const [carts, total] = await Promise.all([
     cartsQuery,
     Cart.countDocuments(filter),
@@ -101,6 +133,7 @@ export const getAllCarts = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 300);
   res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', result));
+  return;
 });
 
 export const addToCart = asyncHandler(async (req, res) => {
@@ -148,6 +181,7 @@ export const addToCart = asyncHandler(async (req, res) => {
   }
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Item added to cart successfully', populatedCart));
+  return;
 });
 
 export const updateCartItem = asyncHandler(async (req, res) => {
@@ -199,6 +233,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   }
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart item updated successfully', updatedCart));
+  return;
 });
 
 export const removeFromCart = asyncHandler(async (req, res) => {
@@ -232,6 +267,7 @@ export const removeFromCart = asyncHandler(async (req, res) => {
   }
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Item removed from cart successfully', updatedCart));
+  return;
 });
 
 export const clearCart = asyncHandler(async (req, res) => {
@@ -264,6 +300,7 @@ export const clearCart = asyncHandler(async (req, res) => {
     totalPrice: 0,
     itemCount: 0,
   }));
+  return;
 });
 
 export const getCartSummary = asyncHandler(async (req, res) => {
@@ -300,6 +337,7 @@ export const getCartSummary = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, summary, 300);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart summary retrieved successfully', summary));
+  return;
 });
 
 export const checkoutCart = asyncHandler(async (req, res) => {
@@ -329,4 +367,5 @@ export const checkoutCart = asyncHandler(async (req, res) => {
   }
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Checkout successful', { totalPrice }));
+  return;
 })
