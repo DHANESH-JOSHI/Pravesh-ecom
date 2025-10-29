@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import { ICategory } from './category.interface';
 
-const CategorySchema: Schema = new Schema<ICategory>(
+const categorySchema: Schema = new Schema<ICategory>(
   {
     title: {
       type: String,
@@ -26,6 +26,7 @@ const CategorySchema: Schema = new Schema<ICategory>(
   {
     timestamps: true,
     toJSON: {
+      virtuals: true,
       transform: function (doc, ret: any) {
         if (ret.createdAt && typeof ret.createdAt !== 'string') {
           ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -35,11 +36,28 @@ const CategorySchema: Schema = new Schema<ICategory>(
         }
       }
     },
+    toObject: {
+      virtuals: true
+    }
   }
 );
 
-CategorySchema.index({ createdAt: -1 });
-CategorySchema.index({ title: 'text' });
-CategorySchema.index({ parentCategory: -1 });
-CategorySchema.index({ isDeleted: -1 });
-export const Category = mongoose.model<ICategory>('Category', CategorySchema);
+categorySchema.virtual('children',{
+  ref:'Category',
+  localField:'_id',
+  foreignField:'parentCategory',
+  justOne:false
+})
+
+categorySchema.virtual('products',{
+  ref:'Product',
+  localField:'_id',
+  foreignField:'category',
+  justOne:false
+})
+
+categorySchema.index({ createdAt: -1 });
+categorySchema.index({ title: 'text' });
+categorySchema.index({ parentCategory: -1 });
+categorySchema.index({ isDeleted: -1 });
+export const Category = mongoose.model<ICategory>('Category', categorySchema);

@@ -41,6 +41,7 @@ export const createCategory = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(status.CREATED, "Category created successfully", category)
     );
+  return;
 });
 
 export const getAllCategories = asyncHandler(async (req, res) => {
@@ -81,6 +82,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", result));
+  return;
 });
 
 export const getChildCategories = asyncHandler(async (req, res) => {
@@ -100,6 +102,7 @@ export const getChildCategories = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, childCategories, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Child categories retrieved successfully", childCategories));
+  return;
 });
 
 export const getCategoryById = asyncHandler(async (req, res) => {
@@ -135,6 +138,7 @@ export const getCategoryById = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, category, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category retrieved successfully", category));
+  return;
 });
 
 export const updateCategoryById = asyncHandler(async (req, res) => {
@@ -203,6 +207,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
   );
+  return;
 });
 
 export const deleteCategoryById = asyncHandler(async (req, res) => {
@@ -225,4 +230,5 @@ export const deleteCategoryById = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`category:${categoryId}*`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted successfully", category));
+  return;
 });
