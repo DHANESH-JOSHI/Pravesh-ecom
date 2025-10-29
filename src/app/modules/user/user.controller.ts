@@ -23,6 +23,7 @@ export const getMe = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, user, 600);
   res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", user));
+  return;
 });
 
 export const updateUser = asyncHandler(async (req, res) => {

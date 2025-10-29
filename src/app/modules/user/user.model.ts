@@ -18,6 +18,7 @@ const userSchema = new Schema<IUser>(
   {
     timestamps: true,
     toJSON: {
+      virtuals: true,
       transform: function (doc, ret: any) {
         if (ret.createdAt && typeof ret.createdAt !== 'string') {
           ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -26,10 +27,54 @@ const userSchema = new Schema<IUser>(
           ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
         }
       }
+    },
+    toObject: {
+      virtuals: true,
     }
   }
 );
 
+userSchema.virtual('wallet', {
+  ref: 'Wallet',
+  localField: '_id',
+  foreignField: 'user',
+  justOne: true,
+});
+
+userSchema.virtual('cart', {
+  ref: 'Cart',
+  localField: '_id',
+  foreignField: 'user',
+  justOne: true,
+});
+
+userSchema.virtual('wishlist', {
+  ref: 'Wishlist',
+  localField: '_id',
+  foreignField: 'user',
+  justOne: true,
+});
+
+userSchema.virtual('orders', {
+  ref: 'Order',
+  localField: '_id',
+  foreignField: 'user',
+  justOne: false,
+});
+
+userSchema.virtual('addresses', {
+  ref: 'Address',
+  localField: '_id',
+  foreignField: 'user',
+  justOne: false,
+});
+
+userSchema.virtual('reviews', {
+  ref: 'Review',
+  localField: '_id',
+  foreignField: 'user',
+  justOne: false,
+});
 
 userSchema.pre<IUser>('save', async function (next) {
   if (!this.isModified('password')) {
@@ -47,7 +92,6 @@ userSchema.methods.comparePassword = async function (password: string): Promise<
 userSchema.methods.compareOtp = function (otp: string): boolean {
   return this.otp === otp && this.otpExpires && this.otpExpires > new Date();
 };
-
 
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
