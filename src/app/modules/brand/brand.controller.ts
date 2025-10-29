@@ -35,6 +35,7 @@ export const createBrand = asyncHandler(async (req, res) => {
   await redis.deleteByPattern("brands*");
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", brand));
+  return;
 });
 
 export const getAllBrands = asyncHandler(async (req, res) => {
@@ -75,6 +76,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, result, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", result));
+  return;
 });
 
 export const getBrandById = asyncHandler(async (req, res) => {
@@ -101,6 +103,7 @@ export const getBrandById = asyncHandler(async (req, res) => {
   await redis.set(cacheKey, brand, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
+  return;
 });
 
 export const updateBrandById = asyncHandler(async (req, res) => {
@@ -155,6 +158,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
   );
+  return;
 });
 
 export const deleteBrandById = asyncHandler(async (req, res) => {
@@ -176,4 +180,5 @@ export const deleteBrandById = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`brand:${brandId}`);
 
   res.json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
+  return;
 });
