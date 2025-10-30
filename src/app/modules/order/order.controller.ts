@@ -33,7 +33,7 @@ export const createOrder = asyncHandler(async (req, res) => {
     let totalAmount = 0;
     for (const item of cart.items) {
       const product = await Product.findById(item.product).session(session);
-      if (!product || product.isDeleted || product.status !== 'active') {
+      if (!product || product.isDeleted) {
         throw new ApiError(status.BAD_REQUEST, `Product with ID ${item.product} is not available.`);
       }
       if (product.stock < item.quantity) {
@@ -116,13 +116,13 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
   return;
 });
 
-export const updateCustomOrder = asyncHandler(async (req, res) => {
+export const updateOrder = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
   const { items, status: orderStatus, feedback } = adminUpdateOrderValidation.parse(req.body);
 
   const order = await Order.findById(orderId);
-  if (!order || !order.isCustomOrder) {
-    throw new ApiError(status.NOT_FOUND, 'Custom order not found');
+  if (!order) {
+    throw new ApiError(status.NOT_FOUND, 'order not found');
   }
   let totalAmount = order.totalAmount;
   if (items && items.length > 0) {

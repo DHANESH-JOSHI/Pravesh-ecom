@@ -3,7 +3,7 @@ import { auth, authenticatedActionLimiter } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 import {
   createCustomOrder,
-  updateCustomOrder,
+  updateOrder,
   confirmCustomOrder,
   getMyOrders,
   getOrderById,
@@ -25,7 +25,7 @@ router.get('/me', auth('user'), authenticatedActionLimiter, getMyOrders);
 
 router.get('/', auth('admin'), authenticatedActionLimiter, getAllOrders);
 
-router.patch('/:id', auth('admin'), authenticatedActionLimiter, updateCustomOrder);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, updateOrder);
 
 router.patch('/:id/status', auth('admin'), authenticatedActionLimiter, updateOrderStatus);
 
