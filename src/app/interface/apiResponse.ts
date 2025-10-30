@@ -9,7 +9,7 @@ export class ApiResponse {
   constructor(statusCode: number, message: string, data?: any, context = 'Global') {
     logger.info(`[${context}] : ${message}`);
     this.statusCode = statusCode;
-    this.success = statusCode >= status.OK && statusCode < status.INTERNAL_SERVER_ERROR;
+    this.success = statusCode === status.OK || statusCode === status.CREATED || statusCode === status.ACCEPTED || statusCode === status.NO_CONTENT;
     this.message = message;
     this.data = data;
   }
