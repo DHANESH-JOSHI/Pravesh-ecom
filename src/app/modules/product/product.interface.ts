@@ -24,12 +24,6 @@ export enum StockStatus {
   OutOfStock = 'out_of_stock',
 }
 
-export enum ProductStatus {
-  Active = 'active',
-  Inactive = 'inactive',
-  Discontinued = 'discontinued'
-}
-
 
 export interface IProduct extends Document {
   name: string;
@@ -55,7 +49,6 @@ export interface IProduct extends Document {
   images: string[];
   thumbnail: string;
 
-  status: ProductStatus;
   tags?: string[];
 
   isFeatured?: boolean;
@@ -80,7 +73,6 @@ export interface IProductFilter {
   maxPrice?: number;
   inStock?: boolean;
   stockStatus?: StockStatus;
-  status?: ProductStatus;
 
   isFeatured?: boolean;
   isNewArrival?: boolean;

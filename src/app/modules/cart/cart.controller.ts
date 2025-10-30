@@ -349,7 +349,7 @@ export const checkoutCart = asyncHandler(async (req, res) => {
   let totalPrice = 0;
   for (const item of cart.items) {
     const product = item.product as unknown as IProduct;
-    if (product.isDeleted || product.status !== 'active') {
+    if (product.isDeleted) {
       throw new ApiError(status.BAD_REQUEST, `Product ${product.name} is not available`);
     }
     if (item.quantity > product.stock) {

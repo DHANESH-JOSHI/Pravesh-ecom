@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Types } from "mongoose";
-import { DiscountType, ProductStatus, StockStatus, UnitType } from './product.interface';
+import { DiscountType, StockStatus, UnitType } from './product.interface';
 
 const objectIdValidation = z
   .string()
@@ -64,7 +64,6 @@ const productsQueryValidation = z.object({
   brandId: objectIdValidation.optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
-  status: z.enum(ProductStatus).optional(),
   stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),

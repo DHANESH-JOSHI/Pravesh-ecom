@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { DiscountType, IProduct, ProductStatus, StockStatus, UnitType } from "./product.interface";
+import { DiscountType, IProduct, StockStatus, UnitType } from "./product.interface";
 
 const productSchema = new Schema<IProduct>(
   {
@@ -42,7 +42,6 @@ const productSchema = new Schema<IProduct>(
     images: [{ type: String, required: true }],
     thumbnail: { type: String, required: true },
 
-    status: { type: String, enum: ProductStatus, default: ProductStatus.Active },
     tags: [{ type: String, trim: true }],
 
     isFeatured: { type: Boolean, default: false },
@@ -126,15 +125,12 @@ productSchema.pre('findOneAndUpdate', function (next) {
 productSchema.pre('save', function (next) {
   calculateFinalPrice(this);
   if (this.stock === 0) {
-    this.status = ProductStatus.Inactive;
     this.stockStatus = StockStatus.OutOfStock;
   }
   if (this.stock < this.minStock) {
     this.stockStatus = StockStatus.LowStock;
-    this.status = ProductStatus.Active;
   } else if (this.stock >= this.minStock && this.stockStatus !== StockStatus.InStock) {
     this.stockStatus = StockStatus.InStock;
-    this.status = ProductStatus.Active;
   }
   next();
 });

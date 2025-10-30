@@ -6,7 +6,7 @@ import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { createProductValidation, productsQueryValidation } from './product.validation';
 import { Category } from '../category/category.model';
 import { Brand } from '../brand/brand.model';
-import { IProductQuery, ProductStatus } from './product.interface';
+import { IProductQuery } from './product.interface';
 import status from 'http-status';
 import mongoose from 'mongoose';
 const ApiError = getApiErrorClass("PRODUCT");
@@ -88,7 +88,6 @@ export const getDiscountProducts = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const products = await Product.find({
     isDiscount: true,
-    status: ProductStatus.Active,
     isDeleted: false,
   })
     .populate('category', 'brand')
@@ -161,7 +160,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     brandId,
     minPrice,
     maxPrice,
-    status: productStatus = 'active',
     stockStatus = 'in_stock',
     isFeatured,
     isNewArrival,
@@ -173,7 +171,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
   const filter: any = {
     stockStatus,
-    status: productStatus,
   };
   if (isDeleted !== undefined) {
     filter.isDeleted = isDeleted;
@@ -251,7 +248,13 @@ export const getProductById = asyncHandler(async (req, res) => {
   }
   let product;
   if (populate == 'true') {
-    product = await Product.findById(id).populate('category', 'brand')
+    product = await Product.findById(id).populate('category', '_id title').populate('brand', '_id name').populate({
+      path: 'reviews',
+      populate: {
+        path: 'user',
+        select: 'name img'
+      }
+    })
   } else {
     product = await Product.findById(id);
   }
@@ -550,30 +553,35 @@ export const searchProducts = asyncHandler(async (req, res) => {
       new ApiResponse(status.OK, 'Products found successfully', cachedProducts)
     );
   }
-
   const { q, page = 1, limit = 10 } = req.query;
 
-  if (!q) {
-    throw new ApiError(status.BAD_REQUEST, 'Search query is required');
-  }
-
-  const filter = {
-    $text: { $search: q as string },
+  const filter: any = {
     status: 'active',
     isDeleted: false,
   };
-
+  if (q) {
+    filter.$text = { $search: q as string };
+  }
   const skip = (Number(page) - 1) * Number(limit);
-
-  const [products, total] = await Promise.all([
-    Product.find(filter, { score: { $meta: 'textScore' } })
-      .populate('category', 'brand')
-      .sort({ score: { $meta: 'textScore' } })
-      .skip(skip)
-      .limit(Number(limit)),
-    Product.countDocuments(filter),
-  ]);
-
+  let products, total;
+  if (q) {
+    [products, total] = await Promise.all([
+      Product.find(filter, { score: { $meta: 'textScore' } })
+        .populate('category', 'brand')
+        .sort({ score: { $meta: 'textScore' } })
+        .skip(skip)
+        .limit(Number(limit)),
+      Product.countDocuments(filter),
+    ]);
+  } else {
+    [products, total] = await Promise.all([
+      Product.find(filter)
+        .populate('category', 'brand')
+        .skip(skip)
+        .limit(Number(limit)),
+      Product.countDocuments(filter),
+    ]);
+  }
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
     products,
@@ -655,7 +663,6 @@ export const getBestSellingProducts = asyncHandler(async (req, res) => {
 
   const filter = {
     isDeleted: false,
-    status: ProductStatus.Active,
     totalSold: { $gt: 0 }
   };
 
@@ -703,7 +710,6 @@ export const getTrendingProducts = asyncHandler(async (req, res) => {
 
   const filter = {
     isDeleted: false,
-    status: ProductStatus.Active,
     salesCount: { $gt: 0 }
   };
 
