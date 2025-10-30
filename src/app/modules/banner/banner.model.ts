@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import { BannerType, IBanner } from './banner.interface';
 
-const BannerSchema = new Schema<IBanner>(
+const bannerSchema = new Schema<IBanner>(
   {
     title: { type: String, required: true },
     image: { type: String, required: true },
@@ -30,4 +30,7 @@ const BannerSchema = new Schema<IBanner>(
   }
 );
 
-export const Banner = mongoose.model<IBanner>('Banner', BannerSchema);
+bannerSchema.index({ title: 'text', type: 1 })
+bannerSchema.index({ createdAt: -1, isDeleted: 1 })
+
+export const Banner = mongoose.model<IBanner>('Banner', bannerSchema);

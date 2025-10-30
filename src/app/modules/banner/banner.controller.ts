@@ -29,7 +29,7 @@ export const getAllBanners = asyncHandler(async (req, res) => {
   }
 
   const filter: any = {};
-  if (search) filter.title = { $regex: search, $options: 'i' };
+  if (search) filter.$text = { $search: search };
   if (type) filter.type = type;
   if (isDeleted !== undefined) {
     filter.isDeleted = isDeleted === 'true';
