@@ -48,7 +48,13 @@ export const getAllWallets = asyncHandler(async (req, res) => {
 
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
-    wallets,
+    wallets: wallets.map(wallet => {
+      const walletObject = wallet.toObject();
+      return {
+        ...walletObject,
+        transactions: walletObject.transactions?.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) || []
+      }
+    }),
     page: Number(page),
     limit: Number(limit),
     total,
@@ -135,6 +141,9 @@ export const getTransactions = asyncHandler(async (req, res) => {
   }
 
   const wallet = await Wallet.findOne({ userId: userId });
+  if (wallet && wallet.transactions) {
+    wallet.transactions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
   if (!wallet) {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found');
   }
