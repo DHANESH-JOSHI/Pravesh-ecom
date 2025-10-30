@@ -5,11 +5,11 @@ const brandSchema = new mongoose.Schema<IBrand>(
   {
     name: {
       type: String,
-      required: true
+      required: true,
+      unique: true
     },
     image: {
       type: String,
-      required: true
     },
     isDeleted: {
       type: Boolean,
@@ -19,7 +19,7 @@ const brandSchema = new mongoose.Schema<IBrand>(
   {
     timestamps: true,
     toJSON: {
-      virtuals:true,
+      virtuals: true,
       transform: function (doc, ret: any) {
         if (ret.createdAt && typeof ret.createdAt !== 'string') {
           ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -30,8 +30,8 @@ const brandSchema = new mongoose.Schema<IBrand>(
         return ret;
       }
     },
-    toObject:{
-      virtuals:true
+    toObject: {
+      virtuals: true
     }
   }
 )
@@ -42,6 +42,6 @@ brandSchema.virtual('products', {
   foreignField: 'brand',
   justOne: false
 });
-
-brandSchema.index({ createdAt: -1 });
+brandSchema.index({ name: 'text' });
+brandSchema.index({ createdAt: -1, isDeleted: 1 });
 export const Brand = mongoose.model<IBrand>('Brand', brandSchema);

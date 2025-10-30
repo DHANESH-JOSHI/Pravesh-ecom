@@ -19,13 +19,10 @@ export const createBrand = asyncHandler(async (req, res) => {
   if (existingBrand) {
     throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
   }
-
-  if (!req.file) {
-    throw new ApiError(status.BAD_REQUEST, "Image is required");
+  let image;
+  if (req.file) {
+    image = req.file.path
   }
-
-  const image = req.file.path
-
   const brand = new Brand({
     name,
     image,
@@ -50,7 +47,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {};
-  if (search) filter.name = { $regex: search, $options: 'i' };
+  if (search) filter.$text = { search: search };
   if (isDeleted !== undefined) {
     filter.isDeleted = isDeleted === 'true';
   } else {
