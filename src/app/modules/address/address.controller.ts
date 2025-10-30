@@ -22,8 +22,9 @@ export const createAddress = asyncHandler(async (req, res) => {
     throw new ApiError(status.INTERNAL_SERVER_ERROR, "Failed to create address");
   }
 
-  await redis.deleteByPattern(`addresses:user:${userId}*`);
+  await redis.deleteByPattern(`addresses:user:${address.user}*`);
   await redis.deleteByPattern('addresses*');
+  await redis.deleteByPattern(`users:${address.user}:populate=true`);
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Address created successfully", address));
   return;
@@ -192,27 +193,13 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = user;
     } else {
-      const users = await User.find({
-        $or: [
-          { name: { $regex: user, $options: 'i' } },
-          { email: { $regex: user, $options: 'i' } },
-          { phone: { $regex: user, $options: 'i' } }
-        ]
-      }).select('_id');
-
+      const users = await User.find({ $text: { $search: user as string } }).select('_id');
       const userIds = users.map(u => u._id);
       filter.user = { $in: userIds };
     }
   }
   if (search) {
-    filter.$or = [
-      { fullname: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } },
-      { city: { $regex: search, $options: 'i' } },
-      { state: { $regex: search, $options: 'i' } },
-      { postalCode: { $regex: search, $options: 'i' } },
-      { country: { $regex: search, $options: 'i' } }
-    ];
+    filter.$text = { $search: search };
   }
   const skip = (Number(page) - 1) * Number(limit);
 

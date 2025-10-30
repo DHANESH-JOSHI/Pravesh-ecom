@@ -81,6 +81,8 @@ addressSchema.pre('save', async function (next) {
   next();
 });
 
+addressSchema.index({ fullname: 'text', phone: 'text', city: 'text', state: 'text', postalCode: 'text', country: 'text' });
+
 addressSchema.virtual('orders', {
   ref: 'Order',
   localField: '_id',
