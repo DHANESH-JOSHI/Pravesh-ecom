@@ -6,12 +6,10 @@ const categorySchema: Schema = new Schema<ICategory>(
     title: {
       type: String,
       required: true,
-      unique: true,
       trim: true
     },
     image: {
       type: String,
-      required: true
     },
     isDeleted: {
       type: Boolean,
@@ -55,9 +53,9 @@ categorySchema.virtual('products',{
   foreignField:'category',
   justOne:false
 })
-
 categorySchema.index({ createdAt: -1 });
 categorySchema.index({ title: 'text' });
 categorySchema.index({ parentCategory: -1 });
 categorySchema.index({ isDeleted: -1 });
+categorySchema.index({ parentCategory: 1, title: 1 }, { unique: true });
 export const Category = mongoose.model<ICategory>('Category', categorySchema);

@@ -12,30 +12,40 @@ const ApiResponse = getApiResponseClass("CATEGORY");
 
 export const createCategory = asyncHandler(async (req, res) => {
   const { title, parentCategoryId } = categoryValidation.parse(req.body);
-
-  const existingCategory = await Category.findOne({
+  let category = await Category.findOne({
     title,
-    parentCategory: parentCategoryId,
-    isDeleted: false,
+    parentCategory: new mongoose.Types.ObjectId(parentCategoryId),
   });
-  if (existingCategory) {
-    throw new ApiError(status.BAD_REQUEST, "Category with this title already exists");
+  if (category) {
+    if (category.isDeleted) {
+      category.isDeleted = false;
+    }
+    else {
+      throw new ApiError(status.BAD_REQUEST, "Category with this title already exists");
+    }
   }
-
-  if (!req.file) {
-    throw new ApiError(status.BAD_REQUEST, "Image is required");
+  let image;
+  if (req.file) {
+    image = req.file.path;
   }
-
-  const image = req.file.path;
-
-  const category = await Category.create({
-    title,
-    parentCategory: parentCategoryId,
-    image
-  });
-
+  if (!category) {
+    category = await Category.create({
+      title,
+      parentCategory: parentCategoryId,
+      image
+    });
+  } else {
+    if (category.image) {
+      const publicId = category.image.split("/").pop()?.split(".")[0];
+      if (publicId) {
+        await cloudinary.uploader.destroy(`pravesh-categories/${publicId}`);
+      }
+    }
+    category.image = image;
+    await category.save();
+  }
   await redis.deleteByPattern("categories*");
-
+  await redis.deleteByPattern(`category:${category.parentCategory}*`);
   res
     .status(status.CREATED)
     .json(
@@ -55,8 +65,10 @@ export const getAllCategories = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, isDeleted } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
-  const filter: any = {};
-  if (search) filter.title = { $regex: search, $options: 'i' };
+  const filter: any = {
+    parentCategory: null
+  };
+  if (search) filter.$text = { $search: search };
   if (isDeleted !== undefined) {
     filter.isDeleted = isDeleted === 'true';
   } else {
@@ -108,7 +120,7 @@ export const getChildCategories = asyncHandler(async (req, res) => {
 export const getCategoryById = asyncHandler(async (req, res) => {
   const categoryId = req.params.id;
   const { populate = 'false' } = req.query;
-  const cacheKey = generateCacheKey(`category:${categoryId}`,req.query);
+  const cacheKey = generateCacheKey(`category:${categoryId}`, req.query);
   const cachedCategory = await redis.get(cacheKey);
 
   if (cachedCategory) {
@@ -123,7 +135,7 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     category = await Category.findOne({
       _id: categoryId,
       isDeleted: false,
-    }).populate('parentCategory children');
+    }).populate('parentCategory children products');
   } else {
     category = await Category.findOne({
       _id: categoryId,
@@ -202,7 +214,8 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
   );
 
   await redis.deleteByPattern("categories*");
-  await redis.deleteByPattern(`category:${categoryId}*`);
+  await redis.deleteByPattern(`category:${category._id}*`);
+  await redis.deleteByPattern(`category:${category.parentCategory}*`);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
@@ -227,7 +240,8 @@ export const deleteCategoryById = asyncHandler(async (req, res) => {
   }
 
   await redis.deleteByPattern("categories*");
-  await redis.deleteByPattern(`category:${categoryId}*`);
+  await redis.deleteByPattern(`category:${category._id}*`);
+  await redis.deleteByPattern(`category:${category.parentCategory}*`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted successfully", category));
   return;
