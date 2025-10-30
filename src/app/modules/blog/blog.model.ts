@@ -1,7 +1,7 @@
 import { Schema, model } from 'mongoose';
 import { IBlog } from './blog.interface';
 
-const BlogSchema = new Schema<IBlog>(
+const blogSchema = new Schema<IBlog>(
   {
     title: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, trim: true },
@@ -27,13 +27,14 @@ const BlogSchema = new Schema<IBlog>(
   }
 );
 
-BlogSchema.index({ isPublished: 1, isDeleted: 1, createdAt: -1 });
+blogSchema.index({ isPublished: 1, isDeleted: 1, createdAt: -1 });
+blogSchema.index({ title: 'text', content: 'text' });
 
-BlogSchema.pre('save', function (next) {
+blogSchema.pre('save', function (next) {
   if (this.isModified('title')) {
     this.slug = this.title.toLowerCase().split(' ').join('-') + '-' + Date.now();
   }
   next();
 });
 
-export const Blog = model<IBlog>('Blog', BlogSchema);
+export const Blog = model<IBlog>('Blog', blogSchema);

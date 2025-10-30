@@ -53,10 +53,7 @@ export const getAllBlogs = asyncHandler(async (req, res) => {
 
   const filter: any = {};
   if (search) {
-    filter.$or = [
-      { title: { $regex: search, $options: 'i' } },
-      { slug: { $regex: search, $options: 'i' } }
-    ];
+    filter.$text = { $search: search };
   }
   if (isPublished !== undefined) filter.isPublished = isPublished === 'true';
   if (isDeleted !== undefined) {
