@@ -92,7 +92,7 @@ userSchema.methods.comparePassword = async function (password: string): Promise<
 userSchema.methods.compareOtp = function (otp: string): boolean {
   return this.otp === otp && this.otpExpires && this.otpExpires > new Date();
 };
-
+userSchema.index({ name: 'text', phone: 1, email: 'text' })
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ createdAt: -1 });
