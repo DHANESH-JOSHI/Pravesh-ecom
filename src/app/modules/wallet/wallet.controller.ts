@@ -69,10 +69,6 @@ export const getAllWallets = asyncHandler(async (req, res) => {
 
 export const getWalletBalance = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
-
   const cacheKey = `wallet:balance:${userId}`;
   const cachedBalance = await redis.get(cacheKey);
   if (cachedBalance) {
@@ -130,10 +126,6 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 
 export const getTransactions = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'Unauthorized');
-  }
-
   const cacheKey = `wallet:transactions:${userId}`;
   const cachedTransactions = await redis.get(cacheKey);
   if (cachedTransactions) {

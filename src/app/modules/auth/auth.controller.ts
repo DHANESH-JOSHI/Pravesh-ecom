@@ -63,10 +63,10 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
   if (user.role !== UserRole.USER) {
-    throw new ApiError(status.UNAUTHORIZED, "User role is not user");
+    throw new ApiError(status.BAD_REQUEST, "User role is not user");
   }
   if (user.status !== UserStatus.ACTIVE) {
-    throw new ApiError(status.UNAUTHORIZED, "User account is not active");
+    throw new ApiError(status.BAD_REQUEST, "User account is not active");
   }
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
@@ -94,7 +94,7 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
   }
 
   if (user.role !== UserRole.ADMIN) {
-    throw new ApiError(status.UNAUTHORIZED, "User is not an admin");
+    throw new ApiError(status.BAD_REQUEST, "User is not an admin");
   }
 
   const isMatch = await user.comparePassword(password);
@@ -154,11 +154,11 @@ export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
   }
 
   if (user.role !== UserRole.ADMIN) {
-    throw new ApiError(status.FORBIDDEN, "Unauthorized");
+    throw new ApiError(status.BAD_REQUEST, "Unauthorized");
   }
 
   if (!user.compareOtp(otp)) {
-    throw new ApiError(status.UNAUTHORIZED, "Invalid or expired OTP");
+    throw new ApiError(status.BAD_REQUEST, "Invalid or expired OTP");
   }
 
   if (user.status === UserStatus.PENDING) {
@@ -192,11 +192,11 @@ export const loginUsingOtp = asyncHandler(async (req, res) => {
   }
 
   if (user.role !== UserRole.USER) {
-    throw new ApiError(status.UNAUTHORIZED, "User role is not user");
+    throw new ApiError(status.BAD_REQUEST, "User role is not user");
   }
 
   if (!user.compareOtp(otp)) {
-    throw new ApiError(status.UNAUTHORIZED, "Invalid or expired OTP");
+    throw new ApiError(status.BAD_REQUEST, "Invalid or expired OTP");
   }
 
   if (user.status === UserStatus.PENDING) {
@@ -229,7 +229,7 @@ export const refreshTokens = asyncHandler(async (req, res) => {
 
   const decodedToken = verifyToken(refreshToken);
   if (!decodedToken) {
-    throw new ApiError(status.UNAUTHORIZED, "Invalid refresh token");
+    throw new ApiError(status.BAD_REQUEST, "Invalid refresh token");
   }
   const user = await User.findById(decodedToken.userId);
 

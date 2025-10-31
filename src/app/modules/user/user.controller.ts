@@ -162,9 +162,6 @@ export const getUserById = asyncHandler(async (req, res) => {
 
 export const updatePassword = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, "User not authenticated");
-  }
   const { currentPassword, newPassword } = updatePasswordValidation.parse(req.body);
 
   const user = await User.findById(userId);
@@ -173,7 +170,7 @@ export const updatePassword = asyncHandler(async (req, res) => {
   }
   const isPasswordCorrect = await user.comparePassword(currentPassword)
   if (!isPasswordCorrect) {
-    throw new ApiError(status.UNAUTHORIZED, "Incorrect password");
+    throw new ApiError(status.BAD_REQUEST, "Incorrect password");
   }
   user.password = newPassword;
   await user.save();

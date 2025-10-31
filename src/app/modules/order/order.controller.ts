@@ -16,9 +16,6 @@ const ApiResponse = getApiResponseClass("ORDER");
 
 export const createOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
   const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
 
   const session = await mongoose.startSession();

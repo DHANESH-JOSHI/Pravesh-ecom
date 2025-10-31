@@ -58,10 +58,6 @@ export const getMyCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { populate = 'false' } = req.query;
 
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
-
   const cacheKey = `cart:user:${userId}:populate:${populate}`;
   const cachedCart = await redis.get(cacheKey);
   if (cachedCart) {
@@ -139,10 +135,6 @@ export const getAllCarts = asyncHandler(async (req, res) => {
 export const addToCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId, quantity } = addToCartValidation.parse(req.body);
-
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -240,10 +232,6 @@ export const removeFromCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
 
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
-
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
   }
@@ -273,10 +261,6 @@ export const removeFromCart = asyncHandler(async (req, res) => {
 export const clearCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
-
   const cart = await Cart.findOne({ user: userId });
 
   if (!cart) {
@@ -305,10 +289,6 @@ export const clearCart = asyncHandler(async (req, res) => {
 
 export const getCartSummary = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-
-  if (!userId) {
-    throw new ApiError(status.UNAUTHORIZED, 'User not authenticated');
-  }
 
   const cacheKey = `cart:summary:${userId}`;
   const cachedSummary = await redis.get(cacheKey);
