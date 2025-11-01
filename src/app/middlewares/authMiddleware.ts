@@ -11,7 +11,7 @@ import { Payload } from "@/utils";
 export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const token = req.cookies?.accessToken;
+      const token = req.cookies?.accessToken || req.headers?.authorization?.replace('Bearer ', '');
       if (!token) {
         return next(new ApiError(status.UNAUTHORIZED, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
       }

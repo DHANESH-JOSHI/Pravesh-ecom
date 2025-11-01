@@ -270,8 +270,10 @@ export const logout = asyncHandler(async (req, res) => {
 });
 
 export const refreshTokens = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.cookies ;
-
+  const refreshToken = req.cookies.refreshToken || req.headers.authorization?.replace('Bearer ', '');
+  if (!refreshToken) {
+    throw new ApiError(status.BAD_REQUEST, "Refresh token not provided");
+  }
   const decodedToken = verifyToken(refreshToken);
   if (!decodedToken) {
     throw new ApiError(status.BAD_REQUEST, "Invalid refresh token");
