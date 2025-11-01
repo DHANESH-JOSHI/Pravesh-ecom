@@ -45,7 +45,8 @@ export const createCategory = asyncHandler(async (req, res) => {
     await category.save();
   }
   await redis.deleteByPattern("categories*");
-  await redis.deleteByPattern(`category:${category.parentCategory}*`);
+  await redis.delete(`category:${category.parentCategory}:populate=true`);
+  await redis.delete(`categories:children:${category.parentCategory}`);
   res
     .status(status.CREATED)
     .json(
@@ -215,6 +216,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern("categories*");
   await redis.deleteByPattern(`category:${category._id}*`);
+  await redis.delete(`categories:children:${category.parentCategory}`);
   await redis.deleteByPattern(`category:${category.parentCategory}*`);
 
   res.status(status.OK).json(
@@ -240,6 +242,7 @@ export const deleteCategoryById = asyncHandler(async (req, res) => {
   }
 
   await redis.deleteByPattern("categories*");
+  await redis.delete(`categories:children:${category.parentCategory}`);
   await redis.deleteByPattern(`category:${category._id}*`);
   await redis.deleteByPattern(`category:${category.parentCategory}*`);
 

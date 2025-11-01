@@ -58,7 +58,7 @@ export const getMyCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { populate = 'false' } = req.query;
 
-  const cacheKey = `cart:user:${userId}:populate:${populate}`;
+  const cacheKey = generateCacheKey(`cart:user:${userId}`, req.query);
   const cachedCart = await redis.get(cacheKey);
   if (cachedCart) {
     res.status(status.OK).json(new ApiResponse(status.OK, 'Cart retrieved successfully', cachedCart));
@@ -127,7 +127,7 @@ export const getAllCarts = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 300);
+  await redis.set(cacheKey, result, 600);
   res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', result));
   return;
 });
@@ -164,13 +164,10 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   const populatedCart = await Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
 
-  // Invalidate user cart caches
   await redis.deleteByPattern(`cart:user:${userId}*`);
-  await redis.deleteByPattern(`cart:summary:${userId}`);
+  await redis.delete(`cart:summary:${userId}`);
   await redis.deleteByPattern('carts*');
-  if (cart._id) {
-    await redis.delete(`cart:id:${cart._id}`);
-  }
+  await redis.delete(`cart:id:${cart._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Item added to cart successfully', populatedCart));
   return;
@@ -216,13 +213,10 @@ export const updateCartItem = asyncHandler(async (req, res) => {
 
   const updatedCart = await Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
 
-  // Invalidate user cart caches
   await redis.deleteByPattern(`cart:user:${userId}*`);
-  await redis.deleteByPattern(`cart:summary:${userId}`);
+  await redis.delete(`cart:summary:${userId}`);
   await redis.deleteByPattern('carts*');
-  if (cart._id) {
-    await redis.delete(`cart:id:${cart._id}`);
-  }
+  await redis.delete(`cart:id:${cart._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart item updated successfully', updatedCart));
   return;
@@ -246,13 +240,10 @@ export const removeFromCart = asyncHandler(async (req, res) => {
 
   const updatedCart = await Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
 
-  // Invalidate user cart caches
   await redis.deleteByPattern(`cart:user:${userId}*`);
-  await redis.deleteByPattern(`cart:summary:${userId}`);
+  await redis.delete(`cart:summary:${userId}`);
   await redis.deleteByPattern('carts*');
-  if (cart._id) {
-    await redis.delete(`cart:id:${cart._id}`);
-  }
+  await redis.delete(`cart:id:${cart._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Item removed from cart successfully', updatedCart));
   return;
@@ -269,13 +260,10 @@ export const clearCart = asyncHandler(async (req, res) => {
 
   await cart.clearCart();
 
-  // Invalidate user cart caches
   await redis.deleteByPattern(`cart:user:${userId}*`);
-  await redis.deleteByPattern(`cart:summary:${userId}`);
+  await redis.delete(`cart:summary:${userId}`);
   await redis.deleteByPattern('carts*');
-  if (cart._id) {
-    await redis.delete(`cart:id:${cart._id}`);
-  }
+  await redis.delete(`cart:id:${cart._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart cleared successfully', {
     user: userId,
@@ -304,7 +292,7 @@ export const getCartSummary = asyncHandler(async (req, res) => {
       totalItems: 0,
       itemCount: 0,
     };
-    await redis.set(cacheKey, summary, 300);
+    await redis.set(cacheKey, summary, 600);
     res.status(status.OK).json(new ApiResponse(status.OK, 'Cart summary retrieved successfully', summary));
     return;
   }
@@ -314,7 +302,7 @@ export const getCartSummary = asyncHandler(async (req, res) => {
     totalItems,
     totalPrice,
   };
-  await redis.set(cacheKey, summary, 300);
+  await redis.set(cacheKey, summary, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart summary retrieved successfully', summary));
   return;
@@ -338,13 +326,10 @@ export const checkoutCart = asyncHandler(async (req, res) => {
     totalPrice += item.quantity * product.finalPrice
   }
 
-  // Invalidate user cart caches after checkout
   await redis.deleteByPattern(`cart:user:${userId}*`);
-  await redis.deleteByPattern(`cart:summary:${userId}`);
+  await redis.delete(`cart:summary:${userId}`);
   await redis.deleteByPattern('carts*');
-  if (cart._id) {
-    await redis.delete(`cart:id:${cart._id}`);
-  }
+  await redis.delete(`cart:id:${cart._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Checkout successful', { totalPrice }));
   return;

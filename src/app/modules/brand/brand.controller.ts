@@ -160,7 +160,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
   );
 
   await redis.deleteByPattern("brands*");
-  await redis.deleteByPattern(`brand:${brandId}`);
+  await redis.deleteByPattern(`brand:${brandId}*`);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
@@ -184,7 +184,7 @@ export const deleteBrandById = asyncHandler(async (req, res) => {
   await brand.save();
 
   await redis.deleteByPattern("brands*");
-  await redis.deleteByPattern(`brand:${brandId}`);
+  await redis.deleteByPattern(`brand:${brandId}*`);
 
   res.json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
   return;

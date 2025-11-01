@@ -112,17 +112,14 @@ export const updateBlog = asyncHandler(async (req, res) => {
   );
 
   await redis.deleteByPattern('blogs*');
-  await redis.deleteByPattern(`blog:${existingBlog.slug}`);
-  if (updatedBlog && updatedBlog.slug !== existingBlog.slug) {
-    await redis.deleteByPattern(`blog:${updatedBlog.slug}`);
-  }
+  await redis.delete(`blog:${existingBlog.slug}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog updated successfully`, updatedBlog));
   return;
 });
 
 export const deleteBlog = asyncHandler(async (req, res) => {
-  const { id:blogId } = req.params;
+  const { id: blogId } = req.params;
   if (!mongoose.Types.ObjectId.isValid(blogId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid blog ID');
   }
@@ -140,7 +137,7 @@ export const deleteBlog = asyncHandler(async (req, res) => {
   );
 
   await redis.deleteByPattern('blogs*');
-  await redis.deleteByPattern(`blog:${existingBlog.slug}`);
+  await redis.delete(`blog:${existingBlog.slug}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog deleted successfully`, deletedBlog));
   return;

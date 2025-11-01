@@ -61,7 +61,7 @@ export const getAllWallets = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 300);
+  await redis.set(cacheKey, result, 600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', result));
   return;
@@ -81,7 +81,7 @@ export const getWalletBalance = asyncHandler(async (req, res) => {
   }
 
   const result = { balance: wallet.balance };
-  await redis.set(cacheKey, result, 300);
+  await redis.set(cacheKey, result, 600);
 
   res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', result));
   return;
@@ -112,9 +112,8 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 
   await wallet.save();
 
-  // Invalidate caches
-  await redis.deleteByPattern(`wallet:balance:${userId}`);
-  await redis.deleteByPattern(`wallet:transactions:${userId}`);
+  await redis.delete(`wallet:balance:${userId}`);
+  await redis.delete(`wallet:transactions:${userId}`);
   await redis.deleteByPattern('wallets*');
 
   res.json(new ApiResponse(status.OK, 'Funds added to wallet successfully', {
@@ -140,8 +139,7 @@ export const getTransactions = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found');
   }
 
-  await redis.set(cacheKey, wallet.transactions, 300);
-
+  await redis.set(cacheKey, wallet.transactions, 600);
   res.json(new ApiResponse(status.OK, 'Transactions retrieved', wallet.transactions));
   return;
 });

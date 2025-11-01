@@ -85,7 +85,11 @@ export const createReview = asyncHandler(async (req, res) => {
     await session.commitTransaction();
 
     await redis.deleteByPattern(`reviews:product:${productId}*`);
-    await redis.deleteByPattern('reviews*');
+    await redis.deleteByPattern('reviews:all*');
+    await redis.deleteByPattern(`reviews:user:${userId}*`);
+    await redis.delete(`product:${review.product}:populate=true`);
+    await redis.delete(`user:${userId}:populate=true`);
+    await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
@@ -144,7 +148,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
 
 export const getAllReviews = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, rating, user, product, search } = req.query;
-  const cacheKey = generateCacheKey('reviews', req.query);
+  const cacheKey = generateCacheKey('reviews:all', req.query);
   const cachedReviews = await redis.get(cacheKey);
 
   if (cachedReviews) {
@@ -268,8 +272,11 @@ export const updateReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    await redis.delete(`review:${reviewId}`);
     await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.deleteByPattern('reviews*');
+    await redis.delete(`product:${existingReview.product}:populate=true`);
+    await redis.delete(`user:${userId}:populate=true`);
+    await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
@@ -302,8 +309,11 @@ export const deleteReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    await redis.delete(`review:${reviewId}`);
     await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.deleteByPattern('reviews*');
+    await redis.delete(`product:${existingReview.product}:populate=true`);
+    await redis.delete(`user:${userId}:populate=true`);
+    await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))

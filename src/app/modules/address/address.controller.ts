@@ -23,7 +23,7 @@ export const createAddress = asyncHandler(async (req, res) => {
   }
 
   await redis.deleteByPattern(`addresses:user:${address.user}*`);
-  await redis.deleteByPattern('addresses*');
+  await redis.deleteByPattern('addresses:all*');
   await redis.deleteByPattern(`users:${address.user}:populate=true`);
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Address created successfully", address));
@@ -69,6 +69,7 @@ export const getAddressById = asyncHandler(async (req, res) => {
   if (!address) {
     throw new ApiError(status.NOT_FOUND, "Address not found or you are not authorized to access it");
   }
+  await redis.set(cacheKey, address, 600);
   res.status(status.OK).json(new ApiResponse(status.OK, "Address retrieved successfully", address));
   return;
 })
@@ -92,8 +93,10 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
     ...validatedData,
   }, { new: true });
 
+  await redis.deleteByPattern(`address:${addressId}*`);
   await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.deleteByPattern('addresses*');
+  await redis.delete(`users:${userId}:populate=true`);
+  await redis.deleteByPattern('addresses:all*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address updated successfully", updatedAddress));
   return;
@@ -116,8 +119,10 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
   existingAddress.isDeleted = true;
   await existingAddress.save();
 
+  await redis.deleteByPattern(`address:${addressId}*`);
   await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.deleteByPattern('addresses*');
+  await redis.delete(`users:${userId}:populate=true`);
+  await redis.deleteByPattern('addresses:all*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address deleted successfully"));
 })
@@ -170,13 +175,16 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
   );
   address.isDefault = true;
   await address.save();
+  await redis.deleteByPattern(`addresses:user:${userId}*`);
+  await redis.delete(`users:${userId}:populate=true`);
+  await redis.deleteByPattern(`address:${id}*`);
   res.status(status.OK).json(new ApiResponse(status.OK, "Default address set successfully"));
   return;
 })
 
 export const getAllAddresses = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, user, isDeleted } = req.query;
-  const cacheKey = generateCacheKey('addresses', req.query);
+  const cacheKey = generateCacheKey('addresses:all', req.query);
   const cachedAddresses = await redis.get(cacheKey);
 
   if (cachedAddresses) {

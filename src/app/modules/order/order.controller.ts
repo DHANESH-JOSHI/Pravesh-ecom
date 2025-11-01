@@ -104,7 +104,6 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     image: customOrderImage,
   });
 
-  // Invalidate caches
   await redis.deleteByPattern(`orders:user:${userId}*`);
   await redis.deleteByPattern('orders*');
   await redis.delete('dashboard:stats');
@@ -143,8 +142,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
 
-  // Invalidate caches
-  await redis.deleteByPattern(`order:${orderId}*`);
+  await redis.delete(`order:${orderId}`);
+  await redis.deleteByPattern(`orders:user:${order.user}*`);
   await redis.deleteByPattern('orders*');
   await redis.delete('dashboard:stats');
 
@@ -199,9 +198,8 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    // Invalidate caches
     await redis.deleteByPattern(`orders:user:${userId}*`);
-    await redis.deleteByPattern(`order:${orderId}*`);
+    await redis.delete(`order:${orderId}`);
     await redis.deleteByPattern('orders*');
     await redis.delete('dashboard:stats');
 

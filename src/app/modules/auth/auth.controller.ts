@@ -243,7 +243,7 @@ export const refreshTokens = asyncHandler(async (req, res) => {
     cookie('accessToken', newAccessToken,
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', newRefreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * (user.role === 'admin' ? 2 : 7), secure: true, sameSite: 'lax' })
     .json(new ApiResponse(status.OK, "Tokens refreshed successfully", { accessToken: newAccessToken, refreshToken: newRefreshToken }));
   return;
 });

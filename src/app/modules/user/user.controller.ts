@@ -55,8 +55,8 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
+  await redis.deleteByPattern(`user:${userId}*`);
   await redis.deleteByPattern('users*');
-  await redis.deleteByPattern(`user:*`);
   await redis.delete('dashboard:stats')
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
@@ -193,7 +193,7 @@ export const recoverUser = asyncHandler(async (req, res) => {
 
   user.isDeleted = false;
   await user.save();
-  await redis.deleteByPattern(`user:*`);
+  await redis.deleteByPattern(`user:${id}*`);
   await redis.deleteByPattern('users*');
   await redis.delete('dashboard:stats')
 
@@ -211,7 +211,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
   user.isDeleted = true;
   await user.save();
 
-  await redis.deleteByPattern(`user:*`);
+  await redis.deleteByPattern(`user:${id}*`);
   await redis.deleteByPattern('users*');
   await redis.delete('dashboard:stats')
 
