@@ -1,8 +1,7 @@
-import { asyncHandler, generateTokens, sendEmail, sendSMS, verifyToken } from "@/utils";
+import { asyncHandler, generateTokens, sendEmail, sendSMS, verifyToken, generateOTP } from "@/utils";
 import { User } from "../user/user.model";
 import { loginValidation, registerValidation, requestOtpValidation, verifyOtpValidation } from "./auth.validation";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
-import { generateOTP } from "@/utils";
 import status from "http-status";
 import { Wallet } from '../wallet/wallet.model';
 import mongoose from "mongoose";
@@ -17,41 +16,87 @@ export const registerUser = asyncHandler(async (req, res) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
-  let user;
 
   try {
-    const existingUser = await User.findOne({ $or: [{ email }, { phone }] }).session(session);
-    if (existingUser) {
-      if (existingUser.email === email) {
-        throw new ApiError(status.BAD_REQUEST, "Email already exists");
-      }
-      if (existingUser.phone === phone) {
-        throw new ApiError(status.BAD_REQUEST, "Phone number already exists");
+    let user = await User.findOne({ phone }).session(session);
+
+    if (user) {
+      // If user has a different email and a new one is provided
+      if (email && user.email !== email) {
+        const emailExists = await User.findOne({ email }).session(session);
+        if (emailExists) {
+          throw new ApiError(
+            status.BAD_REQUEST,
+            "User already registered with this phone, and email belongs to another account."
+          );
+        }
+        user.email = email;
       }
     }
 
-    const otp = generateOTP();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+    // No user found by phone — check if email exists
+    else {
+      if (email) {
+        const existingEmailUser = await User.findOne({ email }).session(session);
+        if (existingEmailUser) {
+          throw new ApiError(
+            status.BAD_REQUEST,
+            "User already registered with this email, and phone belongs to another account."
+          );
+        }
+      }
 
-    const newUser = new User({ name, password, img, phone, email, otp, otpExpires });
-    await newUser.save({ session });
-    user = newUser;
+      // Create new user
+      user = new User({ name, password, img, phone, email });
+      await user.save({ session });
+      // create wallet for user
+      await Wallet.create([{ user: user._id }], { session });
+    }
 
-    await Wallet.create([{ user: user._id }], { session });
+    // User is pending verification — allow updating
+    if (user.status === UserStatus.PENDING) {
+      user.name = name;
+      user.password = password;
+      if (img) user.img = img;
+    }
+
+    // issue new OTP
+    user.otp = generateOTP();
+    user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
+    await user.save({ session });
 
     await session.commitTransaction();
+    session.endSession();
 
+    // send otp to email if available
+    if (email) {
+      await sendEmail(
+        email,
+        "OTP for Pravesh Registration",
+        `Your OTP for Pravesh registration is ${user.otp}`
+      );
+    }
+    // send otp to phone
+    await sendSMS(`Your OTP for Pravesh registration is ${user.otp}`, phone);
+
+    // remove sensitive fields
+    const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
+
+    res
+      .status(status.CREATED)
+      .json(
+        new ApiResponse(
+          status.CREATED,
+          `OTP sent to phone ${email ? "and email" : ""} for registration verification.`,
+          userObject
+        )
+      );
   } catch (error) {
     await session.abortTransaction();
-    throw error;
-  } finally {
     session.endSession();
+    throw error;
   }
-  if (email) await sendEmail(email, 'OTP for Pravesh registration', `Your OTP for Pravesh registration is ${user.otp}`);
-  await sendSMS(`Your OTP for Pravesh registration is ${user.otp}`, phone);
-  const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
-  res.status(status.CREATED).json(new ApiResponse(status.OK, "OTP sent to email and phone for registration verification", userObject));
-  return;
 });
 
 export const loginUser = asyncHandler(async (req, res) => {
@@ -80,7 +125,7 @@ export const loginUser = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
-    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
+    .json(new ApiResponse(status.OK, "OTP verified successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
 
@@ -139,7 +184,7 @@ export const requestForOtp = asyncHandler(async (req, res) => {
 
   await user.save();
 
-  res.json(new ApiResponse(status.OK, "OTP sent successfully", { phoneOrEmail }));
+  res.json(new ApiResponse(status.OK, `OTP sent to ${isEmail ? 'email' : 'phone'} successfully`, { phoneOrEmail }));
   return;
 });
 
@@ -225,7 +270,7 @@ export const logout = asyncHandler(async (req, res) => {
 });
 
 export const refreshTokens = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.cookies;
+  const { refreshToken } = req.cookies ;
 
   const decodedToken = verifyToken(refreshToken);
   if (!decodedToken) {
