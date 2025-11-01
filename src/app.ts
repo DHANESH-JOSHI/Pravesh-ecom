@@ -8,6 +8,9 @@ import status from 'http-status';
 
 const app: Application = express();
 
+// Trust proxy for Vercel/reverse proxy environments
+app.set('trust proxy', 1);
+
 const corsOptions = {
   origin: true,
   credentials: true,
