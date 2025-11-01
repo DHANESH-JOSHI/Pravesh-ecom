@@ -4,8 +4,46 @@ import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { redis } from "@/config/redis";
+import mongoose from "mongoose";
+import { UserStatus } from "./user.interface";
+import { registerValidation } from "../auth/auth.validation";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
+
+export const createUser = asyncHandler(async (req, res) => {
+  const { name, password, img, phone, email } = registerValidation.parse(req.body);
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    let user = await User.findOne({ $or: [{ phone }, { email }] }).session(session);
+    if (user) {
+      throw new ApiError(status.BAD_REQUEST, "User already exists with this phone or email.");
+    }
+    user = new User({ name, password, img, phone, email, status: UserStatus.ACTIVE });
+
+    await user.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // remove sensitive fields
+    const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
+
+    res
+      .status(status.CREATED)
+      .json(
+        new ApiResponse(
+          status.CREATED,
+          `User created and verified successfully.`,
+          userObject
+        )
+      );
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+})
 
 export const getMe = asyncHandler(async (req, res) => {
   const userId = req.user?._id;

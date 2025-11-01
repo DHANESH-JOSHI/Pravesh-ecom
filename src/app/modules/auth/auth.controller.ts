@@ -125,7 +125,7 @@ export const loginUser = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
-    .json(new ApiResponse(status.OK, "OTP verified successfully", { user: userObject, accessToken, refreshToken }));
+    .json(new ApiResponse(status.OK, "User logged in successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
 
@@ -154,7 +154,7 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
-    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
+    .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject,accessToken }));
   return;
 });
 
@@ -222,7 +222,7 @@ export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
-    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
+    .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject }));
   return;
 })
 
@@ -260,7 +260,7 @@ export const loginUsingOtp = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
-    .json(new ApiResponse(status.OK, "OTP verified successfully", { ...userObject }));
+    .json(new ApiResponse(status.OK, "User logged in successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
 

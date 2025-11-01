@@ -8,7 +8,8 @@ import {
   updateUser,
   deleteUser,
   getMe,
-  updatePassword
+  updatePassword,
+  createUser
 } from "./user.controller";
 import { auth, authenticatedActionLimiter, dataCheckLimiter } from "@/middlewares";
 
@@ -16,19 +17,21 @@ const router = express.Router();
 
 router.get("/me", auth(), authenticatedActionLimiter, getMe);
 
+router.post("/phone/:phone", dataCheckLimiter, checkPhoneExists);
+
+router.post("/email/:email", dataCheckLimiter, checkEmailExists);
+
 router.get("/", auth('admin'), authenticatedActionLimiter, getAllUsers);
 
-router.get("/:id", auth(), authenticatedActionLimiter, getUserById);
+router.post("/", auth('admin'), authenticatedActionLimiter, createUser);
 
-router.patch("/password", auth('user'), authenticatedActionLimiter,updatePassword);
+router.get("/:id", auth(), authenticatedActionLimiter, getUserById);
 
 router.post("/:id/recover", auth('admin'), authenticatedActionLimiter, recoverUser);
 
 router.delete("/:id", auth('admin'), authenticatedActionLimiter, deleteUser);
 
-router.post("/phone/:phone", dataCheckLimiter, checkPhoneExists);
-
-router.post("/email/:email", dataCheckLimiter, checkEmailExists);
+router.patch("/password", auth('user'), authenticatedActionLimiter, updatePassword);
 
 router.patch("/", auth('user'), authenticatedActionLimiter, updateUser);
 
