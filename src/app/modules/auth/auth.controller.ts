@@ -37,7 +37,7 @@ export const registerUser = asyncHandler(async (req, res) => {
     await newUser.save({ session });
     user = newUser;
 
-    await Wallet.create([{ userId: user._id }], { session });
+    await Wallet.create([{ user: user._id }], { session });
 
     await session.commitTransaction();
 

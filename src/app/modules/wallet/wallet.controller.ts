@@ -132,7 +132,7 @@ export const getTransactions = asyncHandler(async (req, res) => {
     return res.json(new ApiResponse(status.OK, 'Transactions retrieved', cachedTransactions));
   }
 
-  const wallet = await Wallet.findOne({ userId: userId });
+  const wallet = await Wallet.findOne({ user: userId });
   if (wallet && wallet.transactions) {
     wallet.transactions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
