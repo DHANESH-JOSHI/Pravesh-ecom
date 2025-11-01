@@ -4,10 +4,12 @@ import mongoose from 'mongoose';
 import app from './app';
 import { redis } from "@/config/redis";
 import { connectDB } from "@/config/db";
+import { seedDefaultAdmin } from "./seeder";
 
 async function main() {
   try {
     await connectDB()
+    await seedDefaultAdmin()
     await redis.connect();
     const server = app.listen(config.PORT, () => {
       logger.info(`[APP] Server is running on port ${config.PORT}`)
