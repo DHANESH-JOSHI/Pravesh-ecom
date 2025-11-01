@@ -8,7 +8,7 @@ export const seedDefaultAdmin = async () => {
     await User.create({
       name: 'test admin',
       email: adminEmail,
-      phone: '9999999999',
+      phone: '7654328765',
       password: "admin_password",
       role: 'admin',
       status: 'active',
