@@ -16,43 +16,46 @@ export const registerUser = asyncHandler(async (req, res) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
-
+  let user;
   try {
-    let user = await User.findOne({ phone }).session(session);
-
+    user = await User.findOne({ phone }).session(session);
     if (user) {
       // If user has a different email and a new one is provided
       if (email && user.email !== email) {
         const emailExists = await User.findOne({ email }).session(session);
         if (emailExists) {
-          throw new ApiError(
-            status.BAD_REQUEST,
-            "User already registered with this phone, and email belongs to another account."
-          );
+          if (emailExists.status === UserStatus.ACTIVE) {
+            throw new ApiError(
+              status.BAD_REQUEST,
+              "User already registered with this phone, and email belongs to another account."
+            );
+          }
+          await User.deleteOne({ _id: emailExists._id }, { session });
         }
         user.email = email;
       }
     }
-
-    // No user found by phone — check if email exists
     else {
+      // user not found by phone
       if (email) {
         const existingEmailUser = await User.findOne({ email }).session(session);
         if (existingEmailUser) {
-          throw new ApiError(
-            status.BAD_REQUEST,
-            "User already registered with this email, and phone belongs to another account."
-          );
+          if (existingEmailUser.status === UserStatus.ACTIVE) {
+            throw new ApiError(status.BAD_REQUEST, "User already registered with this email, and phone belongs to another account.");
+          }
+          user = existingEmailUser;
+          user.phone = phone;
+        } else {
+          user = new User({ name, password, img, phone, email });
+          await user.save({ session });
+          await Wallet.create([{ user: user._id }], { session });
         }
+      } else {
+        user = new User({ name, password, img, phone });
+        await user.save({ session });
+        await Wallet.create([{ user: user._id }], { session });
       }
-
-      // Create new user
-      user = new User({ name, password, img, phone, email });
-      await user.save({ session });
-      // create wallet for user
-      await Wallet.create([{ user: user._id }], { session });
     }
-
     // User is pending verification — allow updating
     if (user.status === UserStatus.PENDING) {
       user.name = name;
@@ -69,34 +72,36 @@ export const registerUser = asyncHandler(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // send otp to email if available
-    if (email) {
-      await sendEmail(
-        email,
-        "OTP for Pravesh Registration",
-        `Your OTP for Pravesh registration is ${user.otp}`
-      );
-    }
-    // send otp to phone
-    await sendSMS(`Your OTP for Pravesh registration is ${user.otp}`, phone);
-
-    // remove sensitive fields
-    const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
-
-    res
-      .status(status.CREATED)
-      .json(
-        new ApiResponse(
-          status.CREATED,
-          `OTP sent to phone ${email ? "and email" : ""} for registration verification.`,
-          userObject
-        )
-      );
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
     throw error;
+  } finally {
+    session.endSession();
   }
+  // send otp to email if available
+  if (email) {
+    await sendEmail(
+      email,
+      "OTP for Pravesh Registration",
+      `Your OTP for Pravesh registration is ${user.otp}`
+    );
+  }
+  // send otp to phone
+  await sendSMS(`Your OTP for Pravesh registration is ${user.otp}`, phone);
+
+  // remove sensitive fields
+  const { password: _, otp, otpExpires, ...userObject } = user.toJSON();
+
+  res
+    .status(status.CREATED)
+    .json(
+      new ApiResponse(
+        status.CREATED,
+        `OTP sent to phone ${email ? "and email" : ""} for registration verification.`,
+        userObject
+      )
+    );
+  return;
 });
 
 export const loginUser = asyncHandler(async (req, res) => {
@@ -154,7 +159,7 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
-    .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject,accessToken }));
+    .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject, accessToken }));
   return;
 });
 
