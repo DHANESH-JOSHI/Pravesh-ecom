@@ -33,20 +33,20 @@ export const apiLimiter = createRateLimiter({
 
 export const authLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
-  max: 7,
+  max: 20,
   message:
     "Too many authentication attempts from this IP. Please try again later.",
 });
 
 export const emailLimiter = createRateLimiter({
   windowMs: 30 * 60 * 1000,
-  max: 4,
+  max: 7,
   message: "Too many email requests from this IP. Please try again later.",
 });
 
 export const smsLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 3,
+  max: 7,
   message: "Too many SMS requests from this IP. Please try again later.",
 });
 
