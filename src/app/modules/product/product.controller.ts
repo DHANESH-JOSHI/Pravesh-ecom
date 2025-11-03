@@ -183,7 +183,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   } else {
     filter.isDeleted = false;
   }
-  if(stockStatus){
+  if (stockStatus) {
     filter.stockStatus = stockStatus;
   }
   if (categoryId) filter.category = categoryId;
@@ -574,7 +574,6 @@ export const searchProducts = asyncHandler(async (req, res) => {
   const { q, page = 1, limit = 10 } = req.query;
 
   const filter: any = {
-    status: 'active',
     isDeleted: false,
   };
   if (q) {
