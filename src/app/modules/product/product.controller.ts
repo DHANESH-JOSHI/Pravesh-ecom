@@ -21,7 +21,7 @@ const slugify = (text: string) =>
     .replace(/(^-|-$)+/g, '');
 
 export const createProduct = asyncHandler(async (req, res) => {
-  const productData = createProductValidation.parse(req.body);
+  const productData:any = createProductValidation.parse(req.body);
   const existingSku = await Product.findOne({ sku: productData.sku, isDeleted: false });
   if (existingSku) {
     throw new ApiError(status.BAD_REQUEST, 'Product with this SKU already exists');
@@ -279,8 +279,7 @@ export const getProductById = asyncHandler(async (req, res) => {
 
 export const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const updateData = createProductValidation.partial().parse(req.body);
-
+  const updateData:any = createProductValidation.partial().parse(req.body);
   const existingProduct = await Product.findOne({ _id: id, isDeleted: false });
   if (!existingProduct) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');

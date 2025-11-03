@@ -17,9 +17,6 @@ const createProductValidation = z.object({
   brandId: objectIdValidation.optional(),
   categoryId: objectIdValidation,
 
-  thumbnail: z.url().optional(),
-  images: z.array(z.string()).optional(),
-
   originalPrice: z.coerce.number().min(0, 'Base price must be positive'),
   discountValue: z.coerce.number().min(0, 'Discount cannot be negative').default(0),
   discountType: z.enum(DiscountType).default(DiscountType.Percentage),
@@ -46,7 +43,7 @@ const createProductValidation = z.object({
 
   tags: z.preprocess((val) => {
     if (typeof val === 'string') {
-      return val.split(',').map(item => item.trim());
+      try { return JSON.parse(val); } catch (e) { return val; }
     }
     return val;
   }, z.array(z.string()).optional()),
