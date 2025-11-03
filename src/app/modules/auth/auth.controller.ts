@@ -124,12 +124,12 @@ export const loginUser = asyncHandler(async (req, res) => {
   }
   const { accessToken, refreshToken } = generateTokens(user);
   const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
-
+  const isProd = process.env.NODE_ENV === 'production';
   res.
     cookie('accessToken', accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
     cookie('refreshToken', refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
     .json(new ApiResponse(status.OK, "User logged in successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
@@ -153,12 +153,12 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
   }
   const { accessToken, refreshToken } = generateTokens(user);
   const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
-
+  const isProd = process.env.NODE_ENV === 'production';
   res.
     cookie('accessToken', accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
     cookie('refreshToken', refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
     .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject, accessToken }));
   return;
 });
@@ -221,12 +221,12 @@ export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
   await user.save();
 
   const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
-
+  const isProd = process.env.NODE_ENV === 'production';
   res.
     cookie('accessToken', accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
     cookie('refreshToken', refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
     .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject }));
   return;
 })
@@ -259,12 +259,12 @@ export const loginUsingOtp = asyncHandler(async (req, res) => {
   await user.save();
 
   const { password: _, otp: __, otpExpires, ...userObject } = user.toJSON();
-
+  const isProd = process.env.NODE_ENV === 'production';
   res.
     cookie('accessToken', accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
     cookie('refreshToken', refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
     .json(new ApiResponse(status.OK, "User logged in successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
@@ -290,12 +290,12 @@ export const refreshTokens = asyncHandler(async (req, res) => {
   }
 
   const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens(user);
-
+  const isProd = process.env.NODE_ENV === 'production';
   res.
     cookie('accessToken', newAccessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: true, sameSite: 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
     cookie('refreshToken', newRefreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * (user.role === 'admin' ? 2 : 7), secure: true, sameSite: 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * (user.role === 'admin' ? 2 : 7), secure: isProd, sameSite: isProd ? 'none' : 'lax' })
     .json(new ApiResponse(status.OK, "Tokens refreshed successfully", { accessToken: newAccessToken, refreshToken: newRefreshToken }));
   return;
 });
