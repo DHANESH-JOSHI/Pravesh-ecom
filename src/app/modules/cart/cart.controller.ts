@@ -4,7 +4,7 @@ import { Product } from '../product/product.model';
 import { asyncHandler, generateCacheKey } from '@/utils';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { addToCartValidation, updateCartItemValidation } from './cart.validation';
-import { IProduct } from '../product/product.interface';
+import { IProduct, StockStatus } from '../product/product.interface';
 import status from 'http-status';
 import { redis } from '@/config/redis';
 import { User } from '../user/user.model';
@@ -143,11 +143,14 @@ export const addToCart = asyncHandler(async (req, res) => {
   const product = await Product.findOne({
     _id: productId,
     isDeleted: false,
-    status: 'active'
   });
 
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
+  }
+
+  if (product.stockStatus === StockStatus.OutOfStock) {
+    throw new ApiError(status.BAD_REQUEST, 'Product is out of stock');
   }
 
   if (product.stock < quantity) {

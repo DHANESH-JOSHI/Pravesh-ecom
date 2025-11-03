@@ -11,6 +11,7 @@ import status from 'http-status';
 import { Product } from '../product/product.model';
 import { redis } from '@/config/redis';
 import { User } from '../user/user.model';
+import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
@@ -33,6 +34,11 @@ export const createOrder = asyncHandler(async (req, res) => {
       if (!product || product.isDeleted) {
         throw new ApiError(status.BAD_REQUEST, `Product with ID ${item.product} is not available.`);
       }
+
+      if (product.stockStatus === StockStatus.OutOfStock) {
+        throw new ApiError(status.BAD_REQUEST, `product ${product.name} is out of stock`);
+      }
+
       if (product.stock < item.quantity) {
         throw new ApiError(status.BAD_REQUEST, `Not enough stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
       }
