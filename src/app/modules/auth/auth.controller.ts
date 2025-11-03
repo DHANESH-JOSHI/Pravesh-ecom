@@ -159,7 +159,7 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
       { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
     cookie('refreshToken', refreshToken,
       { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
-    .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject, accessToken }));
+    .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject }));
   return;
 });
 
