@@ -45,11 +45,10 @@ export const getAllWallets = asyncHandler(async (req, res) => {
       .populate('user', '_id name email'),
     Wallet.countDocuments(filter),
   ]);
-
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
     wallets: wallets.map(wallet => {
-      const walletObject = wallet.toObject();
+      const walletObject = wallet.toJSON();
       return {
         ...walletObject,
         transactions: walletObject.transactions?.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) || []
