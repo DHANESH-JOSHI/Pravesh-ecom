@@ -66,6 +66,7 @@ export const createProduct = asyncHandler(async (req, res) => {
     brand: productData.brandId,
   });
 
+  await redis.deleteByPattern('products:all*');
   await redis.deleteByPattern('products:discount*');
   await redis.deleteByPattern('products:featured*');
   await redis.deleteByPattern('products:new-arrival*');
