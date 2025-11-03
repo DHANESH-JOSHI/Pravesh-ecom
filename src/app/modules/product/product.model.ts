@@ -17,7 +17,7 @@ const productSchema = new Schema<IProduct>(
     discountType: { type: String, enum: DiscountType, default: DiscountType.Percentage },
     finalPrice: { type: Number, default: 0 },
     stock: { type: Number, required: true },
-    minStock: { type: Number, default: 5 },
+    minStock: { type: Number, default: 0 },
     unit: {
       type: String,
       enum: UnitType,
@@ -26,9 +26,7 @@ const productSchema = new Schema<IProduct>(
     stockStatus: {
       type: String,
       enum: StockStatus,
-      default: StockStatus.InStock,
     },
-
     features: {
       type: [String],
       default: [],
@@ -126,8 +124,7 @@ productSchema.pre('save', function (next) {
   calculateFinalPrice(this);
   if (this.stock === 0) {
     this.stockStatus = StockStatus.OutOfStock;
-  }
-  if (this.stock < this.minStock) {
+  } else if (this.stock < this.minStock) {
     this.stockStatus = StockStatus.LowStock;
   } else if (this.stock >= this.minStock && this.stockStatus !== StockStatus.InStock) {
     this.stockStatus = StockStatus.InStock;

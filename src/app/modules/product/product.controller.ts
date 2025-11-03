@@ -167,7 +167,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     brandId,
     minPrice,
     maxPrice,
-    stockStatus = 'in_stock',
+    stockStatus,
     isFeatured,
     isNewArrival,
     isDiscount,
