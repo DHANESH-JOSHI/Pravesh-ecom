@@ -650,7 +650,7 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     categories,
     colors: colors.flat().filter(Boolean),
     sizes: sizes.flat().filter(Boolean),
-    priceRange: { minPrice: priceRange[0].minPrice, maxPrice: priceRange[0].maxPrice },
+    priceRange: { minPrice: priceRange?.[0]?.minPrice || 0, maxPrice: priceRange?.[0]?.maxPrice || 0 },
   };
 
   await redis.set(cacheKey, filters, 3600);

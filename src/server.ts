@@ -10,7 +10,8 @@ async function main() {
   try {
     await connectDB()
     await seedDefaultAdmin()
-    await redis.connect();
+    await redis.flushAll();
+    logger.info('[Redis] Cache flushed successfully.');
     const server = app.listen(config.PORT, () => {
       logger.info(`[APP] Server is running on port ${config.PORT}`)
     })

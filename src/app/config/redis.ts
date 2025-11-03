@@ -56,5 +56,10 @@ export const redis = {
         await client.del(keys);
       }
     } while (cursor !== '0');
+  },
+
+  async flushAll(): Promise<void> {
+    await this.connect();
+    await client.flushAll();
   }
 };
