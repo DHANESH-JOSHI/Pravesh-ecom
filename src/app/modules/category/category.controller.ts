@@ -63,12 +63,14 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", cachedCategories));
   }
 
-  const { page = 1, limit = 10, search, isDeleted } = req.query;
+  const { page = 1, limit = 10, search, isDeleted, isParent } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {
-    parentCategory: null
   };
+  if (isParent == 'true') {
+    filter.parentCategory = null;
+  }
   if (search) filter.$text = { $search: search };
   if (isDeleted !== undefined) {
     filter.isDeleted = isDeleted === 'true';
