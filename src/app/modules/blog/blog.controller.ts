@@ -11,7 +11,7 @@ const ApiError = getApiErrorClass('BLOG');
 const ApiResponse = getApiResponseClass('BLOG');
 
 export const createBlog = asyncHandler(async (req, res) => {
-  const blogData = createBlogValidation.parse(req.body);
+  const blogData: any = createBlogValidation.parse(req.body);
   if (req.file) blogData.featuredImage = req.file?.path;
   const blog = await Blog.create(blogData);
   await redis.deleteByPattern('blogs*');
@@ -84,7 +84,7 @@ export const updateBlog = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(blogId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid blog ID');
   }
-  const postData = updateBlogValidation.parse(req.body);
+  const postData: any = updateBlogValidation.parse(req.body);
 
   const existingBlog = await Blog.findOne({ _id: blogId, isDeleted: false });
 
