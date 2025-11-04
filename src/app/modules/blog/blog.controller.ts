@@ -22,16 +22,16 @@ export const createBlog = asyncHandler(async (req, res) => {
   return;
 });
 
-export const getBlogBySlug = asyncHandler(async (req, res) => {
-  const { slug } = req.params;
-  const cacheKey = `blog:${slug}`;
+export const getBlogById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const cacheKey = `blog:${id}`;
   const cachedBlog = await redis.get(cacheKey);
 
   if (cachedBlog) {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', cachedBlog));
   }
 
-  const post = await Blog.findOne({ slug, isPublished: true, isDeleted: false });
+  const post = await Blog.findOne({ _id: id, isDeleted: false })
 
   if (!post) {
     throw new ApiError(status.NOT_FOUND, 'Blog not found');
@@ -112,7 +112,7 @@ export const updateBlog = asyncHandler(async (req, res) => {
   );
 
   await redis.deleteByPattern('blogs*');
-  await redis.delete(`blog:${existingBlog.slug}`);
+  await redis.delete(`blog:${existingBlog._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog updated successfully`, updatedBlog));
   return;
@@ -137,7 +137,7 @@ export const deleteBlog = asyncHandler(async (req, res) => {
   );
 
   await redis.deleteByPattern('blogs*');
-  await redis.delete(`blog:${existingBlog.slug}`);
+  await redis.delete(`blog:${existingBlog._id}`);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog deleted successfully`, deletedBlog));
   return;

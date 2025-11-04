@@ -1,18 +1,19 @@
 import express from 'express';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
-import { createBlog, deleteBlog, getAllBlogs, getBlogBySlug, updateBlog } from './blog.controller';
+import { createBlog, deleteBlog, getAllBlogs, getBlogById, updateBlog } from './blog.controller';
+import { upload } from '@/config/cloudinary';
 
 const router = express.Router();
 
 router.get('/', getAllBlogs);
 
-router.get('/:slug', getBlogBySlug);
+router.get('/:id', getBlogById);
 
 router.use(auth('admin'), authenticatedActionLimiter);
 
-router.post('/', createBlog);
+router.post('/', upload.single('featuredImage'), createBlog);
 
-router.patch('/:id', updateBlog);
+router.patch('/:id', upload.single('featuredImage'), updateBlog);
 
 router.delete('/:id', deleteBlog);
 

@@ -4,7 +4,6 @@ import { IBlog } from './blog.interface';
 const blogSchema = new Schema<IBlog>(
   {
     title: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, trim: true },
     content: { type: String, required: true },
     featuredImage: { type: String },
     tags: [{ type: String, trim: true }],
