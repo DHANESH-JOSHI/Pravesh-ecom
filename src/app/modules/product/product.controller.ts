@@ -9,16 +9,9 @@ import { Brand } from '../brand/brand.model';
 import { IProductQuery } from './product.interface';
 import status from 'http-status';
 import mongoose from 'mongoose';
+import { slugify } from '@/utils/slugify';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
-
-const slugify = (text: string) =>
-  text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
 
 export const createProduct = asyncHandler(async (req, res) => {
   const productData: any = createProductValidation.parse(req.body);

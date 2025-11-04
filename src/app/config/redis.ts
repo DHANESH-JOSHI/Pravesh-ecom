@@ -54,6 +54,7 @@ export const redis = {
       cursor = nextCursor;
       if (keys.length > 0) {
         await client.del(keys);
+        logger.info(`[Redis] Deleting keys: ${keys.join(', ')}`);
       }
     } while (cursor !== '0');
   },
