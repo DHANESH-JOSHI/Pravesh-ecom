@@ -12,10 +12,7 @@ const ApiResponse = getApiResponseClass('BLOG');
 
 export const createBlog = asyncHandler(async (req, res) => {
   const blogData = createBlogValidation.parse(req.body);
-  if (!req.file) {
-    throw new ApiError(status.BAD_REQUEST, 'Featured image is required');
-  }
-  blogData.featuredImage = req.file?.path;
+  if (req.file) blogData.featuredImage = req.file?.path;
   const blog = await Blog.create(blogData);
   await redis.deleteByPattern('blogs*');
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Blog post created successfully', blog));
