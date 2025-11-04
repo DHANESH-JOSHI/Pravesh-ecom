@@ -293,35 +293,6 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  if (updateData.sku && updateData.sku !== existingProduct.sku) {
-    const existingSku = await Product.findOne({
-      sku: updateData.sku,
-      isDeleted: false,
-      _id: { $ne: id }
-    });
-    if (existingSku) {
-      throw new ApiError(status.BAD_REQUEST, 'Product with this SKU already exists');
-    }
-  }
-
-  if (!updateData.slug && updateData.name && updateData.name !== existingProduct.name) {
-    const base = slugify(updateData.name);
-    let candidate = base;
-    let i = 1;
-    while (await Product.findOne({ slug: candidate, _id: { $ne: id } })) {
-      candidate = `${base}-${i++}`;
-    }
-    updateData.slug = candidate;
-  } else if (updateData.slug) {
-    const base = slugify(updateData.slug);
-    let candidate = base;
-    let i = 1;
-    while (await Product.findOne({ slug: candidate, _id: { $ne: id } })) {
-      candidate = `${base}-${i++}`;
-    }
-    updateData.slug = candidate;
-  }
-
   if (req.files && typeof req.files === 'object') {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 

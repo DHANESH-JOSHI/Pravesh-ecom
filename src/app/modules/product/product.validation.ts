@@ -11,7 +11,6 @@ const objectIdValidation = z
 const createProductValidation = z.object({
   name: z.string().nonempty('Product name is required').max(200, 'Product name too long'),
   slug: z.string().optional(),
-  sku: z.string().nonempty('SKU is required'),
   description: z.string().optional(),
   shortDescription: z.string().optional(),
   brandId: objectIdValidation.optional(),
