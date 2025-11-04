@@ -63,7 +63,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved successfully", cachedCategories));
   }
 
-  const { page = 1, limit = 10, search, isDeleted, isParent } = req.query;
+  const { page = 1, limit = 10, search, isDeleted, isParent, populate = 'false' } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {
@@ -82,7 +82,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     Category.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit)).populate('parentCategory'),
+      .limit(Number(limit)).populate(populate == 'true' ? 'children' : ''),
     Category.countDocuments(filter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
