@@ -1,10 +1,13 @@
 import { validateIndianMobile } from "@/utils";
 import { z } from "zod";
 import { UserRole } from "./user.interface";
-import { phoneOrEmailSchema } from "../auth/auth.validation";
 
 export const resetPasswordValidation = z.object({
-  phoneOrEmail: phoneOrEmailSchema,
+  otp: z
+    .string()
+    .trim()
+    .length(6, "OTP must be exactly 6 digits")
+    .regex(/^\d+$/, "OTP must contain only numbers"),
   newPassword: z.string().min(6)
 });
 

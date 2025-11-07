@@ -1,5 +1,5 @@
 import express from "express";
-import { loginUser, logout, refreshTokens, registerUser, requestForOtp, loginUsingOtp, resetPassword, loginAsAdmin, loginAsAdminUsingOtp } from "../auth/auth.controller";
+import { loginUser, logout, refreshTokens, registerUser, requestForOtp, loginUsingOtp, loginAsAdmin, loginAsAdminUsingOtp } from "../auth/auth.controller";
 import { authLimiter, smsLimiter } from "@/middlewares";
 
 const router = express.Router();
@@ -19,7 +19,5 @@ router.post("/admin-otp-login", authLimiter, loginAsAdminUsingOtp)
 router.post("/refresh-tokens", authLimiter, refreshTokens);
 
 router.post("/logout", authLimiter, logout);
-
-router.post('/password/reset', authLimiter, resetPassword);
 
 export const authRouter = router;

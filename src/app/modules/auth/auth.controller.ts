@@ -6,7 +6,6 @@ import status from "http-status";
 import { Wallet } from '../wallet/wallet.model';
 import mongoose from "mongoose";
 import { UserRole, UserStatus } from "../user/user.interface";
-import { resetPasswordValidation } from "../user/user.validation";
 
 const ApiError = getApiErrorClass("AUTH");
 const ApiResponse = getApiResponseClass("AUTH");
@@ -299,19 +298,5 @@ export const refreshTokens = asyncHandler(async (req, res) => {
     .json(new ApiResponse(status.OK, "Tokens refreshed successfully", { accessToken: newAccessToken, refreshToken: newRefreshToken }));
   return;
 });
-
-export const resetPassword = asyncHandler(async (req, res) => {
-  const { phoneOrEmail, newPassword } = resetPasswordValidation.parse(req.body)
-  const user = await User.findOne({
-    $or: [{ phone: phoneOrEmail }, { email: phoneOrEmail }]
-  })
-  if (!user || user.isDeleted) {
-    throw new ApiError(status.NOT_FOUND, "User not found");
-  }
-  user.password = newPassword;
-  await user.save();
-  res.json(new ApiResponse(status.OK, "Password reset successfully"));
-  return;
-})
 
 

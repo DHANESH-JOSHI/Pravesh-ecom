@@ -18,20 +18,20 @@ router.use(authenticatedActionLimiter);
 
 router.get('/', auth('admin'), getAllCarts)
 
-router.get('/me', auth('user'),getMyCart);
+router.get('/me', auth('user'), getMyCart);
 
-router.get('/summary', auth('user'),getCartSummary);
+router.get('/summary', auth('user'), getCartSummary);
 
 router.get('/:id', auth('admin'), getCartById)
 
-router.post('/add', auth('user'),addToCart);
+router.post('/add', auth('user'), addToCart);
 
-router.patch('/item/:productId', auth('user'),updateCartItem);
+router.patch('/item/:productId', auth('user'), updateCartItem);
 
-router.delete('/item/:productId', auth('user'),removeFromCart);
+router.delete('/item/:productId', auth('user'), removeFromCart);
 
-router.delete('/clear', auth('user'),clearCart);
+router.delete('/clear', auth('user'), clearCart);
 
-router.post('/checkout', auth('user'),checkoutCart);
+router.post('/checkout', auth('user'), checkoutCart);
 
 export const cartRouter = router;

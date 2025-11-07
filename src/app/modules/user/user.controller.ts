@@ -1,5 +1,5 @@
 import { User } from "./user.model";
-import { emailCheckValidation, phoneCheckValidation, updatePasswordValidation, updateUserValidation } from "./user.validation";
+import { emailCheckValidation, phoneCheckValidation, resetPasswordValidation, updatePasswordValidation, updateUserValidation } from "./user.validation";
 import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
@@ -100,7 +100,6 @@ export const updateUser = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
   return;
 });
-
 
 export const getAllUsers = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, role, status: userStatus, isDeleted } = req.query;
@@ -301,3 +300,18 @@ export const checkEmailExists = asyncHandler(async (req, res) => {
   return;
 });
 
+export const resetPassword = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { otp, newPassword } = resetPasswordValidation.parse(req.body)
+  const user = await User.findById(userId)
+  if (!user || user.isDeleted) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
+  if(!user.compareOtp(otp)) {
+    throw new ApiError(status.BAD_REQUEST, "Invalid or expired OTP");
+  }
+  user.password = newPassword;
+  await user.save();
+  res.json(new ApiResponse(status.OK, "Password reset successfully"));
+  return;
+})

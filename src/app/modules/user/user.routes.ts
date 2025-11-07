@@ -9,7 +9,8 @@ import {
   deleteUser,
   getMe,
   updatePassword,
-  createUser
+  createUser,
+  resetPassword
 } from "./user.controller";
 import { auth, authenticatedActionLimiter, dataCheckLimiter } from "@/middlewares";
 
@@ -34,5 +35,7 @@ router.delete("/:id", auth('admin'), authenticatedActionLimiter, deleteUser);
 router.patch("/password", auth('user'), authenticatedActionLimiter, updatePassword);
 
 router.patch("/", auth('user'), authenticatedActionLimiter, updateUser);
+
+router.post('/password/reset',auth('user'), authenticatedActionLimiter, resetPassword);
 
 export const userRouter = router;
