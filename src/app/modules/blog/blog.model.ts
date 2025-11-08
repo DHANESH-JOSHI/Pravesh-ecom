@@ -1,5 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { IBlog } from './blog.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const blogSchema = new Schema<IBlog>(
   {
@@ -12,19 +13,10 @@ const blogSchema = new Schema<IBlog>(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        return ret;
-      }
-    }
   }
 );
+
+applyMongooseToJSON(blogSchema);
 
 blogSchema.index({ isPublished: 1, isDeleted: 1, createdAt: -1 });
 blogSchema.index({ title: 'text', content: 'text' });

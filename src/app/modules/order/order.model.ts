@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { IOrder, OrderStatus, IOrderItem } from './order.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const OrderItemSchema = new Schema<IOrderItem>({
   product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
@@ -31,19 +32,9 @@ const OrderSchema = new Schema<IOrder>(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        return ret;
-      },
-    },
   }
 );
+applyMongooseToJSON(OrderSchema);
 
 OrderSchema.index({ user: 1, status: 1 });
 OrderSchema.index({ status: 1 });

@@ -1,5 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import { IAddress } from './address.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
+
 
 const addressSchema = new Schema<IAddress>(
   {
@@ -54,23 +56,10 @@ const addressSchema = new Schema<IAddress>(
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        return ret;
-      },
-    },
-    toObject: {
-      virtuals: true,
-    },
   }
 );
+
+applyMongooseToJSON(addressSchema);
 
 addressSchema.pre('save', async function (next) {
   if (!this.isNew) return next();

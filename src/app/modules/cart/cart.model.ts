@@ -1,7 +1,8 @@
 import mongoose, { Schema } from 'mongoose';
 import { ICart, ICartItem, ICartModel } from './cart.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
-const CartItemSchema = new Schema<ICartItem>(
+const cartItemSchema = new Schema<ICartItem>(
   {
     product: {
       type: Schema.Types.ObjectId,
@@ -16,7 +17,7 @@ const CartItemSchema = new Schema<ICartItem>(
   }
 );
 
-const CartSchema = new Schema<ICart, ICartModel>(
+const cartSchema = new Schema<ICart>(
   {
     user: {
       type: Schema.Types.ObjectId,
@@ -24,24 +25,15 @@ const CartSchema = new Schema<ICart, ICartModel>(
       required: true,
       unique: true,
     },
-    items: [CartItemSchema],
+    items: [cartItemSchema],
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = ret.createdAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = ret.updatedAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-      }
-    }
   }
 );
+applyMongooseToJSON(cartSchema);
 
-CartSchema.methods.addItem = async function (
+cartSchema.methods.addItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
@@ -59,7 +51,7 @@ CartSchema.methods.addItem = async function (
   return this.save();
 };
 
-CartSchema.methods.updateItem = async function (
+cartSchema.methods.updateItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
@@ -81,7 +73,7 @@ CartSchema.methods.updateItem = async function (
   return this.save();
 };
 
-CartSchema.methods.removeItem = async function (
+cartSchema.methods.removeItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
 ) {
@@ -92,12 +84,12 @@ CartSchema.methods.removeItem = async function (
   return this.save();
 };
 
-CartSchema.methods.clearCart = async function (this: ICart) {
+cartSchema.methods.clearCart = async function (this: ICart) {
   this.items = [];
   return this.save();
 };
 
-CartSchema.methods.getCartSummary = async function (this: ICart) {
+cartSchema.methods.getCartSummary = async function (this: ICart) {
   const totalItems = this.items.reduce((sum, item) => sum + item.quantity, 0);
   const populatedProduct = await this.populate('items.product', 'finalPrice');
   const totalPrice = populatedProduct.items.reduce((sum, item) => {
@@ -107,4 +99,4 @@ CartSchema.methods.getCartSummary = async function (this: ICart) {
   return { totalItems, totalPrice };
 }
 
-export const Cart = mongoose.model<ICart, ICartModel>('Cart', CartSchema);
+export const Cart = mongoose.model<ICart, ICartModel>('Cart', cartSchema);

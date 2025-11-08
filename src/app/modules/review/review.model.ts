@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { IReview } from './review.interface'
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 
 const reviewSchema = new mongoose.Schema<IReview>(
@@ -28,18 +29,9 @@ const reviewSchema = new mongoose.Schema<IReview>(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        return ret;
-      }
-    },
   })
+
+applyMongooseToJSON(reviewSchema);
 
 reviewSchema.index({ product: 1, createdAt: -1 });
 reviewSchema.index({ createdAt: -1 });

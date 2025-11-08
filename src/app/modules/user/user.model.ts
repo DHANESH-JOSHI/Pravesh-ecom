@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { IUser, UserRole, UserStatus } from './user.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const userSchema = new Schema<IUser>(
   {
@@ -17,22 +18,9 @@ const userSchema = new Schema<IUser>(
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-      }
-    },
-    toObject: {
-      virtuals: true,
-    }
   }
 );
+applyMongooseToJSON(userSchema);
 
 userSchema.virtual('wallet', {
   ref: 'Wallet',

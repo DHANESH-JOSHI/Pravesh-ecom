@@ -1,5 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { IWishlist } from './wishlist.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const WishlistSchema = new Schema<IWishlist>(
   {
@@ -18,17 +19,8 @@ const WishlistSchema = new Schema<IWishlist>(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-      }
-    }
   }
 );
+applyMongooseToJSON(WishlistSchema);
 
 export const Wishlist = model<IWishlist>('Wishlist', WishlistSchema);

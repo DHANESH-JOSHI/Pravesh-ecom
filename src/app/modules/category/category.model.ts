@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { ICategory } from './category.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const categorySchema: Schema = new Schema<ICategory>(
   {
@@ -23,22 +24,10 @@ const categorySchema: Schema = new Schema<ICategory>(
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-      }
-    },
-    toObject: {
-      virtuals: true
-    }
   }
 );
+
+applyMongooseToJSON(categorySchema);
 
 categorySchema.virtual('children',{
   ref:'Category',

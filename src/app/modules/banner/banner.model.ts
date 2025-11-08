@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { BannerType, IBanner } from './banner.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const bannerSchema = new Schema<IBanner>(
   {
@@ -17,18 +18,10 @@ const bannerSchema = new Schema<IBanner>(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-      }
-    },
   }
 );
+
+applyMongooseToJSON(bannerSchema);
 
 bannerSchema.index({ title: 'text', type: 1 })
 bannerSchema.index({ createdAt: -1, isDeleted: 1 })

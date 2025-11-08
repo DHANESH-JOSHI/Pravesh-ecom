@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { IWallet, ITransaction } from './wallet.interface';
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const TransactionSchema = new Schema<ITransaction>(
   {
@@ -34,17 +35,8 @@ const WalletSchema = new Schema<IWallet>(
   },
   {
     timestamps: true,
-    toJSON: {
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-      }
-    }
   }
 );
+applyMongooseToJSON(WalletSchema);
 
 export const Wallet = mongoose.model<IWallet>('Wallet', WalletSchema);

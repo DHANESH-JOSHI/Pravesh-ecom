@@ -1,5 +1,6 @@
 import mongoose from "mongoose"
 import { IBrand } from './brand.interface'
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const brandSchema = new mongoose.Schema<IBrand>(
   {
@@ -18,23 +19,10 @@ const brandSchema = new mongoose.Schema<IBrand>(
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        return ret;
-      }
-    },
-    toObject: {
-      virtuals: true
-    }
   }
 )
+
+applyMongooseToJSON(brandSchema);
 
 brandSchema.virtual('products', {
   ref: 'Product',
