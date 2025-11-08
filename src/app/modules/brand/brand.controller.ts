@@ -12,26 +12,39 @@ const ApiResponse = getApiResponseClass("BRAND");
 export const createBrand = asyncHandler(async (req, res) => {
   const { name } = brandValidation.parse(req.body);
 
-  const existingBrand = await Brand.findOne({
-    name,
-    isDeleted: false,
+  let existingBrand = await Brand.findOne({
+    name
   });
   if (existingBrand) {
-    throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
+    if (!existingBrand.isDeleted) {
+      throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
+    }
+    existingBrand.name = name;
+    await existingBrand.save();
   }
   let image;
   if (req.file) {
-    image = req.file.path
+    image = req.file.path;
   }
-  const brand = new Brand({
-    name,
-    image,
-  });
-  await brand.save();
+  if (!existingBrand) {
+    existingBrand = await Brand.create({
+      name,
+      image
+    });
+  } else {
+    if (existingBrand.image) {
+      const publicId = existingBrand.image.split("/").pop()?.split(".")[0];
+      if (publicId) {
+        await cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
+      }
+    }
+    existingBrand.image = image;
+    await existingBrand.save();
+  }
 
   await redis.deleteByPattern("brands*");
 
-  res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", brand));
+  res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", existingBrand));
   return;
 });
 
