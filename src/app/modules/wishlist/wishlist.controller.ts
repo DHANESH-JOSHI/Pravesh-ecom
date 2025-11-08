@@ -19,13 +19,13 @@ export const getWishlist = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Wishlist retrieved successfully', cachedWishlist));
   }
 
-  let wishlist = await Wishlist.findOne({ userId }).populate({
+  let wishlist = await Wishlist.findOne({ user: userId }).populate({
     path: 'items',
     match: { isDeleted: false },
   });
 
   if (!wishlist) {
-    wishlist = await Wishlist.create({ userId, items: [] });
+    wishlist = await Wishlist.create({ user: userId, items: [] });
   }
 
   await redis.set(cacheKey, wishlist, 600);
