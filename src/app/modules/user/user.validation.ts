@@ -1,6 +1,5 @@
 import { validateIndianMobile } from "@/utils";
 import { z } from "zod";
-import { UserRole } from "./user.interface";
 
 export const resetPasswordValidation = z.object({
   otp: z
@@ -28,14 +27,10 @@ export const emailCheckValidation = z.object({
 
 export const updateUserValidation = z.object({
   name: z.string().optional(),
-  phone: z.string().refine(validateIndianMobile, {
-    message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
-  }).optional(),
   email: z.union([
     z.email("Invalid email format"),
     z.string().length(0)
   ]).optional(),
   img: z.string().optional(),
-  role: z.enum(UserRole).optional(),
 });
 
