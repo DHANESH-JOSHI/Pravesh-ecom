@@ -1,6 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import { DiscountType, IProduct, StockStatus, UnitType } from "./product.interface";
 import { slugify } from "@/utils/slugify";
+import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
 const productSchema = new Schema<IProduct>(
   {
@@ -56,23 +57,10 @@ const productSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-      transform: function (doc, ret: any) {
-        if (ret.createdAt && typeof ret.createdAt !== 'string') {
-          ret.createdAt = new Date(ret.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        if (ret.updatedAt && typeof ret.updatedAt !== 'string') {
-          ret.updatedAt = new Date(ret.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        }
-        return ret;
-      }
-    },
-    toObject: {
-      virtuals: true,
-    },
   }
 );
+
+applyMongooseToJSON(productSchema);
 
 productSchema.virtual('reviews', {
   ref: 'Review',
@@ -84,11 +72,11 @@ productSchema.virtual('reviews', {
 productSchema.index({ name: 'text', description: 'text', tags: 'text', shortDescription: 'text' });
 productSchema.index({ slug: 1, isDeleted: 1 });
 productSchema.index({ sku: 1, isDeleted: 1 });
-productSchema.index({ status: 1, isDeleted: 1, isFeatured: 1, createdAt: -1 });
-productSchema.index({ status: 1, isDeleted: 1, isNewArrival: 1, createdAt: -1 });
-productSchema.index({ status: 1, isDeleted: 1, isDiscount: 1, discountValue: -1 });
-productSchema.index({ status: 1, isDeleted: 1, category: 1, finalPrice: 1 });
-productSchema.index({ status: 1, isDeleted: 1, brand: 1, finalPrice: 1 });
+productSchema.index({ isDeleted: 1, isFeatured: 1, createdAt: -1 });
+productSchema.index({ isDeleted: 1, isNewArrival: 1, createdAt: -1 });
+productSchema.index({ isDeleted: 1, isDiscount: 1, discountValue: -1 });
+productSchema.index({ isDeleted: 1, category: 1, finalPrice: 1 });
+productSchema.index({ isDeleted: 1, brand: 1, finalPrice: 1 });
 productSchema.index({ finalPrice: 1 });
 productSchema.index({ createdAt: -1 });
 productSchema.index({ rating: -1 });

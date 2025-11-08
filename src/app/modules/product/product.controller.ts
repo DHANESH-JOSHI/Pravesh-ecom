@@ -397,7 +397,6 @@ export const getFeaturedProducts = asyncHandler(async (req, res) => {
 
   const filter = {
     isFeatured: true,
-    status: 'active',
     isDeleted: false,
   };
 
@@ -442,7 +441,6 @@ export const getNewArrivalProducts = asyncHandler(async (req, res) => {
 
   const filter = {
     isNewArrival: true,
-    status: 'active',
     isDeleted: false,
   };
 
@@ -490,7 +488,6 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
 
   const filter = {
     category: categoryId,
-    status: 'active',
     isDeleted: false,
   };
 
@@ -548,7 +545,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   if (q) {
     [products, total] = await Promise.all([
       Product.find(filter, { score: { $meta: 'textScore' } })
-        .populate('category', 'brand')
+        .populate('category brand')
         .sort({ score: { $meta: 'textScore' } })
         .skip(skip)
         .limit(Number(limit)),
@@ -557,7 +554,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   } else {
     [products, total] = await Promise.all([
       Product.find(filter)
-        .populate('category', 'brand')
+        .populate('category brand')
         .skip(skip)
         .limit(Number(limit)),
       Product.countDocuments(filter),
@@ -590,16 +587,16 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     );
   }
 
-  const brandIds = await Product.distinct('brand', { status: 'active', isDeleted: false });
-  const categoryIds = await Product.distinct('category', { status: 'active', isDeleted: false });
+  const brandIds = await Product.distinct('brand', { isDeleted: false });
+  const categoryIds = await Product.distinct('category', { isDeleted: false });
 
   const [brands, categories, colors, sizes, priceRange] = await Promise.all([
     Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name _id'),
     Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title _id'),
-    Product.distinct('specifications.color', { status: 'active', isDeleted: false }),
-    Product.distinct('specifications.size', { status: 'active', isDeleted: false }),
+    Product.distinct('specifications.color', { isDeleted: false }),
+    Product.distinct('specifications.size', { isDeleted: false }),
     Product.aggregate([
-      { $match: { status: 'active', isDeleted: false } },
+      { $match: { isDeleted: false } },
       {
         $group: {
           _id: null,
