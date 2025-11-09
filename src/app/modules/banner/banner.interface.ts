@@ -4,6 +4,7 @@ import { Document } from "mongoose";
 export enum BannerType {
   Product = 'product',
   Category = 'category',
+  Brand = 'brand',
   Offer = 'offer',
   External = 'external',
 }
