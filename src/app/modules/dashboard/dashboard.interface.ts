@@ -61,7 +61,7 @@ export interface IDashboardStats {
   lowStockProducts: Array<{
     _id: string;
     name: string;
-    stock: number;
+    // stock: number;
   }>;
 
   outOfStockList: Array<{

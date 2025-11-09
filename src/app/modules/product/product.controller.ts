@@ -43,15 +43,19 @@ export const createProduct = asyncHandler(async (req, res) => {
     productData.slug = candidate;
   }
 
-  if (req.files && typeof req.files === 'object') {
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
-      productData.thumbnail = files['thumbnail'][0].path;
-    }
-    if (Array.isArray(files['images'])) {
-      productData.images = files['images'].map((file) => file.path);
-    }
+  if (req.file) {
+    productData.thumbnail = req.file.path;
   }
+
+  // if (req.files && typeof req.files === 'object') {
+  //   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  //   if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
+  //     productData.thumbnail = files['thumbnail'][0].path;
+  //   }
+  //   if (Array.isArray(files['images'])) {
+  //     productData.images = files['images'].map((file) => file.path);
+  //   }
+  // }
 
   const product = await Product.create({
     ...productData,
@@ -60,7 +64,7 @@ export const createProduct = asyncHandler(async (req, res) => {
   });
 
   await redis.deleteByPattern('products:all*');
-  await redis.deleteByPattern('products:discount*');
+  // await redis.deleteByPattern('products:discount*');
   await redis.deleteByPattern('products:featured*');
   await redis.deleteByPattern('products:new-arrival*');
   await redis.deleteByPattern(`products:category:${product.category}*`);
@@ -75,34 +79,34 @@ export const createProduct = asyncHandler(async (req, res) => {
   return;
 });
 
-export const getDiscountProducts = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey('products:discount', req.query);
-  const cachedProducts = await redis.get(cacheKey);
+// export const getDiscountProducts = asyncHandler(async (req, res) => {
+//   const cacheKey = generateCacheKey('products:discount', req.query);
+//   const cachedProducts = await redis.get(cacheKey);
 
-  if (cachedProducts) {
-    return res.status(status.OK).json(
-      new ApiResponse(status.OK, 'Discount products retrieved successfully', cachedProducts)
-    );
-  }
+//   if (cachedProducts) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'Discount products retrieved successfully', cachedProducts)
+//     );
+//   }
 
-  const { page = 1, limit = 10 } = req.query;
-  const products = await Product.find({
-    isDiscount: true,
-    isDeleted: false,
-  })
-    .populate('category', 'brand')
-    .sort({ discountValue: -1, createdAt: -1 })
-    .skip((Number(page) - 1) * Number(limit))
-    .limit(Number(limit))
-    .lean();
+//   const { page = 1, limit = 10 } = req.query;
+//   const products = await Product.find({
+//     isDiscount: true,
+//     isDeleted: false,
+//   })
+//     .populate('category', 'brand')
+//     .sort({ discountValue: -1, createdAt: -1 })
+//     .skip((Number(page) - 1) * Number(limit))
+//     .limit(Number(limit))
+//     .lean();
 
-  await redis.set(cacheKey, products, 3600);
+//   await redis.set(cacheKey, products, 3600);
 
-  res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
-  );
-  return;
-});
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
+//   );
+//   return;
+// });
 
 export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
@@ -160,10 +164,10 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     brandId,
     minPrice,
     maxPrice,
-    stockStatus,
+    // stockStatus,
     isFeatured,
     isNewArrival,
-    isDiscount,
+    // isDiscount,
     rating,
     search,
     isDeleted,
@@ -176,14 +180,14 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   } else {
     filter.isDeleted = false;
   }
-  if (stockStatus) {
-    filter.stockStatus = stockStatus;
-  }
+  // if (stockStatus) {
+  //   filter.stockStatus = stockStatus;
+  // }
   if (categoryId) filter.category = categoryId;
   if (brandId) filter.brand = brandId;
   if (isFeatured !== undefined) filter.isFeatured = isFeatured;
   if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival;
-  if (isDiscount !== undefined) filter.isDiscount = isDiscount;
+  // if (isDiscount !== undefined) filter.isDiscount = isDiscount;
   if (minPrice || maxPrice) {
     filter.finalPrice = {};
     if (minPrice) {
@@ -293,30 +297,40 @@ export const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  if (req.files && typeof req.files === 'object') {
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  // if (req.files && typeof req.files === 'object') {
+  //   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
-    if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
-      updateData.thumbnail = files['thumbnail'][0].path;
-      if (existingProduct.thumbnail) {
-        const publicId = existingProduct.thumbnail.split('/').pop()?.split('.')[0];
-        if (publicId) {
-          await cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
-        }
-      }
-    }
+  //   if (Array.isArray(files['thumbnail']) && files['thumbnail'][0]) {
+  //     updateData.thumbnail = files['thumbnail'][0].path;
+  //     if (existingProduct.thumbnail) {
+  //       const publicId = existingProduct.thumbnail.split('/').pop()?.split('.')[0];
+  //       if (publicId) {
+  //         await cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
+  //       }
+  //     }
+  //   }
 
-    if (Array.isArray(files['images']) && files['images'].length > 0) {
-      updateData.images = files['images'].map((file) => file.path);
-      if (existingProduct.images && existingProduct.images.length > 0) {
-        const deletionPromises = existingProduct.images.map(imageUrl => {
-          const publicId = imageUrl.split('/').pop()?.split('.')[0];
-          if (publicId) {
-            return cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
-          }
-          return Promise.resolve();
-        });
-        await Promise.all(deletionPromises);
+  //   if (Array.isArray(files['images']) && files['images'].length > 0) {
+  //     updateData.images = files['images'].map((file) => file.path);
+  //     if (existingProduct.images && existingProduct.images.length > 0) {
+  //       const deletionPromises = existingProduct.images.map(imageUrl => {
+  //         const publicId = imageUrl.split('/').pop()?.split('.')[0];
+  //         if (publicId) {
+  //           return cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
+  //         }
+  //         return Promise.resolve();
+  //       });
+  //       await Promise.all(deletionPromises);
+  //     }
+  //   }
+  // }
+
+  if (req.file) {
+    updateData.thumbnail = req.file.path;
+    if (existingProduct.thumbnail) {
+      const publicId = existingProduct.thumbnail.split('/').pop()?.split('.')[0];
+      if (publicId) {
+        await cloudinary.uploader.destroy(`pravesh-products/${publicId}`);
       }
     }
   }
@@ -336,7 +350,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`products:search*`);
   await redis.deleteByPattern(`products:featured*`);
   await redis.deleteByPattern(`products:new-arrival*`);
-  await redis.deleteByPattern(`products:discount*`);
+  // await redis.deleteByPattern(`products:discount*`);
   await redis.deleteByPattern(`products:category:${existingProduct.category}*`);
   await redis.delete(`category:${existingProduct.category}:populate=true`);
   await redis.delete(`brand:${existingProduct.brand}:populate=true`);
@@ -372,7 +386,7 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`products:search*`);
   await redis.deleteByPattern(`products:featured*`);
   await redis.deleteByPattern(`products:new-arrival*`);
-  await redis.deleteByPattern(`products:discount*`);
+  // await redis.deleteByPattern(`products:discount*`);
   await redis.deleteByPattern(`products:category:${product.category}*`);
   await redis.delete(`category:${product.category}:populate=true`);
   await redis.delete(`brand:${product.brand}:populate=true`);

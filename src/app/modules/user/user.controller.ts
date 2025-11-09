@@ -26,7 +26,6 @@ export const createUser = asyncHandler(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // remove sensitive fields
     const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
 
     res

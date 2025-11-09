@@ -1,5 +1,5 @@
 import { redis } from "@/config/redis";
-import { cloudinary } from "@/config/cloudinary";
+// import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { Category } from "../category/category.model";
@@ -24,26 +24,27 @@ export const createCategory = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, "Category with this title already exists");
     }
   }
-  let image;
-  if (req.file) {
-    image = req.file.path;
-  }
+  // let image;
+  // if (req.file) {
+  //   image = req.file.path;
+  // }
   if (!category) {
     category = await Category.create({
       title,
       parentCategory: parentCategoryId,
-      image
+      // image
     });
-  } else {
-    if (category.image) {
-      const publicId = category.image.split("/").pop()?.split(".")[0];
-      if (publicId) {
-        await cloudinary.uploader.destroy(`pravesh-categories/${publicId}`);
-      }
-    }
-    category.image = image;
-    await category.save();
   }
+  // else {
+  //   if (category.image) {
+  //     const publicId = category.image.split("/").pop()?.split(".")[0];
+  //     if (publicId) {
+  //       await cloudinary.uploader.destroy(`pravesh-categories/${publicId}`);
+  //     }
+  //   }
+  //   category.image = image;
+  //   await category.save();
+  // }
   await redis.deleteByPattern("categories*");
   await redis.delete(`category:${category.parentCategory}:populate=true`);
   await redis.delete(`categories:children:${category.parentCategory}`);
@@ -138,12 +139,12 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     category = await Category.findOne({
       _id: categoryId,
       isDeleted: false,
-    }).populate('parentCategory children products');
+    }).populate('parentCategory products');
   } else {
     category = await Category.findOne({
       _id: categoryId,
       isDeleted: false,
-    }).populate('parentCategory', '_id title');
+    }).populate('parentCategory', '_id title')
   }
 
   if (!category) {
@@ -196,14 +197,14 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
     }
   }
 
-  if (req.file) {
-    if (category.image) {
-      const publicId = category.image.split("/").pop()?.split(".")[0];
-      if (publicId) {
-        await cloudinary.uploader.destroy(`pravesh-categories/${publicId}`);
-      }
-    }
-  }
+  // if (req.file) {
+  //   if (category.image) {
+  //     const publicId = category.image.split("/").pop()?.split(".")[0];
+  //     if (publicId) {
+  //       await cloudinary.uploader.destroy(`pravesh-categories/${publicId}`);
+  //     }
+  //   }
+  // }
 
 
   const updatedCategory = await Category.findByIdAndUpdate(
@@ -211,7 +212,7 @@ export const updateCategoryById = asyncHandler(async (req, res) => {
     {
       title,
       parentCategory: parentCategoryId,
-      image: req.file ? req.file.path : category.image,
+      // image: req.file ? req.file.path : category.image,
     },
     { new: true }
   );

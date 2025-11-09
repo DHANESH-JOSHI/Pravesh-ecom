@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Types } from "mongoose";
-import { DiscountType, StockStatus, UnitType } from './product.interface';
+// import { StockStatus } from './product.interface';
 
 const objectIdValidation = z
   .string()
@@ -11,26 +11,26 @@ const objectIdValidation = z
 const createProductValidation = z.object({
   name: z.string().nonempty('Product name is required').max(200, 'Product name too long'),
   slug: z.string().optional(),
-  description: z.string().optional(),
-  shortDescription: z.string().optional(),
+  // description: z.string().optional(),
+  // shortDescription: z.string().optional(),
   brandId: objectIdValidation.optional(),
   categoryId: objectIdValidation,
 
   originalPrice: z.coerce.number().min(0, 'Base price must be positive'),
-  discountValue: z.coerce.number().min(0, 'Discount cannot be negative').default(0),
-  discountType: z.enum(DiscountType).default(DiscountType.Percentage),
-  finalPrice: z.coerce.number().min(0).optional(),
+  // discountValue: z.coerce.number().min(0, 'Discount cannot be negative').default(0),
+  // discountType: z.enum(DiscountType).default(DiscountType.Percentage),
+  // finalPrice: z.coerce.number().min(0).optional(),
 
-  stock: z.coerce.number().min(0, 'Stock cannot be negative'),
-  unit: z.enum(UnitType),
-  minStock: z.coerce.number().min(0).optional(),
+  // stock: z.coerce.number().min(0, 'Stock cannot be negative'),
+  unit: z.string(),
+  // minStock: z.coerce.number().min(0).optional(),
 
-  features: z.preprocess((val) => {
-    if (typeof val === 'string') {
-      try { return JSON.parse(val); } catch (e) { return val; }
-    }
-    return val;
-  }, z.array(z.string()).optional()),
+  // features: z.preprocess((val) => {
+  //   if (typeof val === 'string') {
+  //     try { return JSON.parse(val); } catch (e) { return val; }
+  //   }
+  //   return val;
+  // }, z.array(z.string()).optional()),
   specifications: z.preprocess((val) => {
     if (typeof val === 'string') {
       try { return JSON.parse(val); } catch (e) { return val; }
@@ -46,7 +46,7 @@ const createProductValidation = z.object({
     }
     return val;
   }, z.array(z.string()).optional()),
-  stockStatus: z.enum(StockStatus).optional(),
+  // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),
 });
@@ -60,10 +60,10 @@ const productsQueryValidation = z.object({
   brandId: objectIdValidation.optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
-  stockStatus: z.enum(StockStatus).optional(),
+  // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),
-  isDiscount: z.coerce.boolean().optional(),
+  // isDiscount: z.coerce.boolean().optional(),
   isDeleted: z.coerce.boolean().optional(),
   tags: z.string().optional(),
   rating: z.string().regex(/^[1-5]$/, 'Rating must be between 1-5').optional(),

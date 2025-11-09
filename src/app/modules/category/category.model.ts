@@ -7,11 +7,12 @@ const categorySchema: Schema = new Schema<ICategory>(
     title: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
+      unique:true
     },
-    image: {
-      type: String,
-    },
+    // image: {
+    //   type: String,
+    // },
     isDeleted: {
       type: Boolean,
       default: false

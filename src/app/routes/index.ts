@@ -42,7 +42,7 @@ const moduleRoutes: Route[] = [
     route: brandRouter
   },
   {
-    path: '/wallets',
+    path: '/wallet',
     route: walletRouter
   },
   {

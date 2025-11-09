@@ -7,7 +7,7 @@ import {
   deleteProduct,
   getFeaturedProducts,
   getNewArrivalProducts,
-  getDiscountProducts,
+  // getDiscountProducts,
   getProductsByCategory,
   searchProducts,
   getProductFilters,
@@ -20,7 +20,7 @@ import { authenticatedActionLimiter } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 const router = express.Router();
 
-router.post('/', auth('admin'), authenticatedActionLimiter, upload.fields([{ name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 }]), createProduct);
+router.post('/', auth('admin'), authenticatedActionLimiter, upload.single("thumbnail"), createProduct);
 
 router.get('/', getAllProducts);
 
@@ -30,7 +30,7 @@ router.get('/featured', getFeaturedProducts);
 
 router.get('/new-arrivals', getNewArrivalProducts);
 
-router.get('/discount', getDiscountProducts);
+// router.get('/discount', getDiscountProducts);
 
 router.get('/filters', getProductFilters);
 
@@ -44,7 +44,7 @@ router.get('/category/:categoryId', getProductsByCategory);
 
 router.get('/:id', getProductById);
 
-router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.fields([{ name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 10 }]), updateProduct);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single("thumbnail"), updateProduct);
 
 router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteProduct);
 

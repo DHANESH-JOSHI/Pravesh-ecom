@@ -4,7 +4,7 @@ import { Product } from '../product/product.model';
 import { asyncHandler, generateCacheKey } from '@/utils';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { addToCartValidation, updateCartItemValidation } from './cart.validation';
-import { IProduct, StockStatus } from '../product/product.interface';
+import { IProduct } from '../product/product.interface';
 import status from 'http-status';
 import { redis } from '@/config/redis';
 import { User } from '../user/user.model';
@@ -149,13 +149,13 @@ export const addToCart = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
-  if (product.stockStatus === StockStatus.OutOfStock) {
-    throw new ApiError(status.BAD_REQUEST, 'Product is out of stock');
-  }
+  // if (product.stockStatus === StockStatus.OutOfStock) {
+  //   throw new ApiError(status.BAD_REQUEST, 'Product is out of stock');
+  // }
 
-  if (product.stock < quantity) {
-    throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
-  }
+  // if (product.stock < quantity) {
+  //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
+  // }
 
   let cart = await Cart.findOne({ user: userId });
 
@@ -200,9 +200,9 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
-  if (product.stock < quantity) {
-    throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
-  }
+  // if (product.stock < quantity) {
+  //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
+  // }
 
   try {
     await cart.updateItem(new Types.ObjectId(productId), quantity);
@@ -322,10 +322,10 @@ export const checkoutCart = asyncHandler(async (req, res) => {
     if (product.isDeleted) {
       throw new ApiError(status.BAD_REQUEST, `Product ${product.name} is not available`);
     }
-    if (item.quantity > product.stock) {
-      throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock for product ${product.name}`);
-    }
-    totalPrice += item.quantity * product.finalPrice
+    // if (item.quantity > product.stock) {
+    //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock for product ${product.name}`);
+    // }
+    totalPrice += item.quantity * product.originalPrice
   }
 
   await redis.deleteByPattern(`cart:user:${userId}*`);

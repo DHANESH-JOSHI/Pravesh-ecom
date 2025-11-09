@@ -29,31 +29,31 @@ export interface IProduct extends Document {
   name: string;
   slug: string;
   sku: string;
-  description?: string;
-  shortDescription?: string;
+  // description?: string;
+  // shortDescription?: string;
 
   category: Types.ObjectId;
   brand?: Types.ObjectId;
 
   originalPrice: number;
-  discountValue: number;
-  discountType: DiscountType;
-  finalPrice: number;
+  // discountValue: number;
+  // discountType: DiscountType;
+  // finalPrice: number;
 
-  stock: number;
-  minStock: number;
-  unit: UnitType;
-  stockStatus: StockStatus;
+  // stock: number;
+  // minStock: number;
+  unit: string;
+  // stockStatus: StockStatus;
   specifications?: Record<string, any>;
-  features?: string[];
-  images: string[];
-  thumbnail: string;
+  // features?: string[];
+  // images: string[];
+  thumbnail?: string;
 
   tags?: string[];
 
   isFeatured?: boolean;
   isNewArrival?: boolean;
-  isDiscount?: boolean;
+  // isDiscount?: boolean;
   isDeleted?: boolean;
 
   rating?: number;
@@ -71,12 +71,12 @@ export interface IProductFilter {
   brandId?: Types.ObjectId;
   minPrice?: number;
   maxPrice?: number;
-  inStock?: boolean;
-  stockStatus?: StockStatus;
+  // inStock?: boolean;
+  // stockStatus?: StockStatus;
 
   isFeatured?: boolean;
   isNewArrival?: boolean;
-  isDiscount?: boolean;
+  // isDiscount?: boolean;
   isDeleted?: boolean;
 
   tags?: string[];

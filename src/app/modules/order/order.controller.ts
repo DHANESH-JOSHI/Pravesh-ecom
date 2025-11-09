@@ -11,7 +11,7 @@ import status from 'http-status';
 import { Product } from '../product/product.model';
 import { redis } from '@/config/redis';
 import { User } from '../user/user.model';
-import { StockStatus } from '../product/product.interface';
+// import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
@@ -35,19 +35,19 @@ export const createOrder = asyncHandler(async (req, res) => {
         throw new ApiError(status.BAD_REQUEST, `Product with ID ${item.product} is not available.`);
       }
 
-      if (product.stockStatus === StockStatus.OutOfStock) {
-        throw new ApiError(status.BAD_REQUEST, `product ${product.name} is out of stock`);
-      }
+      // if (product.stockStatus === StockStatus.OutOfStock) {
+      //   throw new ApiError(status.BAD_REQUEST, `product ${product.name} is out of stock`);
+      // }
 
-      if (product.stock < item.quantity) {
-        throw new ApiError(status.BAD_REQUEST, `Not enough stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
-      }
+      // if (product.stock < item.quantity) {
+      //   throw new ApiError(status.BAD_REQUEST, `Not enough stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+      // }
       orderItems.push({
         product: product._id,
         quantity: item.quantity,
-        price: product.finalPrice
+        price: product.originalPrice
       });
-      totalAmount += product.finalPrice * item.quantity;
+      totalAmount += product.originalPrice * item.quantity;
     }
 
     const wallet = await Wallet.findOne({ user: userId }).session(session);
@@ -67,7 +67,6 @@ export const createOrder = asyncHandler(async (req, res) => {
         $inc: { stock: -item.quantity }
       }, { session });
     }
-    console.log(orderItems)
     const order = (await Order.create([{
       user: userId,
       items: orderItems,
@@ -144,7 +143,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
       if (!product) {
         throw new ApiError(status.NOT_FOUND, `Product not found: ${item.product}`);
       }
-      totalAmount += product.finalPrice * item.quantity;
+      totalAmount += product.originalPrice * item.quantity;
     }
     order.totalAmount = totalAmount;
     order.status = OrderStatus.AwaitingPayment;

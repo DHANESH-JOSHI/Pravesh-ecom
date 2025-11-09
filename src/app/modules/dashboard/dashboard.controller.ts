@@ -126,7 +126,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         _id: p._id.toString(),
         name: p.name,
         totalSold: p.totalSold || 0,
-        revenue: (p.totalSold || 0) * p.finalPrice
+        revenue: (p.totalSold || 0) * p.originalPrice
       }))),
 
     Product.aggregate([
@@ -253,7 +253,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   const formattedLowStockProducts = lowStockProducts.map(product => ({
     _id: product._id.toString(),
     name: product.name,
-    stock: product.stock
+    // stock: product.stock
   }));
 
   const formattedOutOfStockList = outOfStockList.map(product => ({
