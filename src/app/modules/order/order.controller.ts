@@ -45,7 +45,7 @@ export const createOrder = asyncHandler(async (req, res) => {
       totalAmount += product.finalPrice * item.quantity;
     }
 
-    const wallet = await Wallet.findOne({ userId }).session(session);
+    const wallet = await Wallet.findOne({ user:userId }).session(session);
     if (!wallet || wallet.balance < totalAmount) {
       throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
     }
@@ -185,7 +185,7 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'This order is not awaiting payment.');
     }
 
-    const wallet = await Wallet.findOne({ userId }).session(session);
+    const wallet = await Wallet.findOne({ user:userId }).session(session);
     if (!wallet || wallet.balance < order.totalAmount) {
       throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
     }

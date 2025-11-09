@@ -74,7 +74,7 @@ export const getWalletBalance = asyncHandler(async (req, res) => {
     return res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', cachedBalance));
   }
 
-  const wallet = await Wallet.findOne({ userId });
+  const wallet = await Wallet.findOne({ user: userId });
   if (!wallet) {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found');
   }
