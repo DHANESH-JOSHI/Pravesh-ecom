@@ -78,7 +78,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Order.aggregate([
       { $group: { _id: null, total: { $sum: "$totalAmount" } } }
     ]).then(result => result[0]?.total || 0),
-    Product.countDocuments({ status: 'active', isDeleted: false }),
+    Product.countDocuments({ isDeleted: false }),
 
     User.countDocuments({ createdAt: { $gte: today }, isDeleted: false }),
     User.countDocuments({ createdAt: { $gte: weekAgo }, isDeleted: false }),
@@ -106,9 +106,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Order.countDocuments({ status: 'delivered' }),
     Order.countDocuments({ status: 'cancelled' }),
 
-    Product.countDocuments({ stock: 0, status: 'active', isDeleted: false }),
-    Product.countDocuments({ stock: { $gt: 0, $lt: 10 }, status: 'active', isDeleted: false }),
-    Product.countDocuments({ createdAt: { $gte: monthAgo }, status: 'active', isDeleted: false }),
+    Product.countDocuments({ stock: 0, isDeleted: false }),
+    Product.countDocuments({ stock: { $gt: 0, $lt: 10 }, isDeleted: false }),
+    Product.countDocuments({ createdAt: { $gte: monthAgo }, isDeleted: false }),
 
     Order.find()
       .populate('user', 'name email')
@@ -117,7 +117,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       .select('user totalAmount status createdAt')
       .lean(),
 
-    Product.find({ isDeleted: false, status: 'active', totalSold: { $gt: 0 } })
+    Product.find({ isDeleted: false, totalSold: { $gt: 0 } })
       .sort({ totalSold: -1 })
       .limit(10)
       .select('name totalSold finalPrice')
@@ -131,7 +131,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     Product.aggregate([
       {
-        $match: { isDeleted: false, status: 'active', totalSold: { $gt: 0 } }
+        $match: { isDeleted: false, totalSold: { $gt: 0 } }
       },
       {
         $lookup: {
@@ -201,7 +201,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     Product.find({
       isDeleted: false,
-      status: 'active',
       stock: { $gt: 0, $lt: 10 }
     })
       .sort({ stock: 1 })
@@ -211,7 +210,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     Product.find({
       isDeleted: false,
-      status: 'active',
       stock: 0
     })
       .limit(10)

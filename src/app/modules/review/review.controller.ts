@@ -68,7 +68,7 @@ export const createReview = asyncHandler(async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new ApiError(status.BAD_REQUEST, "Invalid productId")
     }
-    const existingProduct = await Product.findOne({ _id: productId, isDeleted: false, status: 'active' }).session(session);
+    const existingProduct = await Product.findOne({ _id: productId, isDeleted: false }).session(session);
     if (!existingProduct) {
       throw new ApiError(status.NOT_FOUND, "Product not found")
     }
@@ -115,7 +115,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid productId")
   }
-  const existingProduct = await Product.findOne({ _id: productId, isDeleted: false, status: 'active' });
+  const existingProduct = await Product.findOne({ _id: productId, isDeleted: false });
   if (!existingProduct) {
     throw new ApiError(status.NOT_FOUND, "Product not found")
   }

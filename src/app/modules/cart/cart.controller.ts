@@ -194,7 +194,6 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   const product = await Product.findOne({
     _id: productId,
     isDeleted: false,
-    status: 'active'
   });
 
   if (!product) {
