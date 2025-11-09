@@ -1,4 +1,4 @@
-import mongoose from "mongoose"
+import mongoose, { Schema } from "mongoose"
 import { IBrand } from './brand.interface'
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
@@ -11,6 +11,11 @@ const brandSchema = new mongoose.Schema<IBrand>(
     },
     image: {
       type: String,
+    },
+    category: {
+      type: Schema.Types.ObjectId,
+      ref: 'Category',
+      required: true
     },
     isDeleted: {
       type: Boolean,

@@ -139,7 +139,7 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     category = await Category.findOne({
       _id: categoryId,
       isDeleted: false,
-    }).populate('parentCategory products');
+    }).populate('parentCategory children products brands');
   } else {
     category = await Category.findOne({
       _id: categoryId,

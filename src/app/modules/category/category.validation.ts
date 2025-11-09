@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Types } from "mongoose";
 
-const objectIdValidation = z
+export const objectIdValidation = z
   .string()
   .refine((val) => val && Types.ObjectId.isValid(val), {
     message: 'Invalid ObjectId',

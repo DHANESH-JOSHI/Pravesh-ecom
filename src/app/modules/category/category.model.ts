@@ -8,7 +8,7 @@ const categorySchema: Schema = new Schema<ICategory>(
       type: String,
       required: true,
       trim: true,
-      unique:true
+      unique: true
     },
     // image: {
     //   type: String,
@@ -30,19 +30,27 @@ const categorySchema: Schema = new Schema<ICategory>(
 
 applyMongooseToJSON(categorySchema);
 
-categorySchema.virtual('children',{
-  ref:'Category',
-  localField:'_id',
-  foreignField:'parentCategory',
-  justOne:false
+categorySchema.virtual('children', {
+  ref: 'Category',
+  localField: '_id',
+  foreignField: 'parentCategory',
+  justOne: false
 })
 
-categorySchema.virtual('products',{
-  ref:'Product',
-  localField:'_id',
-  foreignField:'category',
-  justOne:false
+categorySchema.virtual('products', {
+  ref: 'Product',
+  localField: '_id',
+  foreignField: 'category',
+  justOne: false
 })
+
+categorySchema.virtual('brands', {
+  ref: 'Brand',
+  localField: '_id',
+  foreignField: 'category',
+  justOne: false
+})
+
 categorySchema.index({ createdAt: -1 });
 categorySchema.index({ title: 'text' });
 categorySchema.index({ parentCategory: -1 });

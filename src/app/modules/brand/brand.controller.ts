@@ -6,14 +6,16 @@ import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import status from "http-status";
+import { Category } from "../category/category.model";
 const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
 
 export const createBrand = asyncHandler(async (req, res) => {
-  const { name } = brandValidation.parse(req.body);
+  const { name, categoryId } = brandValidation.parse(req.body);
 
   let existingBrand = await Brand.findOne({
-    name
+    name,
+    category: categoryId
   });
   if (existingBrand) {
     if (!existingBrand.isDeleted) {
@@ -29,6 +31,7 @@ export const createBrand = asyncHandler(async (req, res) => {
   if (!existingBrand) {
     existingBrand = await Brand.create({
       name,
+      category: categoryId,
       image
     });
   } else {
@@ -43,6 +46,7 @@ export const createBrand = asyncHandler(async (req, res) => {
   }
 
   await redis.deleteByPattern("brands*");
+  await redis.delete(`category:${categoryId}?populate=true`)
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", existingBrand));
   return;
@@ -71,7 +75,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     Brand.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit)),
+      .limit(Number(limit)).populate('category', '_id title'),
     Brand.countDocuments(filter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));
@@ -108,12 +112,12 @@ export const getBrandById = asyncHandler(async (req, res) => {
     brand = await Brand.findOne({
       _id: brandId,
       isDeleted: false,
-    }).populate('products');
+    }).populate('products category');
   } else {
     brand = await Brand.findOne({
       _id: brandId,
       isDeleted: false,
-    });
+    }).populate('category');
   }
 
   if (!brand) {
@@ -128,12 +132,13 @@ export const getBrandById = asyncHandler(async (req, res) => {
 
 export const updateBrandById = asyncHandler(async (req, res) => {
   const brandId = req.params.id;
-  const { name } = brandUpdateValidation.parse(req.body);
+  const { name, categoryId } = brandUpdateValidation.parse(req.body);
   if (!mongoose.Types.ObjectId.isValid(brandId)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
   }
   const brand = await Brand.findOne({
     _id: brandId,
+    category: categoryId,
     isDeleted: false,
   });
 
@@ -155,6 +160,18 @@ export const updateBrandById = asyncHandler(async (req, res) => {
     }
   }
 
+  if (categoryId) {
+    if (categoryId !== brand.category) {
+      const existingCategory = await Category.findOne({
+        _id: categoryId,
+        isDeleted: false,
+      });
+      if (!existingCategory) {
+        throw new ApiError(status.BAD_REQUEST, "Category with this id does not exist");
+      }
+    }
+  }
+
   if (req.file) {
     if (brand.image) {
       const publicId = brand.image.split("/").pop()?.split(".")[0];
@@ -167,6 +184,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
     brandId,
     {
       name,
+      category: categoryId,
       image: req.file ? req.file.path : brand.image,
     },
     { new: true }
@@ -174,6 +192,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern("brands*");
   await redis.deleteByPattern(`brand:${brandId}*`);
+  await redis.delete(`category:${categoryId}?populate=true`)
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
