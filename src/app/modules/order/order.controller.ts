@@ -27,7 +27,7 @@ export const createOrder = asyncHandler(async (req, res) => {
     if (!cart || cart.items.length === 0) {
       throw new ApiError(status.BAD_REQUEST, 'Your cart is empty');
     }
-
+    const orderItems = []
     let totalAmount = 0;
     for (const item of cart.items) {
       const product = await Product.findById(item.product).session(session);
@@ -42,10 +42,15 @@ export const createOrder = asyncHandler(async (req, res) => {
       if (product.stock < item.quantity) {
         throw new ApiError(status.BAD_REQUEST, `Not enough stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
       }
+      orderItems.push({
+        product: product._id,
+        quantity: item.quantity,
+        price: product.finalPrice
+      });
       totalAmount += product.finalPrice * item.quantity;
     }
 
-    const wallet = await Wallet.findOne({ user:userId }).session(session);
+    const wallet = await Wallet.findOne({ user: userId }).session(session);
     if (!wallet || wallet.balance < totalAmount) {
       throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
     }
@@ -62,10 +67,10 @@ export const createOrder = asyncHandler(async (req, res) => {
         $inc: { stock: -item.quantity }
       }, { session });
     }
-
+    console.log(orderItems)
     const order = (await Order.create([{
       user: userId,
-      items: cart.items,
+      items: orderItems,
       totalAmount,
       shippingAddress: shippingAddressId,
       status: OrderStatus.Processing,
@@ -185,7 +190,7 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'This order is not awaiting payment.');
     }
 
-    const wallet = await Wallet.findOne({ user:userId }).session(session);
+    const wallet = await Wallet.findOne({ user: userId }).session(session);
     if (!wallet || wallet.balance < order.totalAmount) {
       throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
     }
