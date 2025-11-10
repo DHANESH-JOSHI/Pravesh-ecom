@@ -69,8 +69,8 @@ export const createProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern('products:new-arrival*');
   await redis.deleteByPattern(`products:category:${product.category}*`);
   await redis.deleteByPattern('products:search*');
-  await redis.delete(`category:${product.category}:populate=true`);
-  await redis.delete(`brand:${product.brand}:populate=true`);
+  await redis.delete(`category:${product.category}?populate=true`);
+  await redis.delete(`brand:${product.brand}?populate=true`);
   await redis.delete('product_filters');
   await redis.delete('dashboard:stats')
   res.status(status.CREATED).json(
@@ -352,8 +352,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`products:new-arrival*`);
   // await redis.deleteByPattern(`products:discount*`);
   await redis.deleteByPattern(`products:category:${existingProduct.category}*`);
-  await redis.delete(`category:${existingProduct.category}:populate=true`);
-  await redis.delete(`brand:${existingProduct.brand}:populate=true`);
+  await redis.delete(`category:${existingProduct.category}?populate=true`);
+  await redis.delete(`brand:${existingProduct.brand}?populate=true`);
   await redis.delete('product_filters');
   await redis.delete('dashboard:stats')
 
@@ -388,8 +388,8 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(`products:new-arrival*`);
   // await redis.deleteByPattern(`products:discount*`);
   await redis.deleteByPattern(`products:category:${product.category}*`);
-  await redis.delete(`category:${product.category}:populate=true`);
-  await redis.delete(`brand:${product.brand}:populate=true`);
+  await redis.delete(`category:${product.category}?populate=true`);
+  await redis.delete(`brand:${product.brand}?populate=true`);
   await redis.delete('product_filters');
   await redis.delete('dashboard:stats')
 

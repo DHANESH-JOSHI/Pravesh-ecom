@@ -48,7 +48,7 @@ export const createCategory = asyncHandler(async (req, res) => {
   //   await category.save();
   // }
   await redis.deleteByPattern("categories*");
-  await redis.delete(`category:${category.parentCategory}:populate=true`);
+  await redis.delete(`category:${category.parentCategory}?populate=true`);
   await redis.delete(`categories:children:${category.parentCategory}`);
   res
     .status(status.CREATED)
@@ -132,6 +132,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     ]);
     return { ...cat.toJSON(), childCount, productCount: result[0]?.totalProducts, brandCount };
   }));
+
 
   const totalPages = Math.ceil(total / Number(limit));
   const result = {

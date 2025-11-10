@@ -24,7 +24,7 @@ export const createAddress = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern(`addresses:user:${address.user}*`);
   await redis.deleteByPattern('addresses:all*');
-  await redis.deleteByPattern(`users:${address.user}:populate=true`);
+  await redis.deleteByPattern(`users:${address.user}?populate=true`);
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Address created successfully", address));
   return;
@@ -95,7 +95,7 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern(`address:${addressId}*`);
   await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.delete(`users:${userId}:populate=true`);
+  await redis.delete(`users:${userId}?populate=true`);
   await redis.deleteByPattern('addresses:all*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address updated successfully", updatedAddress));
@@ -121,7 +121,7 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern(`address:${addressId}*`);
   await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.delete(`users:${userId}:populate=true`);
+  await redis.delete(`users:${userId}?populate=true`);
   await redis.deleteByPattern('addresses:all*');
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address deleted successfully"));
@@ -176,7 +176,7 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
   address.isDefault = true;
   await address.save();
   await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.delete(`users:${userId}:populate=true`);
+  await redis.delete(`users:${userId}?populate=true`);
   await redis.deleteByPattern(`address:${id}*`);
   res.status(status.OK).json(new ApiResponse(status.OK, "Default address set successfully"));
   return;

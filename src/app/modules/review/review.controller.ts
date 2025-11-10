@@ -87,8 +87,8 @@ export const createReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(`reviews:product:${productId}*`);
     await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
-    await redis.delete(`product:${review.product}:populate=true`);
-    await redis.delete(`user:${userId}:populate=true`);
+    await redis.delete(`product:${review.product}?populate=true`);
+    await redis.delete(`user:${userId}?populate=true`);
     await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
@@ -274,8 +274,8 @@ export const updateReview = asyncHandler(async (req, res) => {
 
     await redis.delete(`review:${reviewId}`);
     await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.delete(`product:${existingReview.product}:populate=true`);
-    await redis.delete(`user:${userId}:populate=true`);
+    await redis.delete(`product:${existingReview.product}?populate=true`);
+    await redis.delete(`user:${userId}?populate=true`);
     await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
@@ -311,8 +311,8 @@ export const deleteReview = asyncHandler(async (req, res) => {
 
     await redis.delete(`review:${reviewId}`);
     await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.delete(`product:${existingReview.product}:populate=true`);
-    await redis.delete(`user:${userId}:populate=true`);
+    await redis.delete(`product:${existingReview.product}?populate=true`);
+    await redis.delete(`user:${userId}?populate=true`);
     await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
 
