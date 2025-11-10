@@ -55,6 +55,7 @@ userSchema.virtual('addresses', {
   localField: '_id',
   foreignField: 'user',
   justOne: false,
+  match: { isDeleted: false }
 });
 
 userSchema.virtual('reviews', {

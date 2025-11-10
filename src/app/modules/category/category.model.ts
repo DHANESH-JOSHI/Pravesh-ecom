@@ -34,21 +34,24 @@ categorySchema.virtual('children', {
   ref: 'Category',
   localField: '_id',
   foreignField: 'parentCategory',
-  justOne: false
+  justOne: false,
+  match: { isDeleted: false }
 })
 
 categorySchema.virtual('products', {
   ref: 'Product',
   localField: '_id',
   foreignField: 'category',
-  justOne: false
+  justOne: false,
+  match: { isDeleted: false }
 })
 
 categorySchema.virtual('brands', {
   ref: 'Brand',
   localField: '_id',
   foreignField: 'category',
-  justOne: false
+  justOne: false,
+  match: { isDeleted: false }
 })
 
 categorySchema.index({ createdAt: -1 });

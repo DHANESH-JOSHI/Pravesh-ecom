@@ -33,7 +33,8 @@ brandSchema.virtual('products', {
   ref: 'Product',
   localField: '_id',
   foreignField: 'brand',
-  justOne: false
+  justOne: false,
+  match: { isDeleted: false }
 });
 brandSchema.index({ name: 'text' });
 brandSchema.index({ createdAt: -1, isDeleted: 1 });
