@@ -189,12 +189,12 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival;
   // if (isDiscount !== undefined) filter.isDiscount = isDiscount;
   if (minPrice || maxPrice) {
-    filter.finalPrice = {};
+    filter.originalPrice = {};
     if (minPrice) {
-      filter.finalPrice.$gte = Number(minPrice);
+      filter.originalPrice.$gte = Number(minPrice);
     }
     if (maxPrice) {
-      filter.finalPrice.$lte = Number(maxPrice);
+      filter.originalPrice.$lte = Number(maxPrice);
     }
   }
 
@@ -614,8 +614,8 @@ export const getProductFilters = asyncHandler(async (req, res) => {
       {
         $group: {
           _id: null,
-          minPrice: { $min: '$finalPrice' },
-          maxPrice: { $max: '$finalPrice' },
+          minPrice: { $min: '$originalPrice' },
+          maxPrice: { $max: '$originalPrice' },
         },
       },
     ]),

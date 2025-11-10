@@ -60,8 +60,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     monthlyRevenue,
     orderStatusStats,
 
-    lowStockProducts,
-    outOfStockList,
+    // lowStockProducts,
+    // outOfStockList,
 
     totalReviews,
     averageRating,
@@ -120,7 +120,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Product.find({ isDeleted: false, totalSold: { $gt: 0 } })
       .sort({ totalSold: -1 })
       .limit(10)
-      .select('name totalSold finalPrice')
+      .select('name totalSold originalPrice')
       .lean()
       .then(products => products.map(p => ({
         _id: p._id.toString(),
@@ -147,7 +147,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
           _id: '$category._id',
           name: { $first: '$category.title' },
           totalSold: { $sum: '$totalSold' },
-          revenue: { $sum: { $multiply: ['$totalSold', '$finalPrice'] } }
+          revenue: { $sum: { $multiply: ['$totalSold', '$originalPrice'] } }
         }
       },
       { $sort: { revenue: -1 } },
@@ -199,22 +199,22 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       return stats;
     }),
 
-    Product.find({
-      isDeleted: false,
-      stock: { $gt: 0, $lt: 10 }
-    })
-      .sort({ stock: 1 })
-      .limit(10)
-      .select('name stock')
-      .lean(),
+    // Product.find({
+    //   isDeleted: false,
+    //   stock: { $gt: 0, $lt: 10 }
+    // })
+    //   .sort({ stock: 1 })
+    //   .limit(10)
+    //   .select('name stock')
+    //   .lean(),
 
-    Product.find({
-      isDeleted: false,
-      stock: 0
-    })
-      .limit(10)
-      .select('name')
-      .lean(),
+    // Product.find({
+    //   isDeleted: false,
+    //   stock: 0
+    // })
+    //   .limit(10)
+    //   .select('name')
+    //   .lean(),
 
     Review.countDocuments(),
     Review.aggregate([
@@ -250,16 +250,16 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     createdAt: order.createdAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
   }));
 
-  const formattedLowStockProducts = lowStockProducts.map(product => ({
-    _id: product._id.toString(),
-    name: product.name,
-    // stock: product.stock
-  }));
+  // const formattedLowStockProducts = lowStockProducts.map(product => ({
+  //   _id: product._id.toString(),
+  //   name: product.name,
+  //   // stock: product.stock
+  // }));
 
-  const formattedOutOfStockList = outOfStockList.map(product => ({
-    _id: product._id.toString(),
-    name: product.name
-  }));
+  // const formattedOutOfStockList = outOfStockList.map(product => ({
+  //   _id: product._id.toString(),
+  //   name: product.name
+  // }));
 
   const stats: IDashboardStats = {
     totalUsers,
@@ -294,8 +294,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     monthlyRevenue,
     orderStatusStats,
 
-    lowStockProducts: formattedLowStockProducts,
-    outOfStockList: formattedOutOfStockList,
+    // lowStockProducts: formattedLowStockProducts,
+    // outOfStockList: formattedOutOfStockList,
 
     totalReviews,
     averageRating,

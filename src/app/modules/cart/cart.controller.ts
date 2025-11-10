@@ -33,7 +33,7 @@ export const getCartById = asyncHandler(async (req, res) => {
     },
     {
       path: 'items.product',
-      select: '_id name thumbnail originalPrice finalPrice',
+      select: '_id name thumbnail originalPrice',
       populate: [
         {
           path: 'category',
@@ -113,7 +113,7 @@ export const getAllCarts = asyncHandler(async (req, res) => {
   const cartsQuery = Cart.find(filter)
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(Number(limit)).populate('user', '_id name email').populate('items.product', 'finalPrice');
+    .limit(Number(limit)).populate('user', '_id name email').populate('items.product', 'originalPrice');
   const [carts, total] = await Promise.all([
     cartsQuery,
     Cart.countDocuments(filter),
@@ -312,7 +312,7 @@ export const getCartSummary = asyncHandler(async (req, res) => {
 
 export const checkoutCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const cart = await Cart.findOne({ user: userId }).populate('items.product', 'finalPrice isDeleted status stock name');
+  const cart = await Cart.findOne({ user: userId }).populate('items.product', 'originalPrice isDeleted status stock name');
   if (!cart || cart.items.length === 0) {
     throw new ApiError(status.BAD_REQUEST, 'Cart is empty');
   }

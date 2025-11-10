@@ -58,16 +58,16 @@ export interface IDashboardStats {
     [key: string]: number;
   };
 
-  lowStockProducts: Array<{
-    _id: string;
-    name: string;
-    // stock: number;
-  }>;
+  // lowStockProducts: Array<{
+  //   _id: string;
+  //   name: string;
+  //   // stock: number;
+  // }>;
 
-  outOfStockList: Array<{
-    _id: string;
-    name: string;
-  }>;
+  // outOfStockList: Array<{
+  //   _id: string;
+  //   name: string;
+  // }>;
 
   totalReviews: number;
   averageRating: number;

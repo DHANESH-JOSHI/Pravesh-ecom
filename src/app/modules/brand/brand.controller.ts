@@ -7,6 +7,7 @@ import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import status from "http-status";
 import { Category } from "../category/category.model";
+import { Product } from "../product/product.model";
 const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
 
@@ -78,9 +79,14 @@ export const getAllBrands = asyncHandler(async (req, res) => {
       .limit(Number(limit)).populate('category', '_id title'),
     Brand.countDocuments(filter),
   ]);
+  // Augment categories with childCount, productCount and brandCount
+  const augmentedBrands = await Promise.all(brands.map(async (brand) => {
+    const productCount = await Product.countDocuments({ brand: brand._id, isDeleted: false });
+    return { ...brand.toJSON(), productCount };
+  }));
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
-    brands,
+    brands: augmentedBrands,
     page: Number(page),
     limit: Number(limit),
     total,
@@ -92,6 +98,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
   res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", result));
   return;
 });
+
 
 export const getBrandById = asyncHandler(async (req, res) => {
   const brandId = req.params.id;

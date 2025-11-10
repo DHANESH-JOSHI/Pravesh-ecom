@@ -139,7 +139,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
       if (item.quantity <= 0) {
         throw new ApiError(status.BAD_REQUEST, 'Quantity must be a positive number');
       }
-      const product = await Product.findById(item.product).select('finalPrice');
+      const product = await Product.findById(item.product).select('originalPrice');
       if (!product) {
         throw new ApiError(status.NOT_FOUND, `Product not found: ${item.product}`);
       }
@@ -283,7 +283,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
       },
       {
         path: 'items.product',
-        select: '_id name originalPrice finalPrice thumbnail',
+        select: '_id name originalPrice thumbnail',
         populate: [
           {
             path: 'category',

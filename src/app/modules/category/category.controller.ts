@@ -3,6 +3,8 @@ import { redis } from "@/config/redis";
 import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { Category } from "../category/category.model";
+// import { Product } from "../product/product.model";
+import { Brand } from "../brand/brand.model";
 import { categoryValidation, categoryUpdateValidation } from "./category.validation";
 import mongoose from "mongoose";
 import status from "http-status";
@@ -83,12 +85,57 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     Category.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit)).populate(populate == 'true' ? 'children' : ''),
+      .limit(Number(limit))
+      .populate(populate == 'true' ? 'children' : ''),
     Category.countDocuments(filter),
   ]);
+
+  // Augment categories with childCount, productCount and brandCount
+  const augmentedCategories = await Promise.all(categories.map(async (cat) => {
+    const [childCount, result, brandCount] = await Promise.all([
+      Category.countDocuments({ parentCategory: cat._id, isDeleted: false }),
+      Category.aggregate([
+        { $match: { _id: cat._id } },
+        {
+          $graphLookup: {
+            from: "categories",
+            startWith: "$_id",
+            connectFromField: "_id",
+            connectToField: "parentCategory",
+            as: "descendants"
+          }
+        },
+        {
+          $project: {
+            allCategoryIds: { $concatArrays: [["$_id"], "$descendants._id"] }
+          }
+        },
+        {
+          $lookup: {
+            from: "products",
+            localField: "allCategoryIds",
+            foreignField: "category",
+            as: "products",
+            pipeline: [
+              { $match: { isDeleted: false } },
+            ]
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            totalProducts: { $size: "$products" }
+          }
+        }
+      ]),
+      Brand.countDocuments({ category: cat._id, isDeleted: false }),
+    ]);
+    return { ...cat.toJSON(), childCount, productCount: result[0]?.totalProducts, brandCount };
+  }));
+
   const totalPages = Math.ceil(total / Number(limit));
   const result = {
-    categories,
+    categories: augmentedCategories,
     page: Number(page),
     limit: Number(limit),
     total,
@@ -113,7 +160,7 @@ export const getChildCategories = asyncHandler(async (req, res) => {
   const childCategories = await Category.find({
     parentCategory: parentCategoryId,
     isDeleted: false
-  });
+  }).select('_id title');
 
   await redis.set(cacheKey, childCategories, 3600);
 
