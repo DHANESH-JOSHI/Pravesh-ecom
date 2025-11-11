@@ -111,5 +111,5 @@ userSchema.index({ name: 'text', phone: 1, email: 'text' });
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ createdAt: -1 });
-exports.User = mongoose_1.default.model('User', userSchema);
+exports.User = mongoose_1.default.models.User || mongoose_1.default.model('User', userSchema);
 //# sourceMappingURL=user.model.js.map

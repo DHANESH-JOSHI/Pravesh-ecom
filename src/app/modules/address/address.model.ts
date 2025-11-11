@@ -81,4 +81,4 @@ addressSchema.virtual('orders', {
 
 addressSchema.index({ createdAt: -1 });
 
-export const Address = mongoose.model<IAddress>('Address', addressSchema);
+export const Address: mongoose.Model<IAddress> = mongoose.models.Address || mongoose.model<IAddress>('Address', addressSchema);

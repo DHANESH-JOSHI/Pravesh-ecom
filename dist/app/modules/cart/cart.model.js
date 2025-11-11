@@ -103,5 +103,5 @@ cartSchema.methods.getCartSummary = async function () {
     }, 0);
     return { totalItems, totalPrice };
 };
-exports.Cart = mongoose_1.default.model('Cart', cartSchema);
+exports.Cart = mongoose_1.default.models.Cart || mongoose_1.default.model('Cart', cartSchema);
 //# sourceMappingURL=cart.model.js.map

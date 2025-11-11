@@ -1,6 +1,7 @@
-import mongoose, { Schema } from "mongoose"
+import mongoose from "mongoose"
 import { IBrand } from './brand.interface'
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
+import { generateUniqueSlug } from "@/utils/slugify";
 
 const brandSchema = new mongoose.Schema<IBrand>(
   {
@@ -9,18 +10,20 @@ const brandSchema = new mongoose.Schema<IBrand>(
       required: true,
       unique: true
     },
+    slug: { type: String, required: true, unique: true, lowercase: true },
     image: {
       type: String,
-    },
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: 'Category',
-      required: true
     },
     isDeleted: {
       type: Boolean,
       default: false
     },
+    categories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+      }
+    ]
   },
   {
     timestamps: true,
@@ -36,6 +39,14 @@ brandSchema.virtual('products', {
   justOne: false,
   match: { isDeleted: false }
 });
+
+brandSchema.pre("validate", async function (next) {
+  if (!this.slug && this.name) {
+    this.slug = await generateUniqueSlug(this.name as any);
+  }
+  next();
+});
+
 brandSchema.index({ name: 'text' });
 brandSchema.index({ createdAt: -1, isDeleted: 1 });
-export const Brand = mongoose.model<IBrand>('Brand', brandSchema);
+export const Brand: mongoose.Model<IBrand> = mongoose.models.Brand || mongoose.model<IBrand>('Brand', brandSchema);

@@ -34,5 +34,5 @@ const reviewSchema = new mongoose_1.default.Schema({
 (0, mongooseToJSON_1.default)(reviewSchema);
 reviewSchema.index({ product: 1, createdAt: -1 });
 reviewSchema.index({ createdAt: -1 });
-exports.Review = mongoose_1.default.model('Review', reviewSchema);
+exports.Review = mongoose_1.default.models.Review || mongoose_1.default.model('Review', reviewSchema);
 //# sourceMappingURL=review.model.js.map

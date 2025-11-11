@@ -14,7 +14,6 @@ const category_model_1 = require("../category/category.model");
 const brand_model_1 = require("../brand/brand.model");
 const http_status_1 = __importDefault(require("http-status"));
 const mongoose_1 = __importDefault(require("mongoose"));
-const slugify_1 = require("../../utils/slugify");
 const ApiError = (0, interface_1.getApiErrorClass)("PRODUCT");
 const ApiResponse = (0, interface_1.getApiResponseClass)("PRODUCT");
 exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -34,15 +33,6 @@ exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
         if (!existingBrand) {
             throw new ApiError(http_status_1.default.BAD_REQUEST, 'Invalid brand ID');
         }
-    }
-    if (!productData.slug && productData.name) {
-        const base = (0, slugify_1.slugify)(productData.name);
-        let candidate = base;
-        let i = 1;
-        while (await product_model_1.Product.findOne({ slug: candidate })) {
-            candidate = `${base}-${i++}`;
-        }
-        productData.slug = candidate;
     }
     if (req.file) {
         productData.thumbnail = req.file.path;

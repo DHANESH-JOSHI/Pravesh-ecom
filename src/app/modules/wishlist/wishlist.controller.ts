@@ -72,7 +72,7 @@ export const removeProductFromWishlist = asyncHandler(async (req, res) => {
 
   const initialLength = wishlist.items.length;
   wishlist.items = wishlist.items.filter(
-    (id) => id.toString() !== productId.toString()
+    (id:any) => id.toString() !== productId.toString()
   );
 
   if (initialLength === wishlist.items.length) {

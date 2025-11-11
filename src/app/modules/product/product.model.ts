@@ -1,7 +1,8 @@
 import mongoose, { Schema } from "mongoose";
 import { IProduct } from "./product.interface";
-import { slugify } from "@/utils/slugify";
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
+import { generateUniqueSlug } from "@/utils/slugify";
+import { generateUniqueSKU } from "@/utils/skuify";
 
 const productSchema = new Schema<IProduct>(
   {
@@ -93,52 +94,6 @@ productSchema.index({ salesCount: -1 });
 //     doc.finalPrice = doc.originalPrice;
 //   }
 // };
-/**
- * Reserve a unique slug atomically using a per-base counter.
- *
- * Behavior:
- * - Uses a 'slug_counters' collection; each document _id is the base slug.
- * - findOneAndUpdate with $inc is atomic: first reservation yields seq=1 -> use base.
- *   subsequent reservations yield seq=2 -> base-1, seq=3 -> base-2, etc.
- *
- * This guarantees no two creations receive the same slug even under concurrency.
- */
-const reserveSlugAtomic = async (baseName: string) => {
-  const base = (slugify(baseName || "") || String(Date.now())).toString();
-  const coll = mongoose.connection.collection("slug_counters");
-  // Atomically increment sequence for this base slug
-  const res = await coll.findOneAndUpdate(
-    { _id: base } as any,
-    { $inc: { seq: 1 } },
-    { upsert: true, returnDocument: "after" }
-  );
-  const seq = res?.value && typeof res?.value.seq === "number" ? res.value.seq : 1;
-  if (seq === 1) {
-    return base;
-  }
-  // seq=2 => base-1, seq=3 => base-2, ...
-  return `${base}-${seq - 1}`;
-};
-
-/**
- * Produce a globally unique SKU using an atomic counter.
- *
- * Uses a single 'counters' collection and a document with _id 'product_sku'.
- * Each call atomically increments the counter and returns a formatted SKU.
- *
- * This guarantees every auto-generated SKU is unique under concurrency.
- */
-const nextSkuSequence = async () => {
-  const coll = mongoose.connection.collection("counters");
-  const res = await coll.findOneAndUpdate(
-    { _id: "product_sku" } as any,
-    { $inc: { seq: 1 } },
-    { upsert: true, returnDocument: "after" }
-  );
-  const seq = res?.value && typeof res.value.seq === "number" ? res.value.seq : Date.now();
-  // Format numeric SKU with padding, e.g., SKU000001
-  return `SKU${String(seq).padStart(6, "0")}`;
-};
 
 // productSchema.pre("findOneAndUpdate", function (next) {
 //   const update = this.getUpdate() as any;
@@ -173,6 +128,15 @@ const nextSkuSequence = async () => {
 //     .catch(next);
 // });
 
+productSchema.pre("validate", async function (next) {
+  if (!this.slug && this.name) {
+    this.slug = await generateUniqueSlug(this.name as any);
+  }
+  if (!this.sku && this.name) {
+    this.sku = await generateUniqueSKU();
+  }
+  next();
+});
 productSchema.pre("save", function (next) {
   // // ensure finalPrice and stockStatus
   // calculateFinalPrice(this);
@@ -183,56 +147,7 @@ productSchema.pre("save", function (next) {
   // } else if (this.stock >= this.minStock && this.stockStatus !== StockStatus.InStock) {
   //   this.stockStatus = StockStatus.InStock;
   // }
-
-  // Only generate slug and SKU on creation (isNew). Do not auto-update them on edits.
-  if (!this.isNew) {
-    return next();
-  }
-
-  // Only generate slug and sku on creation (isNew)
-  if (this.isNew) {
-    const tasks: Promise<void>[] = [];
-
-    // SLUG: if user provided a slug, normalize and reserve it; otherwise derive from name and reserve.
-    if (!this.slug && this.name) {
-      const base = slugify(this.name);
-      const p = reserveSlugAtomic(base)
-        .then((slug) => {
-          this.slug = slug;
-        });
-      tasks.push(p);
-    } else if (this.slug) {
-      // user provided a slug: normalize and attempt to reserve it atomically to avoid collisions
-      const baseProvided = slugify(this.slug);
-      const p = reserveSlugAtomic(baseProvided)
-        .then((reserved) => {
-          // If reservation changed (e.g., base -> base-1), assign that value
-          this.slug = reserved;
-        });
-      tasks.push(p);
-    }
-
-    // SKU: only auto-generate when not provided by user
-    if (!this.sku) {
-      const p2 = nextSkuSequence()
-        .then((sku) => {
-          this.sku = sku;
-        });
-      tasks.push(p2);
-    }
-
-    if (tasks.length === 0) {
-      return next();
-    }
-
-    Promise.all(tasks)
-      .then(() => next())
-      .catch((err) => next(err));
-
-    return;
-  }
-
   next();
 });
 
-export const Product = mongoose.model<IProduct>('Product', productSchema);
+export const Product: mongoose.Model<IProduct> =  mongoose.models.Product || mongoose.model<IProduct>('Product', productSchema);

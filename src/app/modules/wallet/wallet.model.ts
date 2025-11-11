@@ -39,4 +39,4 @@ const WalletSchema = new Schema<IWallet>(
 );
 applyMongooseToJSON(WalletSchema);
 
-export const Wallet = mongoose.model<IWallet>('Wallet', WalletSchema);
+export const Wallet: mongoose.Model<IWallet> =  mongoose.models.Wallet || mongoose.model<IWallet>('Wallet', WalletSchema);

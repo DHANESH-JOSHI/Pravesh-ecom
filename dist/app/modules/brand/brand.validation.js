@@ -9,6 +9,6 @@ exports.brandValidation = zod_1.z.object({
 });
 exports.brandUpdateValidation = zod_1.z.object({
     name: zod_1.z.string().min(2, "Name must be at least 2 characters long").optional(),
-    categoryId: category_validation_1.objectIdValidation.optional()
+    categoryIds: category_validation_1.objectIdValidation.array().optional()
 });
 //# sourceMappingURL=brand.validation.js.map

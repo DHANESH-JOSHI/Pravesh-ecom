@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Category = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const mongooseToJSON_1 = __importDefault(require("../../utils/mongooseToJSON"));
+const slugify_1 = require("../../utils/slugify");
 const categorySchema = new mongoose_1.Schema({
     title: {
         type: String,
@@ -46,9 +47,16 @@ const categorySchema = new mongoose_1.Schema({
         trim: true,
         unique: true
     },
+    slug: { type: String, required: true, unique: true, lowercase: true },
     // image: {
     //   type: String,
     // },
+    brands: [
+        {
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: 'Brand',
+        }
+    ],
     isDeleted: {
         type: Boolean,
         default: false
@@ -57,7 +65,12 @@ const categorySchema = new mongoose_1.Schema({
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Category',
         default: null
-    }
+    },
+    path: [
+        {
+            type: String
+        }
+    ]
 }, {
     timestamps: true,
 });
@@ -76,17 +89,28 @@ categorySchema.virtual('products', {
     justOne: false,
     match: { isDeleted: false }
 });
-categorySchema.virtual('brands', {
-    ref: 'Brand',
-    localField: '_id',
-    foreignField: 'category',
-    justOne: false,
-    match: { isDeleted: false }
-});
 categorySchema.index({ createdAt: -1 });
 categorySchema.index({ title: 'text' });
 categorySchema.index({ parentCategory: -1 });
 categorySchema.index({ isDeleted: -1 });
 categorySchema.index({ parentCategory: 1, title: 1 }, { unique: true });
-exports.Category = mongoose_1.default.model('Category', categorySchema);
+categorySchema.pre("validate", async function (next) {
+    if (!this.slug && this.title) {
+        this.slug = await (0, slugify_1.generateUniqueSlug)(this.title);
+    }
+    next();
+});
+categorySchema.pre("save", async function (next) {
+    if (this.parentCategory) {
+        const parent = await mongoose_1.default.model("Category").findById(this.parentCategory);
+        if (parent) {
+            this.path = [...parent.path, this.slug];
+        }
+    }
+    else {
+        this.path = [this.slug];
+    }
+    next();
+});
+exports.Category = mongoose_1.default.models.Category || mongoose_1.default.model('Category', categorySchema);
 //# sourceMappingURL=category.model.js.map

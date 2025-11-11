@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 import { IWishlist } from './wishlist.interface';
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
 
@@ -23,4 +23,4 @@ const WishlistSchema = new Schema<IWishlist>(
 );
 applyMongooseToJSON(WishlistSchema);
 
-export const Wishlist = model<IWishlist>('Wishlist', WishlistSchema);
+export const Wishlist: mongoose.Model<IWishlist> = mongoose.models.Wishlist || mongoose.model<IWishlist>('Wishlist', WishlistSchema);

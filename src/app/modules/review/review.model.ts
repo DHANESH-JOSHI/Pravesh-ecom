@@ -36,4 +36,4 @@ applyMongooseToJSON(reviewSchema);
 reviewSchema.index({ product: 1, createdAt: -1 });
 reviewSchema.index({ createdAt: -1 });
 
-export const Review = mongoose.model<IReview>('Review', reviewSchema)
+export const Review: mongoose.Model<IReview> =  mongoose.models.Review || mongoose.model<IReview>('Review', reviewSchema)

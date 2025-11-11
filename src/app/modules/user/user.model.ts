@@ -86,4 +86,4 @@ userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ createdAt: -1 });
 
-export const User = mongoose.model<IUser>('User', userSchema);
+export const User: mongoose.Model<IUser> =  mongoose.models.User || mongoose.model<IUser>('User', userSchema);

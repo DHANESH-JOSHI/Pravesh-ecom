@@ -72,5 +72,5 @@ const OrderSchema = new mongoose_1.Schema({
 OrderSchema.index({ user: 1, status: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });
-exports.Order = mongoose_1.default.model('Order', OrderSchema);
+exports.Order = mongoose_1.default.models.Order || mongoose_1.default.model('Order', OrderSchema);
 //# sourceMappingURL=order.model.js.map

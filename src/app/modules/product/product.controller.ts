@@ -9,7 +9,6 @@ import { Brand } from '../brand/brand.model';
 import { IProductQuery } from './product.interface';
 import status from 'http-status';
 import mongoose from 'mongoose';
-import { slugify } from '@/utils/slugify';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
 
@@ -31,16 +30,6 @@ export const createProduct = asyncHandler(async (req, res) => {
     if (!existingBrand) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid brand ID');
     }
-  }
-
-  if (!productData.slug && productData.name) {
-    const base = slugify(productData.name);
-    let candidate = base;
-    let i = 1;
-    while (await Product.findOne({ slug: candidate })) {
-      candidate = `${base}-${i++}`;
-    }
-    productData.slug = candidate;
   }
 
   if (req.file) {

@@ -68,5 +68,5 @@ const WalletSchema = new mongoose_1.Schema({
     timestamps: true,
 });
 (0, mongooseToJSON_1.default)(WalletSchema);
-exports.Wallet = mongoose_1.default.model('Wallet', WalletSchema);
+exports.Wallet = mongoose_1.default.models.Wallet || mongoose_1.default.model('Wallet', WalletSchema);
 //# sourceMappingURL=wallet.model.js.map

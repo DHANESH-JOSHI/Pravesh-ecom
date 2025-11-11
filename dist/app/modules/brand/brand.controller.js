@@ -12,7 +12,7 @@ const utils_1 = require("../../utils");
 const interface_1 = require("../../interface");
 const mongoose_1 = __importDefault(require("mongoose"));
 const http_status_1 = __importDefault(require("http-status"));
-const category_model_1 = require("../category/category.model");
+// import { Category } from "../category/category.model";
 const product_model_1 = require("../product/product.model");
 const ApiError = (0, interface_1.getApiErrorClass)("BRAND");
 const ApiResponse = (0, interface_1.getApiResponseClass)("BRAND");
@@ -129,13 +129,12 @@ exports.getBrandById = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.updateBrandById = (0, utils_1.asyncHandler)(async (req, res) => {
     const brandId = req.params.id;
-    const { name, categoryId } = brand_validation_1.brandUpdateValidation.parse(req.body);
+    const { name } = brand_validation_1.brandUpdateValidation.parse(req.body);
     if (!mongoose_1.default.Types.ObjectId.isValid(brandId)) {
         throw new ApiError(http_status_1.default.BAD_REQUEST, "Invalid brand ID");
     }
     const brand = await brand_model_1.Brand.findOne({
         _id: brandId,
-        category: categoryId,
         isDeleted: false,
     });
     if (!brand) {
@@ -153,17 +152,6 @@ exports.updateBrandById = (0, utils_1.asyncHandler)(async (req, res) => {
             }
         }
     }
-    if (categoryId) {
-        if (categoryId !== brand.category) {
-            const existingCategory = await category_model_1.Category.findOne({
-                _id: categoryId,
-                isDeleted: false,
-            });
-            if (!existingCategory) {
-                throw new ApiError(http_status_1.default.BAD_REQUEST, "Category with this id does not exist");
-            }
-        }
-    }
     if (req.file) {
         if (brand.image) {
             const publicId = brand.image.split("/").pop()?.split(".")[0];
@@ -174,12 +162,11 @@ exports.updateBrandById = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     const updatedBrand = await brand_model_1.Brand.findByIdAndUpdate(brandId, {
         name,
-        category: categoryId,
         image: req.file ? req.file.path : brand.image,
     }, { new: true });
     await redis_1.redis.deleteByPattern("brands*");
     await redis_1.redis.deleteByPattern(`brand:${brandId}*`);
-    await redis_1.redis.delete(`category:${categoryId}?populate=true`);
+    // await redis.delete(`category:${categoryId}?populate=true`)  TODO : Handle multiple categories
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Brand updated successfully", updatedBrand));
     return;
 });

@@ -109,5 +109,5 @@ addressSchema.virtual('orders', {
     justOne: false
 });
 addressSchema.index({ createdAt: -1 });
-exports.Address = mongoose_1.default.model('Address', addressSchema);
+exports.Address = mongoose_1.default.models.Address || mongoose_1.default.model('Address', addressSchema);
 //# sourceMappingURL=address.model.js.map

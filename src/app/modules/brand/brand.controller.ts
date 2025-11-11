@@ -6,7 +6,7 @@ import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import status from "http-status";
-import { Category } from "../category/category.model";
+// import { Category } from "../category/category.model";
 import { Product } from "../product/product.model";
 const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
@@ -139,13 +139,12 @@ export const getBrandById = asyncHandler(async (req, res) => {
 
 export const updateBrandById = asyncHandler(async (req, res) => {
   const brandId = req.params.id;
-  const { name, categoryId } = brandUpdateValidation.parse(req.body);
+  const { name } = brandUpdateValidation.parse(req.body);
   if (!mongoose.Types.ObjectId.isValid(brandId)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
   }
   const brand = await Brand.findOne({
     _id: brandId,
-    category: categoryId,
     isDeleted: false,
   });
 
@@ -167,18 +166,6 @@ export const updateBrandById = asyncHandler(async (req, res) => {
     }
   }
 
-  if (categoryId) {
-    if (categoryId !== brand.category) {
-      const existingCategory = await Category.findOne({
-        _id: categoryId,
-        isDeleted: false,
-      });
-      if (!existingCategory) {
-        throw new ApiError(status.BAD_REQUEST, "Category with this id does not exist");
-      }
-    }
-  }
-
   if (req.file) {
     if (brand.image) {
       const publicId = brand.image.split("/").pop()?.split(".")[0];
@@ -191,7 +178,6 @@ export const updateBrandById = asyncHandler(async (req, res) => {
     brandId,
     {
       name,
-      category: categoryId,
       image: req.file ? req.file.path : brand.image,
     },
     { new: true }
@@ -199,7 +185,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern("brands*");
   await redis.deleteByPattern(`brand:${brandId}*`);
-  await redis.delete(`category:${categoryId}?populate=true`)
+  // await redis.delete(`category:${categoryId}?populate=true`)  TODO : Handle multiple categories
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)

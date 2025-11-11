@@ -40,4 +40,4 @@ OrderSchema.index({ user: 1, status: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });
 
-export const Order = mongoose.model<IOrder>('Order', OrderSchema);
+export const Order: mongoose.Model<IOrder> =  mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);

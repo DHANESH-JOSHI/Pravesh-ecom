@@ -99,4 +99,4 @@ cartSchema.methods.getCartSummary = async function (this: ICart) {
   return { totalItems, totalPrice };
 }
 
-export const Cart = mongoose.model<ICart, ICartModel>('Cart', cartSchema);
+export const Cart: mongoose.Model<ICart> = mongoose.models.Cart || mongoose.model<ICart, ICartModel>('Cart', cartSchema);
