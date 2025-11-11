@@ -1,0 +1,265 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.resetPassword = exports.checkEmailExists = exports.checkPhoneExists = exports.deleteUser = exports.recoverUser = exports.updatePassword = exports.getUserById = exports.getAllUsers = exports.updateUser = exports.getMe = exports.createUser = void 0;
+const user_model_1 = require("./user.model");
+const user_validation_1 = require("./user.validation");
+const utils_1 = require("../../utils");
+const interface_1 = require("../../interface");
+const http_status_1 = __importDefault(require("http-status"));
+const redis_1 = require("../../config/redis");
+const mongoose_1 = __importDefault(require("mongoose"));
+const user_interface_1 = require("./user.interface");
+const auth_validation_1 = require("../auth/auth.validation");
+const ApiError = (0, interface_1.getApiErrorClass)("USER");
+const ApiResponse = (0, interface_1.getApiResponseClass)("USER");
+exports.createUser = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { name, password, img, phone, email } = auth_validation_1.registerValidation.parse(req.body);
+    const session = await mongoose_1.default.startSession();
+    session.startTransaction();
+    try {
+        let user = await user_model_1.User.findOne({ $or: [{ phone }, { email }] }).session(session);
+        if (user) {
+            throw new ApiError(http_status_1.default.BAD_REQUEST, "User already exists with this phone or email.");
+        }
+        user = new user_model_1.User({ name, password, img, phone, email, status: user_interface_1.UserStatus.ACTIVE });
+        await user.save({ session });
+        await session.commitTransaction();
+        session.endSession();
+        const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
+        res
+            .status(http_status_1.default.CREATED)
+            .json(new ApiResponse(http_status_1.default.CREATED, `User created and verified successfully.`, userObject));
+    }
+    catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        throw error;
+    }
+});
+exports.getMe = (0, utils_1.asyncHandler)(async (req, res) => {
+    const userId = req.user?._id;
+    const cacheKey = `user:${userId}`;
+    const cachedUser = await redis_1.redis.get(cacheKey);
+    if (cachedUser) {
+        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "User profile retrieved successfully", cachedUser));
+    }
+    const user = await user_model_1.User.findById(userId, { password: 0 });
+    if (!user) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    await redis_1.redis.set(cacheKey, user, 600);
+    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "User profile retrieved successfully", user));
+    return;
+});
+exports.updateUser = (0, utils_1.asyncHandler)(async (req, res) => {
+    const userId = req.user?._id;
+    const validatedData = user_validation_1.updateUserValidation.parse(req.body);
+    if (validatedData.email && validatedData.email.length > 0) {
+        const existingUser = await user_model_1.User.findOne({
+            email: validatedData.email,
+            _id: { $ne: userId }
+        });
+        if (existingUser) {
+            throw new ApiError(http_status_1.default.BAD_REQUEST, "Email already exists");
+        }
+    }
+    if (validatedData.email === '') {
+        delete validatedData.email;
+    }
+    const updatedUser = await user_model_1.User.findByIdAndUpdate(userId, validatedData, { new: true, select: '-password' });
+    if (!updatedUser) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    await redis_1.redis.deleteByPattern(`user:${userId}*`);
+    await redis_1.redis.deleteByPattern('users*');
+    await redis_1.redis.delete('dashboard:stats');
+    res.json(new ApiResponse(http_status_1.default.OK, "User updated successfully", updatedUser));
+    return;
+});
+exports.getAllUsers = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { page = 1, limit = 10, search, role, status: userStatus, isDeleted } = req.query;
+    const cacheKey = (0, utils_1.generateCacheKey)('users', req.query);
+    const cachedUsers = await redis_1.redis.get(cacheKey);
+    if (cachedUsers) {
+        return res.json(new ApiResponse(http_status_1.default.OK, "Users retrieved successfully", cachedUsers));
+    }
+    const filter = {};
+    if (search) {
+        filter.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } }
+        ];
+    }
+    if (role)
+        filter.role = role;
+    if (userStatus)
+        filter.status = userStatus;
+    if (isDeleted !== undefined) {
+        filter.isDeleted = isDeleted === 'true';
+    }
+    else {
+        filter.isDeleted = false;
+    }
+    const skip = (Number(page) - 1) * Number(limit);
+    const [users, total] = await Promise.all([
+        user_model_1.User.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit)),
+        user_model_1.User.countDocuments(filter),
+    ]);
+    const totalPages = Math.ceil(total / Number(limit));
+    const result = {
+        users,
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages,
+    };
+    await redis_1.redis.set(cacheKey, result, 600);
+    res.json(new ApiResponse(http_status_1.default.OK, "Users retrieved successfully", result));
+    return;
+});
+exports.getUserById = (0, utils_1.asyncHandler)(async (req, res) => {
+    const userId = req.params.id;
+    const { populate = 'false' } = req.query;
+    const cacheKey = (0, utils_1.generateCacheKey)(`user:${userId}`, req.query);
+    const cachedUser = await redis_1.redis.get(cacheKey);
+    if (cachedUser) {
+        return res.json(new ApiResponse(http_status_1.default.OK, "User retrieved successfully", cachedUser));
+    }
+    let user;
+    if (populate == 'true') {
+        user = await user_model_1.User.findById(userId, { password: 0 }).populate([
+            {
+                path: 'reviews',
+                options: { limit: 5, sort: { createdAt: -1 } },
+            },
+            {
+                path: 'addresses',
+                options: { limit: 5 },
+            },
+            {
+                path: 'orders',
+                options: { limit: 5, sort: { createdAt: -1 } },
+            },
+            {
+                path: 'wallet',
+            },
+            {
+                path: 'cart',
+            },
+            {
+                path: 'wishlist',
+            },
+        ]);
+    }
+    else {
+        user = await user_model_1.User.findById(userId, { password: 0 });
+    }
+    if (!user) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    await redis_1.redis.set(cacheKey, user, 600);
+    res.json(new ApiResponse(http_status_1.default.OK, "User retrieved successfully", user));
+    return;
+});
+exports.updatePassword = (0, utils_1.asyncHandler)(async (req, res) => {
+    const userId = req.user?._id;
+    const { currentPassword, newPassword } = user_validation_1.updatePasswordValidation.parse(req.body);
+    const user = await user_model_1.User.findById(userId);
+    if (!user) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    const isPasswordCorrect = await user.comparePassword(currentPassword);
+    if (!isPasswordCorrect) {
+        throw new ApiError(http_status_1.default.BAD_REQUEST, "Incorrect password");
+    }
+    user.password = newPassword;
+    await user.save();
+    res.json(new ApiResponse(http_status_1.default.OK, "Password reset successfully"));
+    return;
+});
+exports.recoverUser = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { id } = req.params;
+    const user = await user_model_1.User.findById(id);
+    if (!user) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    if (!user.isDeleted) {
+        throw new ApiError(http_status_1.default.BAD_REQUEST, "User is already active");
+    }
+    user.isDeleted = false;
+    await user.save();
+    await redis_1.redis.deleteByPattern(`user:${id}*`);
+    await redis_1.redis.deleteByPattern('users*');
+    await redis_1.redis.delete('dashboard:stats');
+    res.json(new ApiResponse(http_status_1.default.OK, "User recovered successfully"));
+    return;
+});
+exports.deleteUser = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { id } = req.params;
+    const user = await user_model_1.User.findOne({ _id: id, isDeleted: false });
+    if (!user) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    user.isDeleted = true;
+    await user.save();
+    await redis_1.redis.deleteByPattern(`user:${id}*`);
+    await redis_1.redis.deleteByPattern('users*');
+    await redis_1.redis.delete('dashboard:stats');
+    res.json(new ApiResponse(http_status_1.default.OK, "User deleted successfully"));
+    return;
+});
+exports.checkPhoneExists = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { phone } = user_validation_1.phoneCheckValidation.parse(req.params);
+    const cacheKey = `user:phone:${phone}`;
+    const cachedResult = await redis_1.redis.get(cacheKey);
+    if (cachedResult !== null) {
+        return res.json(new ApiResponse(http_status_1.default.OK, "Phone number exists", cachedResult));
+    }
+    const user = await user_model_1.User.findOne({ phone });
+    const exists = !!user;
+    await redis_1.redis.set(cacheKey, exists, 300);
+    if (!exists) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "Phone number not found");
+    }
+    res.json(new ApiResponse(http_status_1.default.OK, "Phone number exists", true));
+    return;
+});
+exports.checkEmailExists = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { email } = user_validation_1.emailCheckValidation.parse(req.params);
+    const cacheKey = `user:email:${email}`;
+    const cachedResult = await redis_1.redis.get(cacheKey);
+    if (cachedResult !== null) {
+        return res.json(new ApiResponse(http_status_1.default.OK, "Email exists", cachedResult));
+    }
+    const user = await user_model_1.User.findOne({ email });
+    const exists = !!user;
+    await redis_1.redis.set(cacheKey, exists, 300);
+    if (!exists) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "Email not found");
+    }
+    res.json(new ApiResponse(http_status_1.default.OK, "Email exists", true));
+    return;
+});
+exports.resetPassword = (0, utils_1.asyncHandler)(async (req, res) => {
+    const userId = req.user?._id;
+    const { otp, newPassword } = user_validation_1.resetPasswordValidation.parse(req.body);
+    const user = await user_model_1.User.findById(userId);
+    if (!user || user.isDeleted) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
+    if (!user.compareOtp(otp)) {
+        throw new ApiError(http_status_1.default.BAD_REQUEST, "Invalid or expired OTP");
+    }
+    user.password = newPassword;
+    await user.save();
+    res.json(new ApiResponse(http_status_1.default.OK, "Password reset successfully"));
+    return;
+});
+//# sourceMappingURL=user.controller.js.map
