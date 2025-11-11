@@ -5,7 +5,10 @@
   "scripts": {
     "start": "bun ./dist/server.js",
     "dev": "bun --watch src/server.ts",
-    "build": "tsc && tsc-alias",
+    "prebuild": "echo '🏗️  Building TypeScript project...'",
+    "build": "npx tsc && npx tsc-alias",
+    "postbuild": "node -e \"const fs=require('fs');const cp=require('child_process');if(fs.existsSync('./dist')){const f=cp.execSync('find dist -name \\\"*.js\\\" 2>/dev/null|wc -l').toString().trim();const s=cp.execSync('du -sh dist 2>/dev/null').toString().split('\\t')[0];console.log('\\n✅ Build Successful!\\n');console.log('📊 Build Statistics:');console.log('   📦 '+f+' JavaScript files created');console.log('   💾 Total size: '+s);console.log('\\n✨ Ready to deploy! Run: npm start\\n');}else{console.log('\\n❌ Build failed - dist folder not created\\n');}\"",
+    "build:clean": "rm -rf dist && npm run build",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix"
   },
@@ -29,7 +32,6 @@
     "multer-storage-cloudinary": "^4.0.0",
     "redis": "^5.8.3",
     "resend": "^6.1.3",
-    "slugify": "^1.6.6",
     "winston": "^3.18.3",
     "winston-mongodb": "^7.0.1",
     "zod": "^4.1.12"
