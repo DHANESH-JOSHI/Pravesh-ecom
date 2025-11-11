@@ -12,11 +12,10 @@ const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
 
 export const createBrand = asyncHandler(async (req, res) => {
-  const { name, categoryId } = brandValidation.parse(req.body);
+  const { name, categoryIds } = brandValidation.parse(req.body);
 
   let existingBrand = await Brand.findOne({
     name,
-    category: categoryId
   });
   if (existingBrand) {
     if (!existingBrand.isDeleted) {
@@ -32,7 +31,7 @@ export const createBrand = asyncHandler(async (req, res) => {
   if (!existingBrand) {
     existingBrand = await Brand.create({
       name,
-      category: categoryId,
+      categories: categoryIds || [],
       image
     });
   } else {
@@ -42,12 +41,13 @@ export const createBrand = asyncHandler(async (req, res) => {
         await cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
       }
     }
+    existingBrand.categories = categoryIds || [];
     existingBrand.image = image;
     await existingBrand.save();
   }
 
   await redis.deleteByPattern("brands*");
-  await redis.delete(`category:${categoryId}?populate=true`)
+  // await redis.delete(`category:${categoryId}?populate=true`)  TODO : Handle multiple categories
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", existingBrand));
   return;
@@ -76,7 +76,9 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     Brand.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit)).populate('category', '_id title'),
+      .limit(Number(limit))
+    // .populate('categories', '_id slug title')
+    ,
     Brand.countDocuments(filter),
   ]);
   // Augment categories with childCount, productCount and brandCount
@@ -119,12 +121,12 @@ export const getBrandById = asyncHandler(async (req, res) => {
     brand = await Brand.findOne({
       _id: brandId,
       isDeleted: false,
-    }).populate('products category');
+    }).populate('products categories');
   } else {
     brand = await Brand.findOne({
       _id: brandId,
       isDeleted: false,
-    }).populate('category');
+    })
   }
 
   if (!brand) {
@@ -139,7 +141,7 @@ export const getBrandById = asyncHandler(async (req, res) => {
 
 export const updateBrandById = asyncHandler(async (req, res) => {
   const brandId = req.params.id;
-  const { name } = brandUpdateValidation.parse(req.body);
+  const { name, categoryIds } = brandUpdateValidation.parse(req.body);
   if (!mongoose.Types.ObjectId.isValid(brandId)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
   }
@@ -179,6 +181,7 @@ export const updateBrandById = asyncHandler(async (req, res) => {
     {
       name,
       image: req.file ? req.file.path : brand.image,
+      categories: categoryIds || brand.categories ,
     },
     { new: true }
   );
