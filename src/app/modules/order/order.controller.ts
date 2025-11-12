@@ -386,12 +386,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         {
           $inc: {
             salesCount: 1,
-            totalSold: 1,
+            totalSold: item.quantity,
           }
-        });
+        })
     }
-    await redis.deleteByPattern('products:best-selling*');
-    await redis.deleteByPattern('products:trending*');
     await redis.deleteByPattern('products*')
   }
 

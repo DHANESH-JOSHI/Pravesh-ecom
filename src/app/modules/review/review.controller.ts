@@ -10,9 +10,9 @@ import { redis } from "@/config/redis";
 const ApiError = getApiErrorClass("REVIEW")
 const ApiResponse = getApiResponseClass("REVIEW")
 
-const updateProductRating = async (productId: mongoose.Types.ObjectId, session?: mongoose.ClientSession) => {
+const updateProductRating = async (productId: string, session: mongoose.ClientSession) => {
   const stats = await Review.aggregate([
-    { $match: { product: productId } },
+    { $match: { product: new mongoose.Types.ObjectId(productId) } },
     {
       $group: {
         _id: '$product',
@@ -20,7 +20,7 @@ const updateProductRating = async (productId: mongoose.Types.ObjectId, session?:
         rating: { $avg: '$rating' }
       }
     }
-  ]);
+  ]).session(session);
 
   let reviewCount = 0;
   let rating = 0;
@@ -85,7 +85,6 @@ export const createReview = asyncHandler(async (req, res) => {
     await session.commitTransaction();
 
     await redis.deleteByPattern(`reviews:product:${productId}*`);
-    await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
     await redis.delete(`product:${review.product}?populate=true`);
     await redis.delete(`user:${userId}?populate=true`);
@@ -144,7 +143,6 @@ export const getProductReviews = asyncHandler(async (req, res) => {
   res.status(status.OK).json(new ApiResponse(status.OK, "Reviews retrieved successfully", result))
   return;
 })
-
 
 export const getAllReviews = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, rating, user, product, search } = req.query;
@@ -267,14 +265,13 @@ export const updateReview = asyncHandler(async (req, res) => {
     existingReview.rating = rating ?? existingReview.rating;
     existingReview.comment = comment ?? existingReview.comment;
     await existingReview.save({ session });
-
-    await updateProductRating(existingReview.product, session);
+    await updateProductRating(existingReview.product.toString(), session);
 
     await session.commitTransaction();
 
     await redis.delete(`review:${reviewId}`);
-    await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.delete(`product:${existingReview.product}?populate=true`);
+    await redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
+    await redis.delete(`product:${existingReview.product.toString()}?populate=true`);
     await redis.delete(`user:${userId}?populate=true`);
     await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
@@ -305,13 +302,13 @@ export const deleteReview = asyncHandler(async (req, res) => {
     }
     await existingReview.deleteOne({ session });
 
-    await updateProductRating(existingReview.product, session);
+    await updateProductRating(existingReview.product.toString(), session);
 
     await session.commitTransaction();
 
     await redis.delete(`review:${reviewId}`);
-    await redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-    await redis.delete(`product:${existingReview.product}?populate=true`);
+    await redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
+    await redis.delete(`product:${existingReview.product.toString()}?populate=true`);
     await redis.delete(`user:${userId}?populate=true`);
     await redis.deleteByPattern('reviews:all*');
     await redis.deleteByPattern(`reviews:user:${userId}*`);
