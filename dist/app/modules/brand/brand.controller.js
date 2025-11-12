@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBrand = exports.updateBrand = exports.getBrandBySlug = exports.getBrandById = exports.getAllBrands = exports.createBrand = void 0;
+exports.getLeafCategoryIds = exports.deleteBrand = exports.updateBrand = exports.getBrandBySlug = exports.getBrandById = exports.getAllBrands = exports.createBrand = void 0;
 const redis_1 = require("../../config/redis");
 const brand_model_1 = require("./brand.model");
 const brand_validation_1 = require("./brand.validation");
@@ -28,21 +28,24 @@ exports.createBrand = (0, utils_1.asyncHandler)(async (req, res) => {
             await cloudinary_1.cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
     }
     const image = req.file ? req.file.path : brand?.image || undefined;
+    const expandedLeafIds = categoryIds?.length
+        ? await expandToLeafCategories(categoryIds)
+        : [];
     if (!brand) {
         brand = await brand_model_1.Brand.create({
             name,
-            categories: categoryIds || [],
+            categories: expandedLeafIds,
             image,
         });
     }
     else {
         brand.isDeleted = false;
         brand.name = name;
-        brand.categories = categoryIds || [];
+        brand.categories = expandedLeafIds;
         brand.image = image;
         await brand.save();
     }
-    await syncBrandCategories(brand._id, categoryIds || []);
+    await syncBrandCategories(brand._id, expandedLeafIds);
     await redis_1.redis.deleteByPattern("brands*");
     res
         .status(http_status_1.default.CREATED)
@@ -60,8 +63,10 @@ exports.getAllBrands = (0, utils_1.asyncHandler)(async (req, res) => {
     const filter = { isDeleted: isDeleted === "true" };
     if (search)
         filter.$text = { $search: search };
-    if (categoryId)
-        filter.categories = categoryId;
+    if (categoryId) {
+        const allCategoryIds = await (0, exports.getLeafCategoryIds)(categoryId);
+        filter.categories = { $in: allCategoryIds };
+    }
     const sortOrder = order === "asc" ? 1 : -1;
     const sortObj = { [sort]: sortOrder };
     const [brands, total] = await Promise.all([
@@ -137,10 +142,14 @@ exports.updateBrand = (0, utils_1.asyncHandler)(async (req, res) => {
         if (publicId)
             await cloudinary_1.cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
     }
+    const expandedLeafIds = categoryIds?.length
+        ? await expandToLeafCategories(categoryIds)
+        : [];
     brand.name = name || brand.name;
     brand.image = req.file ? req.file.path : brand.image;
-    brand.categories = categoryIds || brand.categories;
+    brand.categories = expandedLeafIds;
     await brand.save();
+    await syncBrandCategories(brand._id, expandedLeafIds);
     await redis_1.redis.deleteByPattern("brands*");
     await redis_1.redis.deleteByPattern(`brand:${id}*`);
     for (const categoryId of brand.categories) {
@@ -168,10 +177,61 @@ exports.deleteBrand = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Brand deleted successfully", brand));
 });
-async function syncBrandCategories(brandId, newCategoryIds) {
+const syncBrandCategories = async (brandId, newCategoryIds) => {
     await category_model_1.Category.updateMany({ brands: brandId, _id: { $nin: newCategoryIds } }, { $pull: { brands: brandId } });
     if (newCategoryIds.length > 0) {
         await category_model_1.Category.updateMany({ _id: { $in: newCategoryIds } }, { $addToSet: { brands: brandId } });
     }
-}
+};
+const expandToLeafCategories = async (categoryIds) => {
+    const leafIds = new Set();
+    for (const id of categoryIds) {
+        const descendants = await (0, exports.getLeafCategoryIds)(id);
+        for (const d of descendants)
+            leafIds.add(d);
+    }
+    return Array.from(leafIds);
+};
+const getLeafCategoryIds = async (categoryId) => {
+    const categoryObjectId = new mongoose_1.default.Types.ObjectId(categoryId);
+    const result = await category_model_1.Category.aggregate([
+        { $match: { _id: categoryObjectId, isDeleted: false } },
+        {
+            $graphLookup: {
+                from: "categories",
+                startWith: "$_id",
+                connectFromField: "_id",
+                connectToField: "parentCategory",
+                as: "descendants",
+                restrictSearchWithMatch: { isDeleted: false },
+            },
+        },
+        {
+            $project: {
+                leafIds: {
+                    $map: {
+                        input: {
+                            $filter: {
+                                input: { $concatArrays: [["$_id"], "$descendants._id"] },
+                                as: "cat",
+                                cond: {
+                                    $not: {
+                                        $in: ["$$cat", "$descendants.parentCategory"],
+                                    },
+                                },
+                            },
+                        },
+                        as: "leaf",
+                        in: "$$leaf",
+                    },
+                },
+            },
+        },
+    ]);
+    const leafIds = result[0]?.leafIds?.length > 0
+        ? result[0].leafIds.map((id) => id.toString())
+        : [categoryId];
+    return leafIds;
+};
+exports.getLeafCategoryIds = getLeafCategoryIds;
 //# sourceMappingURL=brand.controller.js.map

@@ -55,11 +55,18 @@ exports.getAllCategories = (0, utils_1.asyncHandler)(async (req, res) => {
             .sort({ [sort]: order === "desc" ? -1 : 1 })
             .skip(skip)
             .limit(Number(limit))
-            .select("title slug parentCategory createdAt"),
+            .populate("parentCategory", "slug title"),
         category_model_1.Category.countDocuments(filter),
     ]);
+    const augmented = await Promise.all(categories.map(async (c) => {
+        const [productCount, childCount] = await Promise.all([
+            product_model_1.Product.countDocuments({ category: c._id, isDeleted: false }),
+            category_model_1.Category.countDocuments({ parentCategory: c._id, isDeleted: false }),
+        ]);
+        return { ...c.toJSON(), productCount, childCount };
+    }));
     const totalPages = Math.ceil(total / Number(limit));
-    const result = { categories, total, page: Number(page), totalPages };
+    const result = { categories: augmented, total, page: Number(page), totalPages };
     await redis_1.redis.set(cacheKey, result, 3600);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Categories retrieved", result));
 });
@@ -102,13 +109,13 @@ exports.getCategoryById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     if (!mongoose_1.default.Types.ObjectId.isValid(id))
         throw new ApiError(http_status_1.default.BAD_REQUEST, "Invalid category ID");
-    const cacheKey = `category:${id}`;
+    const cacheKey = (0, utils_1.generateCacheKey)(`category:${id}`, req.query);
     const cached = await redis_1.redis.get(cacheKey);
     if (cached)
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Category retrieved", cached));
-    const category = await category_model_1.Category.findOne({ _id: id, isDeleted: false })
-        .populate("parentCategory", "slug title")
-        .populate("brands", "slug name");
+    const { populate = "false" } = req.query;
+    const query = category_model_1.Category.findOne({ _id: id, isDeleted: false });
+    const category = populate === "true" ? await query.populate("parentCategory children brands") : await query.populate("parentCategory", "slug title");
     if (!category)
         throw new ApiError(http_status_1.default.NOT_FOUND, "Category not found");
     await redis_1.redis.set(cacheKey, category, 3600);
@@ -116,13 +123,13 @@ exports.getCategoryById = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getCategoryBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
     const { slug } = req.params;
-    const cacheKey = `category:${slug}`;
+    const cacheKey = (0, utils_1.generateCacheKey)(`category:${slug}`, req.query);
     const cached = await redis_1.redis.get(cacheKey);
     if (cached)
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Category retrieved", cached));
-    const category = await category_model_1.Category.findOne({ slug, isDeleted: false })
-        .populate("parentCategory", "slug title")
-        .populate("brands", "slug name");
+    const { populate = "false" } = req.query;
+    const query = category_model_1.Category.findOne({ slug, isDeleted: false });
+    const category = populate === "true" ? await query.populate("parentCategory children brands") : await query.populate("parentCategory", "slug title");
     if (!category)
         throw new ApiError(http_status_1.default.NOT_FOUND, "Category not found");
     await redis_1.redis.set(cacheKey, category, 3600);

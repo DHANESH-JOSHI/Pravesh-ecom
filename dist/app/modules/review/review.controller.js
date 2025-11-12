@@ -17,7 +17,7 @@ const ApiError = (0, interface_1.getApiErrorClass)("REVIEW");
 const ApiResponse = (0, interface_1.getApiResponseClass)("REVIEW");
 const updateProductRating = async (productId, session) => {
     const stats = await review_model_1.Review.aggregate([
-        { $match: { product: productId } },
+        { $match: { product: new mongoose_1.default.Types.ObjectId(productId) } },
         {
             $group: {
                 _id: '$product',
@@ -25,7 +25,7 @@ const updateProductRating = async (productId, session) => {
                 rating: { $avg: '$rating' }
             }
         }
-    ]);
+    ]).session(session);
     let reviewCount = 0;
     let rating = 0;
     if (stats.length > 0) {
@@ -75,7 +75,6 @@ exports.createReview = (0, utils_1.asyncHandler)(async (req, res) => {
         await updateProductRating(productId, session);
         await session.commitTransaction();
         await redis_1.redis.deleteByPattern(`reviews:product:${productId}*`);
-        await redis_1.redis.deleteByPattern('reviews:all*');
         await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);
         await redis_1.redis.delete(`product:${review.product}?populate=true`);
         await redis_1.redis.delete(`user:${userId}?populate=true`);
@@ -234,11 +233,11 @@ exports.updateReview = (0, utils_1.asyncHandler)(async (req, res) => {
         existingReview.rating = rating ?? existingReview.rating;
         existingReview.comment = comment ?? existingReview.comment;
         await existingReview.save({ session });
-        await updateProductRating(existingReview.product, session);
+        await updateProductRating(existingReview.product.toString(), session);
         await session.commitTransaction();
         await redis_1.redis.delete(`review:${reviewId}`);
-        await redis_1.redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-        await redis_1.redis.delete(`product:${existingReview.product}?populate=true`);
+        await redis_1.redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
+        await redis_1.redis.delete(`product:${existingReview.product.toString()}?populate=true`);
         await redis_1.redis.delete(`user:${userId}?populate=true`);
         await redis_1.redis.deleteByPattern('reviews:all*');
         await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);
@@ -267,11 +266,11 @@ exports.deleteReview = (0, utils_1.asyncHandler)(async (req, res) => {
             throw new ApiError(http_status_1.default.NOT_FOUND, "Review not found or you are not authorized to delete it");
         }
         await existingReview.deleteOne({ session });
-        await updateProductRating(existingReview.product, session);
+        await updateProductRating(existingReview.product.toString(), session);
         await session.commitTransaction();
         await redis_1.redis.delete(`review:${reviewId}`);
-        await redis_1.redis.deleteByPattern(`reviews:product:${existingReview.product}*`);
-        await redis_1.redis.delete(`product:${existingReview.product}?populate=true`);
+        await redis_1.redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
+        await redis_1.redis.delete(`product:${existingReview.product.toString()}?populate=true`);
         await redis_1.redis.delete(`user:${userId}?populate=true`);
         await redis_1.redis.deleteByPattern('reviews:all*');
         await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);

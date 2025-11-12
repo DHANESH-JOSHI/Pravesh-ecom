@@ -109,7 +109,7 @@ exports.getAllUsers = (0, utils_1.asyncHandler)(async (req, res) => {
         user_model_1.User.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(Number(limit)),
+            .limit(Number(limit)).select('-password -otp -otpExpires'),
         user_model_1.User.countDocuments(filter),
     ]);
     const totalPages = Math.ceil(total / Number(limit));

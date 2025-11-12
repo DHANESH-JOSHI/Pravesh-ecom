@@ -337,12 +337,10 @@ exports.updateOrderStatus = (0, utils_1.asyncHandler)(async (req, res) => {
             await product_model_1.Product.findByIdAndUpdate(item.product, {
                 $inc: {
                     salesCount: 1,
-                    totalSold: 1,
+                    totalSold: item.quantity,
                 }
             });
         }
-        await redis_1.redis.deleteByPattern('products:best-selling*');
-        await redis_1.redis.deleteByPattern('products:trending*');
         await redis_1.redis.deleteByPattern('products*');
     }
     await redis_1.redis.delete('dashboard:stats');

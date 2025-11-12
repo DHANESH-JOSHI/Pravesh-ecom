@@ -14,6 +14,7 @@ const category_model_1 = require("../category/category.model");
 const brand_model_1 = require("../brand/brand.model");
 const http_status_1 = __importDefault(require("http-status"));
 const mongoose_1 = __importDefault(require("mongoose"));
+const brand_controller_1 = require("../brand/brand.controller");
 const ApiError = (0, interface_1.getApiErrorClass)("PRODUCT");
 const ApiResponse = (0, interface_1.getApiResponseClass)("PRODUCT");
 exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -95,29 +96,11 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     if (search)
         filter.$text = { $search: search };
     if (categoryId) {
-        const catId = new mongoose_1.default.Types.ObjectId(categoryId);
-        const categories = await category_model_1.Category.aggregate([
-            { $match: { _id: catId } },
-            {
-                $graphLookup: {
-                    from: "categories",
-                    startWith: "$_id",
-                    connectFromField: "_id",
-                    connectToField: "parentCategory",
-                    as: "descendants",
-                },
-            },
-            {
-                $project: {
-                    allCategoryIds: { $concatArrays: [["$_id"], "$descendants._id"] },
-                },
-            },
-        ]);
-        const allIds = categories[0]?.allCategoryIds || [];
-        filter.category = { $in: allIds };
+        const allIds = await (0, brand_controller_1.getLeafCategoryIds)(categoryId);
+        filter.category = { $in: allIds.map((id) => new mongoose_1.default.Types.ObjectId(id)) };
     }
     if (brandId)
-        filter.brand = brandId;
+        filter.brand = new mongoose_1.default.Types.ObjectId(brandId);
     if (minPrice || maxPrice) {
         filter.originalPrice = {};
         if (minPrice)
@@ -454,7 +437,7 @@ exports.getProductFilters = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     const brandIds = await product_model_1.Product.distinct('brand', { isDeleted: false });
     const categoryIds = await product_model_1.Product.distinct('category', { isDeleted: false });
-    const [brands, categories, colors, sizes, priceRange] = await Promise.all([
+    const [brands, categories, priceRange] = await Promise.all([
         brand_model_1.Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name slug'),
         category_model_1.Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title slug'),
         product_model_1.Product.distinct('specifications.color', { isDeleted: false }),
@@ -473,8 +456,8 @@ exports.getProductFilters = (0, utils_1.asyncHandler)(async (req, res) => {
     const filters = {
         brands,
         categories,
-        colors: colors.flat().filter(Boolean),
-        sizes: sizes.flat().filter(Boolean),
+        // colors: colors.flat().filter(Boolean),
+        // sizes: sizes.flat().filter(Boolean),
         priceRange: { minPrice: priceRange?.[0]?.minPrice || 0, maxPrice: priceRange?.[0]?.maxPrice || 0 },
     };
     await redis_1.redis.set(cacheKey, filters, 3600);
