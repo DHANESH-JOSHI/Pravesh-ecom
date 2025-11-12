@@ -12,7 +12,8 @@ const router = express_1.default.Router();
 router.post('/', (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, cloudinary_1.upload.single('image'), brand_controller_1.createBrand);
 router.get('/', brand_controller_1.getAllBrands);
 router.get('/:id', brand_controller_1.getBrandById);
-router.patch('/:id', (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, cloudinary_1.upload.single('image'), brand_controller_1.updateBrandById);
-router.delete('/:id', (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, brand_controller_1.deleteBrandById);
+router.get('/slug/:slug', brand_controller_1.getBrandBySlug);
+router.patch('/:id', (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, cloudinary_1.upload.single('image'), brand_controller_1.updateBrand);
+router.delete('/:id', (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, brand_controller_1.deleteBrand);
 exports.brandRouter = router;
 //# sourceMappingURL=brand.routes.js.map

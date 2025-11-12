@@ -3,8 +3,9 @@ import {
   createBrand,
   getAllBrands,
   getBrandById,
-  updateBrandById,
-  deleteBrandById
+  updateBrand,
+  deleteBrand,
+  getBrandBySlug
 } from './brand.controller';
 import { upload } from '@/config/cloudinary';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
@@ -17,8 +18,10 @@ router.get('/', getAllBrands);
 
 router.get('/:id', getBrandById);
 
-router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single('image'), updateBrandById);
+router.get('/slug/:slug', getBrandBySlug);
 
-router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteBrandById);
+router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single('image'), updateBrand);
+
+router.delete('/:id', auth('admin'), authenticatedActionLimiter, deleteBrand);
 
 export const brandRouter = router;

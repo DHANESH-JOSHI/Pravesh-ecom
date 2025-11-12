@@ -6,214 +6,294 @@ import { asyncHandler, generateCacheKey } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import status from "http-status";
-// import { Category } from "../category/category.model";
 import { Product } from "../product/product.model";
+import { Category } from "../category/category.model";
+
 const ApiError = getApiErrorClass("BRAND");
 const ApiResponse = getApiResponseClass("BRAND");
 
 export const createBrand = asyncHandler(async (req, res) => {
   const { name, categoryIds } = brandValidation.parse(req.body);
 
-  let existingBrand = await Brand.findOne({
-    name,
-  });
-  if (existingBrand) {
-    if (!existingBrand.isDeleted) {
-      throw new ApiError(status.BAD_REQUEST, "Brand with this title already exists");
-    }
-    existingBrand.name = name;
-    await existingBrand.save();
+  let brand = await Brand.findOne({ name });
+
+  if (brand && !brand.isDeleted) {
+    throw new ApiError(status.BAD_REQUEST, "Brand with this name already exists");
   }
-  let image;
-  if (req.file) {
-    image = req.file.path;
+
+  if (req.file && brand?.image) {
+    const publicId = brand.image.split("/").pop()?.split(".")[0];
+    if (publicId) await cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
   }
-  if (!existingBrand) {
-    existingBrand = await Brand.create({
+
+  const image = req.file ? req.file.path : brand?.image || undefined;
+  const expandedLeafIds = categoryIds?.length
+    ? await expandToLeafCategories(categoryIds as any[])
+    : [];
+  if (!brand) {
+    brand = await Brand.create({
       name,
-      categories: categoryIds || [],
-      image
+      categories: expandedLeafIds,
+      image,
     });
   } else {
-    if (existingBrand.image) {
-      const publicId = existingBrand.image.split("/").pop()?.split(".")[0];
-      if (publicId) {
-        await cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
-      }
-    }
-    existingBrand.categories = categoryIds || [];
-    existingBrand.image = image;
-    await existingBrand.save();
+    brand.isDeleted = false;
+    brand.name = name;
+    brand.categories = expandedLeafIds as any[];
+    brand.image = image;
+    await brand.save();
   }
 
+  await syncBrandCategories(brand._id as any, expandedLeafIds);
   await redis.deleteByPattern("brands*");
-  // await redis.delete(`category:${categoryId}?populate=true`)  TODO : Handle multiple categories
 
-  res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Brand created successfully", existingBrand));
-  return;
+  res
+    .status(status.CREATED)
+    .json(new ApiResponse(status.CREATED, "Brand created successfully", brand));
 });
 
 export const getAllBrands = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey('brands', req.query);
-  const cachedBrands = await redis.get(cacheKey);
+  const cacheKey = generateCacheKey("brands", req.query);
+  const cached = await redis.get(cacheKey);
 
-  if (cachedBrands) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", cachedBrands));
-  }
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Brands retrieved successfully", cached));
 
-  const { page = 1, limit = 10, search, isDeleted } = req.query;
+  const {
+    page = 1,
+    limit = 10,
+    search,
+    categoryId,
+    sort = "createdAt",
+    order = "desc",
+    isDeleted = "false",
+  } = req.query;
+
   const skip = (Number(page) - 1) * Number(limit);
+  const filter: any = { isDeleted: isDeleted === "true" };
 
-  const filter: any = {};
-  if (search) filter.$text = { search: search };
-  if (isDeleted !== undefined) {
-    filter.isDeleted = isDeleted === 'true';
-  } else {
-    filter.isDeleted = false;
+  if (search) filter.$text = { $search: search };
+  if (categoryId) {
+    const allCategoryIds = await getLeafCategoryIds(categoryId as string);
+    filter.categories = { $in: allCategoryIds };
   }
+
+  const sortOrder = order === "asc" ? 1 : -1;
+  const sortObj: any = { [sort as string]: sortOrder };
 
   const [brands, total] = await Promise.all([
-    Brand.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-    // .populate('categories', '_id slug title')
-    ,
+    Brand.find(filter).sort(sortObj).skip(skip).limit(Number(limit)),
     Brand.countDocuments(filter),
   ]);
-  // Augment categories with childCount, productCount and brandCount
-  const augmentedBrands = await Promise.all(brands.map(async (brand) => {
-    const productCount = await Product.countDocuments({ brand: brand._id, isDeleted: false });
-    return { ...brand.toJSON(), productCount };
-  }));
+
+  const augmented = await Promise.all(
+    brands.map(async (b) => {
+      const [productCount, categoryCount] = await Promise.all([
+        Product.countDocuments({ brand: b._id, isDeleted: false }),
+        Category.countDocuments({ brands: b._id, isDeleted: false }),
+      ]);
+      return { ...b.toJSON(), productCount, categoryCount };
+    })
+  );
+
   const totalPages = Math.ceil(total / Number(limit));
-  const result = {
-    brands: augmentedBrands,
-    page: Number(page),
-    limit: Number(limit),
-    total,
-    totalPages
-  };
+  const result = { brands: augmented, total, page: Number(page), totalPages };
 
   await redis.set(cacheKey, result, 3600);
-
-  res.status(status.OK).json(new ApiResponse(status.OK, "Brands retrieved successfully", result));
-  return;
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Brands retrieved successfully", result));
 });
-
 
 export const getBrandById = asyncHandler(async (req, res) => {
-  const brandId = req.params.id;
-  const { populate = 'false' } = req.query;
-  const cacheKey = generateCacheKey(`brand:${brandId}`, req.query);
-  const cachedBrand = await redis.get(cacheKey);
-
-  if (cachedBrand) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", cachedBrand));
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(brandId)) {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id))
     throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
-  }
 
-  let brand;
-  if (populate == 'true') {
-    brand = await Brand.findOne({
-      _id: brandId,
-      isDeleted: false,
-    }).populate('products categories');
-  } else {
-    brand = await Brand.findOne({
-      _id: brandId,
-      isDeleted: false,
-    })
-  }
+  const cacheKey = generateCacheKey(`brand:${id}`, req.query);
+  const cached = await redis.get(cacheKey);
+  if (cached)
+    return res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved", cached));
 
-  if (!brand) {
-    throw new ApiError(status.NOT_FOUND, "Brand not found");
-  }
+  const { populate = "false" } = req.query;
+  const query = Brand.findOne({ _id: id, isDeleted: false });
+  const brand =
+    populate === "true"
+      ? await query.populate("categories products")
+      : await query;
+
+  if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
 
   await redis.set(cacheKey, brand, 3600);
-
   res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
-  return;
 });
 
-export const updateBrandById = asyncHandler(async (req, res) => {
-  const brandId = req.params.id;
+export const getBrandBySlug = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const cacheKey = generateCacheKey(`brand:${slug}`, req.query);
+  const cached = await redis.get(cacheKey);
+  if (cached)
+    return res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved", cached));
+
+  const { populate = "false" } = req.query;
+  if (!slug || slug.trim() === "") {
+    throw new ApiError(status.BAD_REQUEST, "Invalid brand slug");
+  }
+  const query = Brand.findOne({ slug, isDeleted: false });
+  const brand =
+    populate === "true"
+      ? await query.populate("categories products")
+      : await query;
+
+  if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
+
+  await redis.set(cacheKey, brand, 3600);
+  res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved successfully", brand));
+});
+
+export const updateBrand = asyncHandler(async (req, res) => {
+  const { id } = req.params;
   const { name, categoryIds } = brandUpdateValidation.parse(req.body);
-  if (!mongoose.Types.ObjectId.isValid(brandId)) {
+  if (!mongoose.Types.ObjectId.isValid(id))
     throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
-  }
-  const brand = await Brand.findOne({
-    _id: brandId,
-    isDeleted: false,
-  });
 
-  if (!brand) {
-    throw new ApiError(status.NOT_FOUND, "Brand not found");
-  }
+  const brand = await Brand.findOne({ _id: id, isDeleted: false });
+  if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
 
-  if (name) {
-    if (name !== brand.name) {
-      const existingBrand = await Brand.findOne({
-        name,
-        isDeleted: false,
-        _id: { $ne: brandId },
-      });
-
-      if (existingBrand) {
-        throw new ApiError(status.BAD_REQUEST, "Brand with this name already exists");
-      }
-    }
+  if (name && name !== brand.name) {
+    const exists = await Brand.findOne({ name, _id: { $ne: id }, isDeleted: false });
+    if (exists) throw new ApiError(status.BAD_REQUEST, "Brand name already exists");
   }
 
-  if (req.file) {
-    if (brand.image) {
-      const publicId = brand.image.split("/").pop()?.split(".")[0];
-      if (publicId) {
-        await cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
-      }
-    }
+  if (req.file && brand.image) {
+    const publicId = brand.image.split("/").pop()?.split(".")[0];
+    if (publicId) await cloudinary.uploader.destroy(`pravesh-brands/${publicId}`);
   }
-  const updatedBrand = await Brand.findByIdAndUpdate(
-    brandId,
-    {
-      name,
-      image: req.file ? req.file.path : brand.image,
-      categories: categoryIds || brand.categories ,
-    },
-    { new: true }
-  );
-
-  await redis.deleteByPattern("brands*");
-  await redis.deleteByPattern(`brand:${brandId}*`);
-  // await redis.delete(`category:${categoryId}?populate=true`)  TODO : Handle multiple categories
-
-  res.status(status.OK).json(
-    new ApiResponse(status.OK, "Brand updated successfully", updatedBrand)
-  );
-  return;
-});
-
-export const deleteBrandById = asyncHandler(async (req, res) => {
-  const brandId = req.params.id;
-  if (!mongoose.Types.ObjectId.isValid(brandId)) {
-    throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
-  }
-  const brand = await Brand.findOne({
-    _id: brandId,
-    isDeleted: false,
-  });
-  if (!brand) {
-    throw new ApiError(status.NOT_FOUND, "Brand not found");
-  }
-  brand.isDeleted = true;
+  const expandedLeafIds = categoryIds?.length
+    ? await expandToLeafCategories(categoryIds as any[])
+    : [];
+  brand.name = name || brand.name;
+  brand.image = req.file ? req.file.path : brand.image;
+  brand.categories = expandedLeafIds as any[];
   await brand.save();
 
+  await syncBrandCategories(brand._id as any, expandedLeafIds);
   await redis.deleteByPattern("brands*");
-  await redis.deleteByPattern(`brand:${brandId}*`);
-
-  res.json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
-  return;
+  await redis.deleteByPattern(`brand:${id}*`);
+  for (const categoryId of brand.categories) {
+    await redis.delete(`category:${categoryId}?populate=true`);
+  }
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Brand updated successfully", brand));
 });
+
+export const deleteBrand = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id))
+    throw new ApiError(status.BAD_REQUEST, "Invalid brand ID");
+
+  const brand = await Brand.findOneAndUpdate(
+    { _id: id, isDeleted: false },
+    { isDeleted: true },
+    { new: true }
+  );
+  if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
+
+  // Remove brand from categories
+  await Category.updateMany(
+    { brands: id },
+    { $pull: { brands: id } }
+  );
+
+  // Optionally: nullify brand in products
+  await Product.updateMany(
+    { brand: id },
+    { $unset: { brand: "" } }
+  );
+
+
+  await redis.deleteByPattern("brands*");
+  await redis.deleteByPattern(`brand:${id}*`);
+  for (const categoryId of brand.categories) {
+    await redis.delete(`category:${categoryId}?populate=true`);
+  }
+
+  res.status(status.OK).json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
+});
+
+
+const syncBrandCategories = async (brandId: mongoose.Types.ObjectId, newCategoryIds: string[]) => {
+  await Category.updateMany(
+    { brands: brandId, _id: { $nin: newCategoryIds } },
+    { $pull: { brands: brandId } }
+  );
+
+  if (newCategoryIds.length > 0) {
+    await Category.updateMany(
+      { _id: { $in: newCategoryIds } },
+      { $addToSet: { brands: brandId } }
+    );
+  }
+}
+
+const expandToLeafCategories = async (categoryIds: string[]) => {
+  const leafIds = new Set<string>();
+
+  for (const id of categoryIds) {
+    const descendants = await getLeafCategoryIds(id);
+    for (const d of descendants) leafIds.add(d);
+  }
+  return Array.from(leafIds);
+}
+
+
+export const getLeafCategoryIds = async (categoryId: string) => {
+  const categoryObjectId = new mongoose.Types.ObjectId(categoryId);
+
+  const result = await Category.aggregate([
+    { $match: { _id: categoryObjectId, isDeleted: false } },
+
+    {
+      $graphLookup: {
+        from: "categories",
+        startWith: "$_id",
+        connectFromField: "_id",
+        connectToField: "parentCategory",
+        as: "descendants",
+        restrictSearchWithMatch: { isDeleted: false },
+      },
+    },
+
+    {
+      $project: {
+        leafIds: {
+          $map: {
+            input: {
+              $filter: {
+                input: { $concatArrays: [["$_id"], "$descendants._id"] },
+                as: "cat",
+                cond: {
+                  $not: {
+                    $in: ["$$cat", "$descendants.parentCategory"],
+                  },
+                },
+              },
+            },
+            as: "leaf",
+            in: "$$leaf",
+          },
+        },
+      },
+    },
+  ]);
+  const leafIds =
+    result[0]?.leafIds?.length > 0
+      ? result[0].leafIds.map((id: any) => id.toString())
+      : [categoryId];
+
+  return leafIds;
+};
+

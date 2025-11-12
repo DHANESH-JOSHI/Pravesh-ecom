@@ -11,7 +11,6 @@ const objectIdValidation = zod_1.z
 }).transform((val) => new mongoose_1.Types.ObjectId(val));
 const createProductValidation = zod_1.z.object({
     name: zod_1.z.string().nonempty('Product name is required').max(200, 'Product name too long'),
-    slug: zod_1.z.string().optional(),
     // description: z.string().optional(),
     // shortDescription: z.string().optional(),
     brandId: objectIdValidation.optional(),
@@ -56,6 +55,8 @@ const createProductValidation = zod_1.z.object({
     // stockStatus: z.enum(StockStatus).optional(),
     isFeatured: zod_1.z.coerce.boolean().optional(),
     isNewArrival: zod_1.z.coerce.boolean().optional(),
+    // 
+    thumbnail: zod_1.z.string().url('Thumbnail must be a valid URL').optional(),
 });
 exports.createProductValidation = createProductValidation;
 const productsQueryValidation = zod_1.z.object({

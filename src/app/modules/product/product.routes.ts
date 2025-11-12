@@ -5,15 +5,9 @@ import {
   getProductById,
   updateProduct,
   deleteProduct,
-  getFeaturedProducts,
-  getNewArrivalProducts,
   // getDiscountProducts,
-  getProductsByCategory,
-  searchProducts,
   getProductFilters,
   getProductBySlug,
-  getBestSellingProducts,
-  getTrendingProducts,
 } from './product.controller';
 import { auth } from '@/middlewares';
 import { authenticatedActionLimiter } from '@/middlewares';
@@ -24,23 +18,9 @@ router.post('/', auth('admin'), authenticatedActionLimiter, upload.single("thumb
 
 router.get('/', getAllProducts);
 
-router.get('/search', searchProducts);
-
-router.get('/featured', getFeaturedProducts);
-
-router.get('/new-arrivals', getNewArrivalProducts);
-
-// router.get('/discount', getDiscountProducts);
-
 router.get('/filters', getProductFilters);
 
-router.get('/best-selling', getBestSellingProducts);
-
-router.get('/trending', getTrendingProducts);
-
 router.get('/slug/:slug', getProductBySlug);
-
-router.get('/category/:categoryId', getProductsByCategory);
 
 router.get('/:id', getProductById);
 

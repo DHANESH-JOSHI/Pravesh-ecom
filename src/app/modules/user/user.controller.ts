@@ -129,7 +129,7 @@ export const getAllUsers = asyncHandler(async (req, res) => {
     User.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit)),
+      .limit(Number(limit)).select('-password -otp -otpExpires'),
     User.countDocuments(filter),
   ]);
 

@@ -10,7 +10,6 @@ const objectIdValidation = z
 
 const createProductValidation = z.object({
   name: z.string().nonempty('Product name is required').max(200, 'Product name too long'),
-  slug: z.string().optional(),
   // description: z.string().optional(),
   // shortDescription: z.string().optional(),
   brandId: objectIdValidation.optional(),
@@ -49,6 +48,8 @@ const createProductValidation = z.object({
   // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),
+  // 
+  thumbnail: z.string().url('Thumbnail must be a valid URL').optional(),
 });
 
 const productsQueryValidation = z.object({

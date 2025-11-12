@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTrendingProducts = exports.getBestSellingProducts = exports.getProductFilters = exports.searchProducts = exports.getProductsByCategory = exports.getNewArrivalProducts = exports.getFeaturedProducts = exports.deleteProduct = exports.updateProduct = exports.getProductById = exports.getAllProducts = exports.getProductBySlug = exports.createProduct = void 0;
+exports.getProductFilters = exports.deleteProduct = exports.updateProduct = exports.getProductById = exports.getAllProducts = exports.getProductBySlug = exports.createProduct = void 0;
 const redis_1 = require("../../config/redis");
 const product_model_1 = require("./product.model");
 const utils_1 = require("../../utils");
@@ -18,10 +18,6 @@ const ApiError = (0, interface_1.getApiErrorClass)("PRODUCT");
 const ApiResponse = (0, interface_1.getApiResponseClass)("PRODUCT");
 exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
     const productData = product_validation_1.createProductValidation.parse(req.body);
-    const existingSku = await product_model_1.Product.findOne({ sku: productData.sku, isDeleted: false });
-    if (existingSku) {
-        throw new ApiError(http_status_1.default.BAD_REQUEST, 'Product with this SKU already exists');
-    }
     if (productData.categoryId) {
         const existingCategory = await category_model_1.Category.findById(productData.categoryId);
         if (!existingCategory) {
@@ -51,12 +47,7 @@ exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
         category: productData.categoryId,
         brand: productData.brandId,
     });
-    await redis_1.redis.deleteByPattern('products:all*');
-    // await redis.deleteByPattern('products:discount*');
-    await redis_1.redis.deleteByPattern('products:featured*');
-    await redis_1.redis.deleteByPattern('products:new-arrival*');
-    await redis_1.redis.deleteByPattern(`products:category:${product.category}*`);
-    await redis_1.redis.deleteByPattern('products:search*');
+    await redis_1.redis.deleteByPattern('products*');
     await redis_1.redis.delete(`category:${product.category}?populate=true`);
     await redis_1.redis.delete(`brand:${product.brand}?populate=true`);
     await redis_1.redis.delete('product_filters');
@@ -64,37 +55,13 @@ exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, 'Product created successfully', product));
     return;
 });
-// export const getDiscountProducts = asyncHandler(async (req, res) => {
-//   const cacheKey = generateCacheKey('products:discount', req.query);
-//   const cachedProducts = await redis.get(cacheKey);
-//   if (cachedProducts) {
-//     return res.status(status.OK).json(
-//       new ApiResponse(status.OK, 'Discount products retrieved successfully', cachedProducts)
-//     );
-//   }
-//   const { page = 1, limit = 10 } = req.query;
-//   const products = await Product.find({
-//     isDiscount: true,
-//     isDeleted: false,
-//   })
-//     .populate('category', 'brand')
-//     .sort({ discountValue: -1, createdAt: -1 })
-//     .skip((Number(page) - 1) * Number(limit))
-//     .limit(Number(limit))
-//     .lean();
-//   await redis.set(cacheKey, products, 3600);
-//   res.status(status.OK).json(
-//     new ApiResponse(status.OK, 'Discount products retrieved successfully', products)
-//   );
-//   return;
-// });
 exports.getProductBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
     const { slug } = req.params;
     const { populate = 'false' } = req.query;
     const cacheKey = (0, utils_1.generateCacheKey)(`product:${slug}`, req.query);
     const cachedProduct = await redis_1.redis.get(cacheKey);
     if (cachedProduct) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved successfully', cachedProduct));
+        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved', cachedProduct));
     }
     if (!slug || slug.trim() === '') {
         throw new ApiError(http_status_1.default.BAD_REQUEST, 'Slug is required');
@@ -111,65 +78,81 @@ exports.getProductBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Product not found');
     }
     await redis_1.redis.set(cacheKey, product, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved successfully', product));
+    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved', product));
     return;
 });
 exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     const query = product_validation_1.productsQueryValidation.parse(req.query);
-    const cacheKey = (0, utils_1.generateCacheKey)('products:all', query);
+    const cacheKey = (0, utils_1.generateCacheKey)('products', query);
     const cachedProducts = await redis_1.redis.get(cacheKey);
     if (cachedProducts) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', cachedProducts));
+        return res
+            .status(http_status_1.default.OK)
+            .json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', cachedProducts));
     }
-    const { page = 1, limit = 10, sort = 'createdAt', order = 'desc', categoryId, brandId, minPrice, maxPrice, 
-    // stockStatus,
-    isFeatured, isNewArrival, 
-    // isDiscount,
-    rating, search, isDeleted, } = query;
-    const filter = {};
-    if (isDeleted !== undefined) {
-        filter.isDeleted = isDeleted;
+    const { page = 1, limit = 10, sort = 'createdAt', order = 'desc', categoryId, brandId, minPrice, maxPrice, isFeatured, isNewArrival, search, rating, isDeleted, } = query;
+    const filter = { isDeleted: isDeleted ?? false };
+    if (search)
+        filter.$text = { $search: search };
+    if (categoryId) {
+        const catId = new mongoose_1.default.Types.ObjectId(categoryId);
+        const categories = await category_model_1.Category.aggregate([
+            { $match: { _id: catId } },
+            {
+                $graphLookup: {
+                    from: "categories",
+                    startWith: "$_id",
+                    connectFromField: "_id",
+                    connectToField: "parentCategory",
+                    as: "descendants",
+                },
+            },
+            {
+                $project: {
+                    allCategoryIds: { $concatArrays: [["$_id"], "$descendants._id"] },
+                },
+            },
+        ]);
+        const allIds = categories[0]?.allCategoryIds || [];
+        filter.category = { $in: allIds };
     }
-    else {
-        filter.isDeleted = false;
-    }
-    // if (stockStatus) {
-    //   filter.stockStatus = stockStatus;
-    // }
-    if (categoryId)
-        filter.category = categoryId;
     if (brandId)
         filter.brand = brandId;
+    if (minPrice || maxPrice) {
+        filter.originalPrice = {};
+        if (minPrice)
+            filter.originalPrice.$gte = Number(minPrice);
+        if (maxPrice)
+            filter.originalPrice.$lte = Number(maxPrice);
+    }
     if (isFeatured !== undefined)
         filter.isFeatured = isFeatured;
     if (isNewArrival !== undefined)
         filter.isNewArrival = isNewArrival;
-    // if (isDiscount !== undefined) filter.isDiscount = isDiscount;
-    if (minPrice || maxPrice) {
-        filter.originalPrice = {};
-        if (minPrice) {
-            filter.originalPrice.$gte = Number(minPrice);
-        }
-        if (maxPrice) {
-            filter.originalPrice.$lte = Number(maxPrice);
-        }
-    }
-    if (rating) {
+    if (rating)
         filter.rating = { $gte: Number(rating) };
-    }
-    if (search) {
-        filter.$text = { $search: search };
-    }
+    // ⚡ Sorting (supports trending, best-selling, new arrivals)
+    const sortMap = {
+        trending: 'salesCount',
+        bestSelling: 'totalSold',
+        newArrivals: 'createdAt',
+        featured: 'isFeatured',
+        rating: 'rating',
+        price: 'originalPrice',
+        createdAt: 'createdAt',
+    };
+    const sortField = sortMap[sort] || 'createdAt';
     const sortOrder = order === 'asc' ? 1 : -1;
-    const sortObj = {};
-    sortObj[sort] = sortOrder;
+    const sortObj = { [sortField]: sortOrder };
     const skip = (Number(page) - 1) * Number(limit);
     const [products, total] = await Promise.all([
         product_model_1.Product.find(filter)
-            .populate('category brand')
+            .populate('category', 'title slug')
+            .populate('brand', 'name slug')
             .sort(sortObj)
             .skip(skip)
-            .limit(Number(limit)),
+            .limit(Number(limit))
+            .lean(),
         product_model_1.Product.countDocuments(filter),
     ]);
     const totalPages = Math.ceil(total / Number(limit));
@@ -181,8 +164,9 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
         totalPages,
     };
     await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', result));
-    return;
+    res
+        .status(http_status_1.default.OK)
+        .json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', result));
 });
 exports.getProductById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
@@ -197,7 +181,7 @@ exports.getProductById = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     let product;
     if (populate == 'true') {
-        product = await product_model_1.Product.findById(id).populate('category', '_id title').populate('brand', '_id name').populate({
+        product = await product_model_1.Product.findById(id).populate('category', 'slug title').populate('brand', 'slug name').populate({
             path: 'reviews',
             populate: {
                 path: 'user',
@@ -273,13 +257,8 @@ exports.updateProduct = (0, utils_1.asyncHandler)(async (req, res) => {
         category: updateData.categoryId,
         brand: updateData.brandId,
     }, { new: true, runValidators: true }).populate('category', 'brand');
-    await redis_1.redis.deleteByPattern('products:all*');
+    await redis_1.redis.deleteByPattern('products*');
     await redis_1.redis.deleteByPattern(`product:${id}*`);
-    await redis_1.redis.deleteByPattern(`products:search*`);
-    await redis_1.redis.deleteByPattern(`products:featured*`);
-    await redis_1.redis.deleteByPattern(`products:new-arrival*`);
-    // await redis.deleteByPattern(`products:discount*`);
-    await redis_1.redis.deleteByPattern(`products:category:${existingProduct.category}*`);
     await redis_1.redis.delete(`category:${existingProduct.category}?populate=true`);
     await redis_1.redis.delete(`brand:${existingProduct.brand}?populate=true`);
     await redis_1.redis.delete('product_filters');
@@ -297,166 +276,176 @@ exports.deleteProduct = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!result) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Product not found');
     }
-    await redis_1.redis.deleteByPattern('products:all*');
+    await redis_1.redis.deleteByPattern('products*');
     await redis_1.redis.deleteByPattern(`product:${id}*`);
-    await redis_1.redis.deleteByPattern(`products:search*`);
-    await redis_1.redis.deleteByPattern(`products:featured*`);
-    await redis_1.redis.deleteByPattern(`products:new-arrival*`);
-    // await redis.deleteByPattern(`products:discount*`);
-    await redis_1.redis.deleteByPattern(`products:category:${product.category}*`);
     await redis_1.redis.delete(`category:${product.category}?populate=true`);
     await redis_1.redis.delete(`brand:${product.brand}?populate=true`);
     await redis_1.redis.delete('product_filters');
     await redis_1.redis.delete('dashboard:stats');
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product deleted successfully', result));
 });
-exports.getFeaturedProducts = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { page = 1, limit = 10 } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)('products:featured', req.query);
-    const cachedProducts = await redis_1.redis.get(cacheKey);
-    if (cachedProducts) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Featured products retrieved successfully', cachedProducts));
-    }
-    const filter = {
-        isFeatured: true,
-        isDeleted: false,
-    };
-    const skip = (Number(page) - 1) * Number(limit);
-    const [products, total] = await Promise.all([
-        product_model_1.Product.find(filter)
-            .populate('category', 'brand')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(Number(limit)),
-        product_model_1.Product.countDocuments(filter),
-    ]);
-    const totalPages = Math.ceil(total / Number(limit));
-    const result = {
-        products,
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages,
-    };
-    await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Featured products retrieved successfully', result));
-    return;
-});
-exports.getNewArrivalProducts = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { page = 1, limit = 10 } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)('products:new-arrival', req.query);
-    const cachedProducts = await redis_1.redis.get(cacheKey);
-    if (cachedProducts) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'New arrival products retrieved successfully', cachedProducts));
-    }
-    const filter = {
-        isNewArrival: true,
-        isDeleted: false,
-    };
-    const skip = (Number(page) - 1) * Number(limit);
-    const [products, total] = await Promise.all([
-        product_model_1.Product.find(filter)
-            .populate('category', 'brand')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(Number(limit))
-            .lean(),
-        product_model_1.Product.countDocuments(filter),
-    ]);
-    const totalPages = Math.ceil(total / Number(limit));
-    const result = {
-        products,
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages,
-    };
-    await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'New arrival products retrieved successfully', result));
-    return;
-});
-exports.getProductsByCategory = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { categoryId } = req.params;
-    const cacheKey = (0, utils_1.generateCacheKey)(`products:category:${categoryId}`, req.query);
-    const cachedProducts = await redis_1.redis.get(cacheKey);
-    if (cachedProducts) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', cachedProducts));
-    }
-    const { page = 1, limit = 10, sort = 'createdAt', order = 'desc' } = req.query;
-    const filter = {
-        category: categoryId,
-        isDeleted: false,
-    };
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const sortObj = {};
-    sortObj[sort] = sortOrder;
-    const skip = (Number(page) - 1) * Number(limit);
-    const [products, total] = await Promise.all([
-        product_model_1.Product.find(filter)
-            .populate('category', 'brand')
-            .sort(sortObj)
-            .skip(skip)
-            .limit(Number(limit)),
-        product_model_1.Product.countDocuments(filter),
-    ]);
-    const totalPages = Math.ceil(total / Number(limit));
-    const result = {
-        products,
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages,
-    };
-    await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', result));
-    return;
-});
-exports.searchProducts = (0, utils_1.asyncHandler)(async (req, res) => {
-    const cacheKey = (0, utils_1.generateCacheKey)('products:search', req.query);
-    const cachedProducts = await redis_1.redis.get(cacheKey);
-    if (cachedProducts) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Products found successfully', cachedProducts));
-    }
-    const { q, page = 1, limit = 10 } = req.query;
-    const filter = {
-        isDeleted: false,
-    };
-    if (q) {
-        filter.$text = { $search: q };
-    }
-    const skip = (Number(page) - 1) * Number(limit);
-    let products, total;
-    if (q) {
-        [products, total] = await Promise.all([
-            product_model_1.Product.find(filter, { score: { $meta: 'textScore' } })
-                .populate('category brand')
-                .sort({ score: { $meta: 'textScore' } })
-                .skip(skip)
-                .limit(Number(limit)),
-            product_model_1.Product.countDocuments(filter),
-        ]);
-    }
-    else {
-        [products, total] = await Promise.all([
-            product_model_1.Product.find(filter)
-                .populate('category brand')
-                .skip(skip)
-                .limit(Number(limit)),
-            product_model_1.Product.countDocuments(filter),
-        ]);
-    }
-    const totalPages = Math.ceil(total / Number(limit));
-    const result = {
-        products,
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages,
-    };
-    await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Products found successfully', result));
-    return;
-});
+// export const getFeaturedProducts = asyncHandler(async (req, res) => {
+//   const { page = 1, limit = 10 } = req.query;
+//   const cacheKey = generateCacheKey('products:featured', req.query);
+//   const cachedProducts = await redis.get(cacheKey);
+//   if (cachedProducts) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'Featured products retrieved successfully', cachedProducts)
+//     );
+//   }
+//   const filter = {
+//     isFeatured: true,
+//     isDeleted: false,
+//   };
+//   const skip = (Number(page) - 1) * Number(limit);
+//   const [products, total] = await Promise.all([
+//     Product.find(filter)
+//       .populate('category', 'brand')
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(Number(limit)),
+//     Product.countDocuments(filter),
+//   ]);
+//   const totalPages = Math.ceil(total / Number(limit));
+//   const result = {
+//     products,
+//     page: Number(page),
+//     limit: Number(limit),
+//     total,
+//     totalPages,
+//   };
+//   await redis.set(cacheKey, result, 3600);
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'Featured products retrieved successfully', result)
+//   );
+//   return;
+// });
+// export const getNewArrivalProducts = asyncHandler(async (req, res) => {
+//   const { page = 1, limit = 10 } = req.query;
+//   const cacheKey = generateCacheKey('products:new-arrival', req.query);
+//   const cachedProducts = await redis.get(cacheKey);
+//   if (cachedProducts) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'New arrival products retrieved successfully', cachedProducts)
+//     );
+//   }
+//   const filter = {
+//     isNewArrival: true,
+//     isDeleted: false,
+//   };
+//   const skip = (Number(page) - 1) * Number(limit);
+//   const [products, total] = await Promise.all([
+//     Product.find(filter)
+//       .populate('category', 'brand')
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(Number(limit))
+//       .lean(),
+//     Product.countDocuments(filter),
+//   ]);
+//   const totalPages = Math.ceil(total / Number(limit));
+//   const result = {
+//     products,
+//     page: Number(page),
+//     limit: Number(limit),
+//     total,
+//     totalPages,
+//   };
+//   await redis.set(cacheKey, result, 3600);
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'New arrival products retrieved successfully', result)
+//   );
+//   return;
+// });
+// export const getProductsByCategory = asyncHandler(async (req, res) => {
+//   const { categoryId } = req.params;
+//   const cacheKey = generateCacheKey(`products:category:${categoryId}`, req.query);
+//   const cachedProducts = await redis.get(cacheKey);
+//   if (cachedProducts) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'Products retrieved successfully', cachedProducts)
+//     );
+//   }
+//   const { page = 1, limit = 10, sort = 'createdAt', order = 'desc' } = req.query;
+//   const filter = {
+//     category: categoryId,
+//     isDeleted: false,
+//   };
+//   const sortOrder = order === 'asc' ? 1 : -1;
+//   const sortObj: any = {};
+//   sortObj[sort as string] = sortOrder;
+//   const skip = (Number(page) - 1) * Number(limit);
+//   const [products, total] = await Promise.all([
+//     Product.find(filter)
+//       .populate('category', 'brand')
+//       .sort(sortObj)
+//       .skip(skip)
+//       .limit(Number(limit)),
+//     Product.countDocuments(filter),
+//   ]);
+//   const totalPages = Math.ceil(total / Number(limit));
+//   const result = {
+//     products,
+//     page: Number(page),
+//     limit: Number(limit),
+//     total,
+//     totalPages,
+//   };
+//   await redis.set(cacheKey, result, 3600);
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'Products retrieved successfully', result)
+//   );
+//   return;
+// });
+// export const searchProducts = asyncHandler(async (req, res) => {
+//   const cacheKey = generateCacheKey('products:search', req.query);
+//   const cachedProducts = await redis.get(cacheKey);
+//   if (cachedProducts) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'Products found successfully', cachedProducts)
+//     );
+//   }
+//   const { q, page = 1, limit = 10 } = req.query;
+//   const filter: any = {
+//     isDeleted: false,
+//   };
+//   if (q) {
+//     filter.$text = { $search: q as string };
+//   }
+//   const skip = (Number(page) - 1) * Number(limit);
+//   let products, total;
+//   if (q) {
+//     [products, total] = await Promise.all([
+//       Product.find(filter, { score: { $meta: 'textScore' } })
+//         .populate('category brand')
+//         .sort({ score: { $meta: 'textScore' } })
+//         .skip(skip)
+//         .limit(Number(limit)),
+//       Product.countDocuments(filter),
+//     ]);
+//   } else {
+//     [products, total] = await Promise.all([
+//       Product.find(filter)
+//         .populate('category brand')
+//         .skip(skip)
+//         .limit(Number(limit)),
+//       Product.countDocuments(filter),
+//     ]);
+//   }
+//   const totalPages = Math.ceil(total / Number(limit));
+//   const result = {
+//     products,
+//     page: Number(page),
+//     limit: Number(limit),
+//     total,
+//     totalPages,
+//   };
+//   await redis.set(cacheKey, result, 3600);
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'Products found successfully', result)
+//   );
+//   return;
+// });
 exports.getProductFilters = (0, utils_1.asyncHandler)(async (req, res) => {
     const cacheKey = 'product_filters';
     const cachedFilters = await redis_1.redis.get(cacheKey);
@@ -466,8 +455,8 @@ exports.getProductFilters = (0, utils_1.asyncHandler)(async (req, res) => {
     const brandIds = await product_model_1.Product.distinct('brand', { isDeleted: false });
     const categoryIds = await product_model_1.Product.distinct('category', { isDeleted: false });
     const [brands, categories, colors, sizes, priceRange] = await Promise.all([
-        brand_model_1.Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name _id'),
-        category_model_1.Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title _id'),
+        brand_model_1.Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name slug'),
+        category_model_1.Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title slug'),
         product_model_1.Product.distinct('specifications.color', { isDeleted: false }),
         product_model_1.Product.distinct('specifications.size', { isDeleted: false }),
         product_model_1.Product.aggregate([
@@ -492,76 +481,84 @@ exports.getProductFilters = (0, utils_1.asyncHandler)(async (req, res) => {
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product filters retrieved successfully', filters));
     return;
 });
-exports.getBestSellingProducts = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { limit = 10, page = 1 } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)('products:best-selling', req.query);
-    const cachedResult = await redis_1.redis.get(cacheKey);
-    if (cachedResult) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Best selling products retrieved successfully', cachedResult));
-    }
-    const pageNumber = parseInt(page);
-    const limitNumber = parseInt(limit);
-    const skip = (pageNumber - 1) * limitNumber;
-    const filter = {
-        isDeleted: false,
-        totalSold: { $gt: 0 }
-    };
-    const [bestSellers, total] = await Promise.all([
-        product_model_1.Product.find(filter)
-            .populate('category', 'name slug')
-            .populate('brand', 'name slug')
-            .sort({ totalSold: -1 })
-            .skip(skip)
-            .limit(limitNumber)
-            .select('-__v'),
-        product_model_1.Product.countDocuments(filter)
-    ]);
-    const totalPages = Math.ceil(total / limitNumber);
-    const result = {
-        products: bestSellers,
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages,
-    };
-    await redis_1.redis.set(cacheKey, result, 600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Best selling products retrieved successfully', result));
-    return;
-});
-exports.getTrendingProducts = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { limit = 10, page = 1 } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)('products:trending', req.query);
-    const cachedResult = await redis_1.redis.get(cacheKey);
-    if (cachedResult) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Trending products retrieved successfully', cachedResult));
-    }
-    const pageNumber = parseInt(page);
-    const limitNumber = parseInt(limit);
-    const skip = (pageNumber - 1) * limitNumber;
-    const filter = {
-        isDeleted: false,
-        salesCount: { $gt: 0 }
-    };
-    const [trending, total] = await Promise.all([
-        product_model_1.Product.find(filter)
-            .populate('category', 'name slug')
-            .populate('brand', 'name slug')
-            .sort({ salesCount: -1, updatedAt: -1 })
-            .skip(skip)
-            .limit(limitNumber)
-            .select('-__v'),
-        product_model_1.Product.countDocuments(filter)
-    ]);
-    const totalPages = Math.ceil(total / limitNumber);
-    const result = {
-        products: trending,
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages,
-    };
-    await redis_1.redis.set(cacheKey, result, 600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Trending products retrieved successfully', result));
-    return;
-});
+// export const getBestSellingProducts = asyncHandler(async (req, res) => {
+//   const { limit = 10, page = 1 } = req.query;
+//   const cacheKey = generateCacheKey('products:best-selling', req.query);
+//   const cachedResult = await redis.get(cacheKey);
+//   if (cachedResult) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'Best selling products retrieved successfully', cachedResult)
+//     );
+//   }
+//   const pageNumber = parseInt(page as string);
+//   const limitNumber = parseInt(limit as string);
+//   const skip = (pageNumber - 1) * limitNumber;
+//   const filter = {
+//     isDeleted: false,
+//     totalSold: { $gt: 0 }
+//   };
+//   const [bestSellers, total] = await Promise.all([
+//     Product.find(filter)
+//       .populate('category', 'name slug')
+//       .populate('brand', 'name slug')
+//       .sort({ totalSold: -1 })
+//       .skip(skip)
+//       .limit(limitNumber)
+//       .select('-__v'),
+//     Product.countDocuments(filter)
+//   ]);
+//   const totalPages = Math.ceil(total / limitNumber);
+//   const result = {
+//     products: bestSellers,
+//     page: Number(page),
+//     limit: Number(limit),
+//     total,
+//     totalPages,
+//   };
+//   await redis.set(cacheKey, result, 600);
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'Best selling products retrieved successfully', result)
+//   );
+//   return;
+// });
+// export const getTrendingProducts = asyncHandler(async (req, res) => {
+//   const { limit = 10, page = 1 } = req.query;
+//   const cacheKey = generateCacheKey('products:trending', req.query);
+//   const cachedResult = await redis.get(cacheKey);
+//   if (cachedResult) {
+//     return res.status(status.OK).json(
+//       new ApiResponse(status.OK, 'Trending products retrieved successfully', cachedResult)
+//     );
+//   }
+//   const pageNumber = parseInt(page as string);
+//   const limitNumber = parseInt(limit as string);
+//   const skip = (pageNumber - 1) * limitNumber;
+//   const filter = {
+//     isDeleted: false,
+//     salesCount: { $gt: 0 }
+//   };
+//   const [trending, total] = await Promise.all([
+//     Product.find(filter)
+//       .populate('category', 'name slug')
+//       .populate('brand', 'name slug')
+//       .sort({ salesCount: -1, updatedAt: -1 })
+//       .skip(skip)
+//       .limit(limitNumber)
+//       .select('-__v'),
+//     Product.countDocuments(filter)
+//   ]);
+//   const totalPages = Math.ceil(total / limitNumber);
+//   const result = {
+//     products: trending,
+//     page: Number(page),
+//     limit: Number(limit),
+//     total,
+//     totalPages,
+//   };
+//   await redis.set(cacheKey, result, 600);
+//   res.status(status.OK).json(
+//     new ApiResponse(status.OK, 'Trending products retrieved successfully', result)
+//   );
+//   return;
+// });
 //# sourceMappingURL=product.controller.js.map

@@ -5,7 +5,7 @@ const zod_1 = require("zod");
 const category_validation_1 = require("../category/category.validation");
 exports.brandValidation = zod_1.z.object({
     name: zod_1.z.string().min(2, "Name must be at least 2 characters long"),
-    categoryId: category_validation_1.objectIdValidation
+    categoryIds: category_validation_1.objectIdValidation.array().optional()
 });
 exports.brandUpdateValidation = zod_1.z.object({
     name: zod_1.z.string().min(2, "Name must be at least 2 characters long").optional(),
