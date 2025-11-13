@@ -16,11 +16,11 @@ const OrderSchema = new Schema<IOrder>(
     shippingAddress: {
       type: Schema.Types.ObjectId,
       ref: 'Address',
-      required: true,
+      default: null,
     },
     status: {
       type: String,
-      enum: Object.values(OrderStatus),
+      enum: OrderStatus,
       default: OrderStatus.Processing,
     },
     isCustomOrder: {

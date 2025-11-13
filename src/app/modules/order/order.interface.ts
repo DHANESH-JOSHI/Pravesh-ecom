@@ -2,12 +2,12 @@ import { Types } from 'mongoose';
 import { Document } from 'mongoose';
 
 export enum OrderStatus {
+  AwaitingConfirmation = 'awaiting_confirmation',
+  AwaitingPayment = 'awaiting_payment',
   Processing = 'processing',
   Shipped = 'shipped',
   Delivered = 'delivered',
   Cancelled = 'cancelled',
-  AwaitingConfirmation = 'awaiting_confirmation',
-  AwaitingPayment = 'awaiting_payment',
 }
 
 export interface IOrderItem {
