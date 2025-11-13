@@ -62,11 +62,19 @@ export const getBannerById = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(bannerId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid banner ID');
   }
+  const cacheKey = `banner:${bannerId}`;
+  const cachedBanner = await redis.get(cacheKey);
+
+  if (cachedBanner) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Banner retrieved successfully', cachedBanner));
+  }
 
   const banner = await Banner.findById(bannerId);
   if (!banner || banner.isDeleted) {
     throw new ApiError(status.NOT_FOUND, 'Banner not found');
   }
+
+  await redis.set(cacheKey, banner, 3600);
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved banner`, banner));
   return;
