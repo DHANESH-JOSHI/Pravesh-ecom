@@ -100,7 +100,6 @@ exports.createCustomOrder = (0, utils_1.asyncHandler)(async (req, res) => {
         user: userId,
         items: [],
         totalAmount: 0,
-        shippingAddress: { street: 'N/A', city: 'N/A', state: 'N/A', postalCode: 'N/A', country: 'N/A' },
         status: order_interface_1.OrderStatus.AwaitingConfirmation,
         isCustomOrder: true,
         image: customOrderImage,

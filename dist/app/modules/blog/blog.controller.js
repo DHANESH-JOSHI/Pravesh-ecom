@@ -25,6 +25,9 @@ exports.createBlog = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getBlogById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
+    if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new ApiError(http_status_1.default.BAD_REQUEST, 'Invalid blog ID');
+    }
     const cacheKey = `blog:${id}`;
     const cachedBlog = await redis_1.redis.get(cacheKey);
     if (cachedBlog) {

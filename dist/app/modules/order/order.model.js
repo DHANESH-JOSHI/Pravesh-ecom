@@ -52,11 +52,11 @@ const OrderSchema = new mongoose_1.Schema({
     shippingAddress: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Address',
-        required: true,
+        default: null,
     },
     status: {
         type: String,
-        enum: Object.values(order_interface_1.OrderStatus),
+        enum: order_interface_1.OrderStatus,
         default: order_interface_1.OrderStatus.Processing,
     },
     isCustomOrder: {
