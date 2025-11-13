@@ -57,6 +57,21 @@ export const getAllBanners = asyncHandler(async (req, res) => {
   return;
 });
 
+export const getBannerById = asyncHandler(async (req, res) => {
+  const { id: bannerId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(bannerId)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid banner ID');
+  }
+
+  const banner = await Banner.findById(bannerId);
+  if (!banner || banner.isDeleted) {
+    throw new ApiError(status.NOT_FOUND, 'Banner not found');
+  }
+
+  res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved banner`, banner));
+  return;
+});
+
 export const updateBanner = asyncHandler(async (req, res) => {
   const { id: bannerId } = req.params;
   if (!mongoose.Types.ObjectId.isValid(bannerId)) {

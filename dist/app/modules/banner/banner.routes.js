@@ -10,6 +10,7 @@ const middlewares_1 = require("../../middlewares");
 const cloudinary_1 = require("../../config/cloudinary");
 const router = express_1.default.Router();
 router.get('/', banner_controller_1.getAllBanners);
+router.get('/:id', banner_controller_1.getBannerById);
 router.use((0, middlewares_1.auth)('admin'));
 router.post('/', middlewares_1.authenticatedActionLimiter, cloudinary_1.upload.single('image'), banner_controller_1.createBanner);
 router.patch('/:id', middlewares_1.authenticatedActionLimiter, cloudinary_1.upload.single('image'), banner_controller_1.updateBanner);

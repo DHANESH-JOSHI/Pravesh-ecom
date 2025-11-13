@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBanner = exports.updateBanner = exports.getAllBanners = exports.createBanner = void 0;
+exports.deleteBanner = exports.updateBanner = exports.getBannerById = exports.getAllBanners = exports.createBanner = void 0;
 const utils_1 = require("../../utils");
 const redis_1 = require("../../config/redis");
 const interface_1 = require("../../interface");
@@ -55,6 +55,18 @@ exports.getAllBanners = (0, utils_1.asyncHandler)(async (req, res) => {
     };
     await redis_1.redis.set(cacheKey, result, 3600);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Successfully retrieved banners`, result));
+    return;
+});
+exports.getBannerById = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { id: bannerId } = req.params;
+    if (!mongoose_1.default.Types.ObjectId.isValid(bannerId)) {
+        throw new ApiError(http_status_1.default.BAD_REQUEST, 'Invalid banner ID');
+    }
+    const banner = await banner_model_1.Banner.findById(bannerId);
+    if (!banner || banner.isDeleted) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, 'Banner not found');
+    }
+    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Successfully retrieved banner`, banner));
     return;
 });
 exports.updateBanner = (0, utils_1.asyncHandler)(async (req, res) => {
