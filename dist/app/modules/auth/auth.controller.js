@@ -15,7 +15,7 @@ const user_interface_1 = require("../user/user.interface");
 const ApiError = (0, interface_1.getApiErrorClass)("AUTH");
 const ApiResponse = (0, interface_1.getApiResponseClass)("AUTH");
 exports.registerUser = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { name, password, img, phone, email } = auth_validation_1.registerValidation.parse(req.body);
+    const { name, password, phone, email } = auth_validation_1.registerValidation.parse(req.body);
     const session = await mongoose_1.default.startSession();
     session.startTransaction();
     let user;
@@ -46,13 +46,13 @@ exports.registerUser = (0, utils_1.asyncHandler)(async (req, res) => {
                     user.phone = phone;
                 }
                 else {
-                    user = new user_model_1.User({ name, password, img, phone, email });
+                    user = new user_model_1.User({ name, password, phone, email });
                     await user.save({ session });
                     await wallet_model_1.Wallet.create([{ user: user._id }], { session });
                 }
             }
             else {
-                user = new user_model_1.User({ name, password, img, phone });
+                user = new user_model_1.User({ name, password, phone });
                 await user.save({ session });
                 await wallet_model_1.Wallet.create([{ user: user._id }], { session });
             }
@@ -61,8 +61,6 @@ exports.registerUser = (0, utils_1.asyncHandler)(async (req, res) => {
         if (user.status === user_interface_1.UserStatus.PENDING) {
             user.name = name;
             user.password = password;
-            if (img)
-                user.img = img;
         }
         // issue new OTP
         user.otp = (0, utils_1.generateOTP)();

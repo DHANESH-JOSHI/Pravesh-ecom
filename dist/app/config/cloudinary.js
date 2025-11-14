@@ -22,8 +22,12 @@ const storage = new multer_storage_cloudinary_1.CloudinaryStorage({
             let folderName = 'pravesh-uploads';
             if (req.originalUrl.includes('/products')) {
                 folderName = 'pravesh-products';
-                // } else if (req.originalUrl.includes('/categories')) {
-                //   folderName = 'pravesh-categories';
+            }
+            else if (req.originalUrl.includes('/users')) {
+                folderName = 'pravesh-users';
+            }
+            else if (req.originalUrl.includes('/categories')) {
+                folderName = 'pravesh-categories';
             }
             else if (req.originalUrl.includes('/brands')) {
                 folderName = 'pravesh-brands';

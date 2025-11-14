@@ -19,7 +19,6 @@ exports.registerValidation = zod_1.default.object({
         message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
     }),
     email: zod_1.default.email("Invalid email format").optional(),
-    img: zod_1.default.string().optional(),
 });
 exports.loginValidation = zod_1.default.object({
     phoneOrEmail: exports.phoneOrEmailSchema,

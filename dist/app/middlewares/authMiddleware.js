@@ -22,9 +22,6 @@ const auth = (...requiredRoles) => {
             let user = await redis_1.redis.get(cacheKey);
             if (!user) {
                 user = await user_model_1.User.findById(decoded.userId);
-                if (user) {
-                    await redis_1.redis.set(cacheKey, user, 600);
-                }
             }
             if (!user) {
                 return next(new interface_1.ApiError(http_status_1.default.NOT_FOUND, "User not found", "AUTH_MIDDLEWARE"));
@@ -32,6 +29,7 @@ const auth = (...requiredRoles) => {
             const userObj = user.toJSON ? user.toJSON() : user;
             const { password: _, otp, otpExpires, ...userObject } = userObj;
             req.user = userObject;
+            await redis_1.redis.set(cacheKey, userObject, 600);
             if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
                 return next(new interface_1.ApiError(http_status_1.default.FORBIDDEN, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
             }

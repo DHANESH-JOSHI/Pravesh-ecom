@@ -13,10 +13,11 @@ const redis_1 = require("../../config/redis");
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_interface_1 = require("./user.interface");
 const auth_validation_1 = require("../auth/auth.validation");
+const cloudinary_1 = require("../../config/cloudinary");
 const ApiError = (0, interface_1.getApiErrorClass)("USER");
 const ApiResponse = (0, interface_1.getApiResponseClass)("USER");
 exports.createUser = (0, utils_1.asyncHandler)(async (req, res) => {
-    const { name, password, img, phone, email } = auth_validation_1.registerValidation.parse(req.body);
+    const { name, password, phone, email } = auth_validation_1.registerValidation.parse(req.body);
     const session = await mongoose_1.default.startSession();
     session.startTransaction();
     try {
@@ -24,7 +25,7 @@ exports.createUser = (0, utils_1.asyncHandler)(async (req, res) => {
         if (user) {
             throw new ApiError(http_status_1.default.BAD_REQUEST, "User already exists with this phone or email.");
         }
-        user = new user_model_1.User({ name, password, img, phone, email, status: user_interface_1.UserStatus.ACTIVE });
+        user = new user_model_1.User({ name, password, phone, email, status: user_interface_1.UserStatus.ACTIVE });
         await user.save({ session });
         await session.commitTransaction();
         session.endSession();
@@ -46,7 +47,7 @@ exports.getMe = (0, utils_1.asyncHandler)(async (req, res) => {
     if (cachedUser) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "User profile retrieved successfully", cachedUser));
     }
-    const user = await user_model_1.User.findById(userId, { password: 0 });
+    const user = await user_model_1.User.findById(userId, { password: 0, otp: 0, otpExpires: 0 });
     if (!user) {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
@@ -57,6 +58,10 @@ exports.getMe = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.updateUser = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
     const validatedData = user_validation_1.updateUserValidation.parse(req.body);
+    const user = await user_model_1.User.findById(userId);
+    if (!user) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
+    }
     if (validatedData.email && validatedData.email.length > 0) {
         const existingUser = await user_model_1.User.findOne({
             email: validatedData.email,
@@ -69,7 +74,15 @@ exports.updateUser = (0, utils_1.asyncHandler)(async (req, res) => {
     if (validatedData.email === '') {
         delete validatedData.email;
     }
-    const updatedUser = await user_model_1.User.findByIdAndUpdate(userId, validatedData, { new: true, select: '-password' });
+    if (req.file) {
+        validatedData.img = req.file.path;
+        if (user.img) {
+            const publicId = user.img.split("/").pop()?.split(".")[0];
+            if (publicId)
+                await cloudinary_1.cloudinary.uploader.destroy(`pravesh-users/${publicId}`);
+        }
+    }
+    const updatedUser = await user_model_1.User.findByIdAndUpdate(userId, validatedData, { new: true, select: '-password -otp -otpExpires' });
     if (!updatedUser) {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
@@ -159,7 +172,7 @@ exports.getUserById = (0, utils_1.asyncHandler)(async (req, res) => {
         ]);
     }
     else {
-        user = await user_model_1.User.findById(userId, { password: 0 });
+        user = await user_model_1.User.findById(userId, { password: 0, otp: 0, otpExpires: 0 });
     }
     if (!user) {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");

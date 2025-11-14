@@ -29,6 +29,6 @@ exports.updateUserValidation = zod_1.z.object({
         zod_1.z.email("Invalid email format"),
         zod_1.z.string().length(0)
     ]).optional(),
-    img: zod_1.z.string().optional(),
+    img: zod_1.z.string().optional()
 });
 //# sourceMappingURL=user.validation.js.map
