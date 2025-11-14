@@ -23,9 +23,6 @@ export const auth = (...requiredRoles: string[]) => {
 
       if (!user) {
         user = await User.findById(decoded.userId);
-        if (user) {
-          await redis.set(cacheKey, user, 600);
-        }
       }
 
       if (!user) {
@@ -34,6 +31,7 @@ export const auth = (...requiredRoles: string[]) => {
       const userObj = (user as any).toJSON ? (user as any).toJSON() : user;
       const { password: _, otp, otpExpires, ...userObject } = userObj;
       req.user = userObject as IUser;
+      await redis.set(cacheKey, userObject, 600);
 
       if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
         return next(new ApiError(status.FORBIDDEN, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));

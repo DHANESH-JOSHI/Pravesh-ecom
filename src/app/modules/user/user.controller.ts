@@ -53,7 +53,7 @@ export const getMe = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "User profile retrieved successfully", cachedUser));
   }
 
-  const user = await User.findById(userId, { password: 0 });
+  const user = await User.findById(userId, { password: 0, otp: 0, otpExpires: 0 });
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
