@@ -549,8 +549,8 @@ export const getProductFilters = asyncHandler(async (req, res) => {
   const [brands, categories, priceRange] = await Promise.all([
     Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name slug'),
     Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title slug'),
-    Product.distinct('specifications.color', { isDeleted: false }),
-    Product.distinct('specifications.size', { isDeleted: false }),
+    // Product.distinct('specifications.color', { isDeleted: false }),
+    // Product.distinct('specifications.size', { isDeleted: false }),
     Product.aggregate([
       { $match: { isDeleted: false } },
       {
