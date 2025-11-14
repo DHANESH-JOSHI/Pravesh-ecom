@@ -7,11 +7,12 @@ import { redis } from "@/config/redis";
 import mongoose from "mongoose";
 import { UserStatus } from "./user.interface";
 import { registerValidation } from "../auth/auth.validation";
+import { cloudinary } from "@/config/cloudinary";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
 export const createUser = asyncHandler(async (req, res) => {
-  const { name, password, img, phone, email } = registerValidation.parse(req.body);
+  const { name, password, phone, email } = registerValidation.parse(req.body);
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -19,7 +20,7 @@ export const createUser = asyncHandler(async (req, res) => {
     if (user) {
       throw new ApiError(status.BAD_REQUEST, "User already exists with this phone or email.");
     }
-    user = new User({ name, password, img, phone, email, status: UserStatus.ACTIVE });
+    user = new User({ name, password, phone, email, status: UserStatus.ACTIVE });
 
     await user.save({ session });
 
@@ -66,7 +67,11 @@ export const getMe = asyncHandler(async (req, res) => {
 export const updateUser = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const validatedData = updateUserValidation.parse(req.body);
+  const user = await User.findById(userId);
 
+  if (!user) {
+    throw new ApiError(status.NOT_FOUND, "User not found");
+  }
   if (validatedData.email && validatedData.email.length > 0) {
     const existingUser = await User.findOne({
       email: validatedData.email,
@@ -80,6 +85,14 @@ export const updateUser = asyncHandler(async (req, res) => {
 
   if (validatedData.email === '') {
     delete validatedData.email;
+  }
+
+  if(req.file){
+    validatedData.img = req.file.path;
+    if(user.img){
+      const publicId = user.img.split("/").pop()?.split(".")[0];
+      if (publicId) await cloudinary.uploader.destroy(`pravesh-users/${publicId}`);
+    }
   }
 
   const updatedUser = await User.findByIdAndUpdate(

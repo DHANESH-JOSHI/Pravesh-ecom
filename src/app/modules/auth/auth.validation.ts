@@ -18,7 +18,6 @@ export const registerValidation = z.object({
     message: "Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9"
   }),
   email: z.email("Invalid email format").optional(),
-  img: z.string().optional(),
 });
 
 export const loginValidation = z.object({

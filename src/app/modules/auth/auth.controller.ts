@@ -11,7 +11,7 @@ const ApiError = getApiErrorClass("AUTH");
 const ApiResponse = getApiResponseClass("AUTH");
 
 export const registerUser = asyncHandler(async (req, res) => {
-  const { name, password, img, phone, email } = registerValidation.parse(req.body);
+  const { name, password, phone, email } = registerValidation.parse(req.body);
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -45,12 +45,12 @@ export const registerUser = asyncHandler(async (req, res) => {
           user = existingEmailUser;
           user.phone = phone;
         } else {
-          user = new User({ name, password, img, phone, email });
+          user = new User({ name, password, phone, email });
           await user.save({ session });
           await Wallet.create([{ user: user._id }], { session });
         }
       } else {
-        user = new User({ name, password, img, phone });
+        user = new User({ name, password, phone });
         await user.save({ session });
         await Wallet.create([{ user: user._id }], { session });
       }
@@ -59,7 +59,6 @@ export const registerUser = asyncHandler(async (req, res) => {
     if (user.status === UserStatus.PENDING) {
       user.name = name;
       user.password = password;
-      if (img) user.img = img;
     }
 
     // issue new OTP

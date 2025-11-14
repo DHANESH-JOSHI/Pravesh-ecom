@@ -31,6 +31,6 @@ export const updateUserValidation = z.object({
     z.email("Invalid email format"),
     z.string().length(0)
   ]).optional(),
-  img: z.string().optional(),
+  img: z.string().optional()
 });
 
