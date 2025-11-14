@@ -85,7 +85,7 @@ export const updateUser = asyncHandler(async (req, res) => {
   const updatedUser = await User.findByIdAndUpdate(
     userId,
     validatedData,
-    { new: true, select: '-password' }
+    { new: true, select: '-password -otp -otpExpires' }
   );
 
   if (!updatedUser) {
@@ -183,7 +183,7 @@ export const getUserById = asyncHandler(async (req, res) => {
       },
     ]);
   } else {
-    user = await User.findById(userId, { password: 0 });
+    user = await User.findById(userId, { password: 0, otp: 0, otpExpires: 0 });
   }
 
   if (!user) {
