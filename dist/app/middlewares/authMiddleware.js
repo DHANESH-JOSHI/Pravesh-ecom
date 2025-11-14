@@ -27,13 +27,13 @@ const auth = (...requiredRoles) => {
                 }
             }
             if (!user) {
-                return next(new interface_1.ApiError(http_status_1.default.UNAUTHORIZED, "User not found", "AUTH_MIDDLEWARE"));
+                return next(new interface_1.ApiError(http_status_1.default.NOT_FOUND, "User not found", "AUTH_MIDDLEWARE"));
             }
             const userObj = user.toJSON ? user.toJSON() : user;
             const { password: _, otp, otpExpires, ...userObject } = userObj;
             req.user = userObject;
             if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
-                return next(new interface_1.ApiError(http_status_1.default.UNAUTHORIZED, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
+                return next(new interface_1.ApiError(http_status_1.default.FORBIDDEN, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
             }
             next();
         }

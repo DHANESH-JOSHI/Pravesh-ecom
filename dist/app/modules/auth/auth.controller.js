@@ -100,7 +100,7 @@ exports.loginUser = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
     if (user.role !== user_interface_1.UserRole.USER) {
-        throw new ApiError(http_status_1.default.BAD_REQUEST, "User role is not user");
+        throw new ApiError(http_status_1.default.BAD_REQUEST, "You do not have permission to perform this action");
     }
     if (user.status !== user_interface_1.UserStatus.ACTIVE) {
         throw new ApiError(http_status_1.default.BAD_REQUEST, "User account is not active");
@@ -127,7 +127,7 @@ exports.loginAsAdmin = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
     if (user.role !== user_interface_1.UserRole.ADMIN) {
-        throw new ApiError(http_status_1.default.BAD_REQUEST, "User is not an admin");
+        throw new ApiError(http_status_1.default.BAD_REQUEST, "You do not have permission to perform this action");
     }
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
@@ -173,7 +173,7 @@ exports.loginAsAdminUsingOtp = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
     if (user.role !== user_interface_1.UserRole.ADMIN) {
-        throw new ApiError(http_status_1.default.BAD_REQUEST, "Unauthorized");
+        throw new ApiError(http_status_1.default.FORBIDDEN, "You do not have permission to perform this action");
     }
     if (!user.compareOtp(otp)) {
         throw new ApiError(http_status_1.default.BAD_REQUEST, "Invalid or expired OTP");
@@ -202,7 +202,7 @@ exports.loginUsingOtp = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
     if (user.role !== user_interface_1.UserRole.USER) {
-        throw new ApiError(http_status_1.default.BAD_REQUEST, "User role is not user");
+        throw new ApiError(http_status_1.default.BAD_REQUEST, "You do not have permission to perform this action");
     }
     if (!user.compareOtp(otp)) {
         throw new ApiError(http_status_1.default.BAD_REQUEST, "Invalid or expired OTP");
