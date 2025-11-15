@@ -13,6 +13,7 @@ const redis_1 = require("../../config/redis");
 const interface_1 = require("../../interface");
 const category_validation_1 = require("./category.validation");
 const product_model_1 = require("../product/product.model");
+const brand_controller_1 = require("../brand/brand.controller");
 const ApiError = (0, interface_1.getApiErrorClass)("CATEGORY");
 const ApiResponse = (0, interface_1.getApiResponseClass)("CATEGORY");
 exports.createCategory = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -55,15 +56,17 @@ exports.getAllCategories = (0, utils_1.asyncHandler)(async (req, res) => {
             .sort({ [sort]: order === "desc" ? -1 : 1 })
             .skip(skip)
             .limit(Number(limit))
-            .populate("parentCategory", "slug title"),
+            .populate("parentCategory", "slug title")
+            .select('-brands'),
         category_model_1.Category.countDocuments(filter),
     ]);
     const augmented = await Promise.all(categories.map(async (c) => {
-        const [productCount, childCount] = await Promise.all([
-            product_model_1.Product.countDocuments({ category: c._id, isDeleted: false }),
+        const [productCount, childCount, brandCount] = await Promise.all([
+            await countProducts(c._id),
             category_model_1.Category.countDocuments({ parentCategory: c._id, isDeleted: false }),
+            await countBrands(c._id)
         ]);
-        return { ...c.toJSON(), productCount, childCount };
+        return { ...c.toJSON(), productCount, childCount, brandCount };
     }));
     const totalPages = Math.ceil(total / Number(limit));
     const result = { categories: augmented, total, page: Number(page), totalPages };
@@ -76,7 +79,7 @@ exports.getCategoryTree = (0, utils_1.asyncHandler)(async (req, res) => {
     if (cached)
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Category tree retrieved", cached));
     const buildTree = async (parent = null) => {
-        const nodes = await category_model_1.Category.find({ parentCategory: parent, isDeleted: false }).select("title slug");
+        const nodes = await category_model_1.Category.find({ parentCategory: parent, isDeleted: false }).select("title slug path");
         const children = await Promise.all(nodes.map(async (n) => ({ ...n.toObject(), children: await buildTree(n._id) })));
         return children;
     };
@@ -208,4 +211,68 @@ exports.deleteCategory = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Category deleted", deleted));
 });
+async function countBrands(categoryId) {
+    const result = await category_model_1.Category.aggregate([
+        { $match: { _id: categoryId } },
+        {
+            $graphLookup: {
+                from: 'categories',
+                startWith: '$_id',
+                connectFromField: '_id',
+                connectToField: 'parentCategory',
+                as: 'descendants',
+                restrictSearchWithMatch: { isDeleted: false }
+            }
+        },
+        {
+            $project: {
+                descendantIds: {
+                    $map: {
+                        input: '$descendants',
+                        as: 'd',
+                        in: '$$d._id'
+                    }
+                }
+            }
+        },
+        {
+            $lookup: {
+                from: 'brands',
+                let: { dIds: '$descendantIds' },
+                pipeline: [
+                    { $match: { isDeleted: false } },
+                    {
+                        $match: {
+                            $expr: {
+                                $gt: [
+                                    {
+                                        $size: {
+                                            $setIntersection: ['$categories', '$$dIds']
+                                        }
+                                    },
+                                    0
+                                ]
+                            }
+                        }
+                    }
+                ],
+                as: 'matchedBrands'
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                brandCount: { $size: '$matchedBrands' }
+            }
+        }
+    ]);
+    return result[0]?.brandCount || 0;
+}
+async function countProducts(categoryId) {
+    const allIds = await (0, brand_controller_1.getLeafCategoryIds)(categoryId);
+    return product_model_1.Product.countDocuments({
+        isDeleted: false,
+        category: { $in: allIds }
+    });
+}
 //# sourceMappingURL=category.controller.js.map

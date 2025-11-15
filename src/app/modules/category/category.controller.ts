@@ -8,6 +8,7 @@ import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import { categoryValidation, categoryUpdateValidation } from "./category.validation";
 import { ICategory } from "./category.interface";
 import { Product } from "../product/product.model";
+import { getLeafCategoryIds } from "../brand/brand.controller";
 
 const ApiError = getApiErrorClass("CATEGORY");
 const ApiResponse = getApiResponseClass("CATEGORY");
@@ -67,22 +68,24 @@ export const getAllCategories = asyncHandler(async (req, res) => {
       .sort({ [sort as string]: order === "desc" ? -1 : 1 })
       .skip(skip)
       .limit(Number(limit))
-      .populate("parentCategory", "slug title"),
+      .populate("parentCategory", "slug title")
+      .select('-brands'),
     Category.countDocuments(filter),
   ]);
 
   const augmented = await Promise.all(
-      categories.map(async (c) => {
-        const [productCount, childCount] = await Promise.all([
-          Product.countDocuments({ category: c._id, isDeleted: false }),
-          Category.countDocuments({ parentCategory: c._id, isDeleted: false }),
-        ]);
-        return { ...c.toJSON(), productCount, childCount };
-      })
-    );
+    categories.map(async (c) => {
+      const [productCount, childCount, brandCount] = await Promise.all([
+        await countProducts(c._id as string),
+        Category.countDocuments({ parentCategory: c._id, isDeleted: false }),
+        await countBrands(c._id as any)
+      ]);
+      return { ...c.toJSON(), productCount, childCount, brandCount };
+    })
+  );
 
   const totalPages = Math.ceil(total / Number(limit));
-  const result = { categories:augmented, total, page: Number(page), totalPages };
+  const result = { categories: augmented, total, page: Number(page), totalPages };
 
   await redis.set(cacheKey, result, 3600);
   res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved", result));
@@ -94,7 +97,7 @@ export const getCategoryTree = asyncHandler(async (req, res) => {
   if (cached) return res.status(status.OK).json(new ApiResponse(status.OK, "Category tree retrieved", cached));
 
   const buildTree = async (parent = null) => {
-    const nodes: ICategory[] = await Category.find({ parentCategory: parent, isDeleted: false }).select("title slug");
+    const nodes: ICategory[] = await Category.find({ parentCategory: parent, isDeleted: false }).select("title slug path");
     const children: ICategory[] = await Promise.all(
       nodes.map(async (n) => ({ ...n.toObject(), children: await buildTree(n._id as any) }))
     );
@@ -259,3 +262,70 @@ export const deleteCategory = asyncHandler(async (req, res) => {
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted", deleted));
 });
+
+async function countBrands(categoryId: mongoose.Types.ObjectId) {
+  const result = await Category.aggregate([
+    { $match: { _id: categoryId } },
+    {
+      $graphLookup: {
+        from: 'categories',
+        startWith: '$_id',
+        connectFromField: '_id',
+        connectToField: 'parentCategory',
+        as: 'descendants',
+        restrictSearchWithMatch: { isDeleted: false }
+      }
+    },
+    {
+      $project: {
+        descendantIds: {
+          $map: {
+            input: '$descendants',
+            as: 'd',
+            in: '$$d._id'
+          }
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: 'brands',
+        let: { dIds: '$descendantIds' },
+        pipeline: [
+          { $match: { isDeleted: false } },
+          {
+            $match: {
+              $expr: {
+                $gt: [
+                  {
+                    $size: {
+                      $setIntersection: ['$categories', '$$dIds']
+                    }
+                  },
+                  0
+                ]
+              }
+            }
+          }
+        ],
+        as: 'matchedBrands'
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        brandCount: { $size: '$matchedBrands' }
+      }
+    }
+  ]);
+
+  return result[0]?.brandCount || 0;
+}
+async function countProducts(categoryId: string) {
+  const allIds = await getLeafCategoryIds(categoryId)
+
+  return Product.countDocuments({
+    isDeleted: false,
+    category: { $in: allIds }
+  });
+}
