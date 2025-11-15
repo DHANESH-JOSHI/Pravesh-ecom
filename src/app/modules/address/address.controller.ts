@@ -169,8 +169,8 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
   if (address.user !== userId) {
     throw new ApiError(status.FORBIDDEN, "You are not authorized to set this address as default");
   }
-  await Address.updateMany(
-    { user: userId },
+  await Address.findOneAndUpdate(
+    { user: userId,isDefault: true },
     { $set: { isDefault: false } }
   );
   address.isDefault = true;

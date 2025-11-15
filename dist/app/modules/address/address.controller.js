@@ -158,7 +158,7 @@ exports.setDefaultAddress = (0, utils_1.asyncHandler)(async (req, res) => {
     if (address.user !== userId) {
         throw new ApiError(http_status_1.default.FORBIDDEN, "You are not authorized to set this address as default");
     }
-    await address_model_1.Address.updateMany({ user: userId }, { $set: { isDefault: false } });
+    await address_model_1.Address.findOneAndUpdate({ user: userId, isDefault: true }, { $set: { isDefault: false } });
     address.isDefault = true;
     await address.save();
     await redis_1.redis.deleteByPattern(`addresses:user:${userId}*`);
