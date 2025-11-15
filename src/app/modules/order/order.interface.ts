@@ -2,12 +2,14 @@ import { Types } from 'mongoose';
 import { Document } from 'mongoose';
 
 export enum OrderStatus {
-  AwaitingConfirmation = 'awaiting_confirmation',
-  AwaitingPayment = 'awaiting_payment',
-  Processing = 'processing',
-  Shipped = 'shipped',
-  Delivered = 'delivered',
+  Received = 'received',
+  Approved = 'approved',
+  Confirmed = 'confirmed',
   Cancelled = 'cancelled',
+  Shipped = 'shipped',
+  OutForDelivery = 'out_for_delivery',
+  Delivered = 'delivered',
+  Refunded = 'refunded',
 }
 
 export interface IOrderItem {
@@ -16,11 +18,17 @@ export interface IOrderItem {
   price: number;
 }
 
+export interface OrderHistory {
+  status: OrderStatus;
+  timestamp: Date;
+}
+
 export interface IOrder extends Document {
   user: Types.ObjectId;
   items: IOrderItem[];
   totalAmount: number;
   shippingAddress: Types.ObjectId;
+  history: OrderHistory[];
   status: OrderStatus;
   isCustomOrder: boolean;
   image?: string;

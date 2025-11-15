@@ -50,17 +50,17 @@ export const createOrder = asyncHandler(async (req, res) => {
       totalAmount += product.originalPrice * item.quantity;
     }
 
-    const wallet = await Wallet.findOne({ user: userId }).session(session);
-    if (!wallet || wallet.balance < totalAmount) {
-      throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
-    }
-    wallet.balance -= totalAmount;
-    wallet.transactions.push({
-      amount: -totalAmount,
-      description: `Order payment`,
-      createdAt: new Date(),
-    });
-    await wallet.save({ session });
+    // const wallet = await Wallet.findOne({ user: userId }).session(session);
+    // if (!wallet || wallet.balance < totalAmount) {
+    //   throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
+    // }
+    // wallet.balance -= totalAmount;
+    // wallet.transactions.push({
+    //   amount: -totalAmount,
+    //   description: `Order payment`,
+    //   createdAt: new Date(),
+    // });
+    // await wallet.save({ session });
 
     for (const item of cart.items) {
       await Product.findByIdAndUpdate(item.product, {
@@ -72,7 +72,7 @@ export const createOrder = asyncHandler(async (req, res) => {
       items: orderItems,
       totalAmount,
       shippingAddress: shippingAddressId,
-      status: OrderStatus.Processing,
+      status: OrderStatus.Received,
     }], { session }))[0];
 
     cart.items = [];
@@ -108,7 +108,7 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     user: userId,
     items: [],
     totalAmount: 0,
-    status: OrderStatus.AwaitingConfirmation,
+    status: OrderStatus.Received,
     isCustomOrder: true,
     image: customOrderImage,
   });
@@ -123,7 +123,7 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
 
 export const updateOrder = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
-  const { items, status: orderStatus, feedback } = adminUpdateOrderValidation.parse(req.body);
+  const { items, feedback } = adminUpdateOrderValidation.parse(req.body);
 
   const order = await Order.findById(orderId);
   if (!order) {
@@ -145,9 +145,15 @@ export const updateOrder = asyncHandler(async (req, res) => {
       totalAmount += product.originalPrice * item.quantity;
     }
     order.totalAmount = totalAmount;
-    order.status = OrderStatus.AwaitingPayment;
+    // order.status = OrderStatus.Approved;
   }
-  if (orderStatus) order.status = orderStatus;
+  // if (orderStatus) {
+  //   if ([OrderStatus.Approved, OrderStatus.Cancelled, OrderStatus.Confirmed].includes(orderStatus)) {
+  //     order.status = orderStatus;
+  //   } else {
+  //     throw new ApiError(status.BAD_REQUEST, 'You can only update the status to Approved, Cancelled, or Confirmed as of now');
+  //   }
+  // }
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
 
@@ -160,32 +166,38 @@ export const updateOrder = asyncHandler(async (req, res) => {
   return;
 });
 
-export const confirmCustomOrder = asyncHandler(async (req, res) => {
+export const confirmOrder = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { id: orderId } = req.params;
-  const { shippingAddressId } = checkoutFromCartValidation.parse(req.body);
+  const { shippingAddressId } = req.body;
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    if (!mongoose.Types.ObjectId.isValid(shippingAddressId)) {
-      throw new ApiError(status.BAD_REQUEST, 'Invalid address ID');
-    }
-    const shippingAddress = await Address.findOne({ _id: shippingAddressId, user: userId, isDeleted: false }).session(session);
-    if (!shippingAddress) {
-      throw new ApiError(status.NOT_FOUND, 'Shipping address not found or you are not authorized to use it');
+    if (shippingAddressId) {
+      if (!mongoose.Types.ObjectId.isValid(shippingAddressId)) {
+        throw new ApiError(status.BAD_REQUEST, 'Invalid address ID');
+      }
+      const shippingAddress = await Address.findOne({ _id: shippingAddressId, user: userId, isDeleted: false }).session(session);
+      if (!shippingAddress) {
+        throw new ApiError(status.NOT_FOUND, 'Shipping address not found or you are not authorized to use it');
+      }
     }
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
     }
-    const order = await Order.findOne({ _id: orderId, user: userId, isCustomOrder: true }).session(session);
+    const order = await Order.findOne({ _id: orderId, user: userId }).session(session);
     if (!order) {
-      throw new ApiError(status.NOT_FOUND, 'Custom order not found or you are not authorized to confirm it');
+      throw new ApiError(status.NOT_FOUND, 'order not found or you are not authorized to confirm it');
     }
 
-    if (order.status !== OrderStatus.AwaitingPayment) {
-      throw new ApiError(status.BAD_REQUEST, 'This order is not awaiting payment.');
+    if (order.isCustomOrder && !shippingAddressId) {
+      throw new ApiError(status.BAD_REQUEST, 'Shipping address is required for custom orders');
+    }
+
+    if (order.status !== OrderStatus.Approved) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only confirm approved orders');
     }
 
     const wallet = await Wallet.findOne({ user: userId }).session(session);
@@ -196,13 +208,13 @@ export const confirmCustomOrder = asyncHandler(async (req, res) => {
     wallet.balance -= order.totalAmount;
     wallet.transactions.push({
       amount: -order.totalAmount,
-      description: `Payment for custom order #${order._id}`,
+      description: `Payment for order #${order._id}`,
       createdAt: new Date(),
     });
     await wallet.save({ session });
 
-    order.status = OrderStatus.Processing;
-    order.shippingAddress = shippingAddress._id as Types.ObjectId;
+    order.status = OrderStatus.Confirmed;
+    order.shippingAddress = shippingAddressId as Types.ObjectId;
     await order.save({ session });
 
     await session.commitTransaction();
@@ -274,7 +286,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
     [
       {
         path: 'user',
-        select: '_id name email',
+        select: 'name email',
         populate: {
           path: 'wallet',
           select: 'balance'
@@ -282,15 +294,15 @@ export const getOrderById = asyncHandler(async (req, res) => {
       },
       {
         path: 'items.product',
-        select: '_id name originalPrice thumbnail',
+        select: 'name originalPrice thumbnail',
         populate: [
           {
             path: 'category',
-            select: '_id title'
+            select: 'slug title path'
           },
           {
             path: 'brand',
-            select: '_id name'
+            select: 'name slug'
           }
         ]
       },
@@ -376,31 +388,122 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 
   const oldStatus = order.status;
-  order.status = newStatus;
-  await order.save();
+  if (oldStatus === OrderStatus.Received) {
+    if (![OrderStatus.Approved, OrderStatus.Cancelled, OrderStatus.Confirmed].includes(newStatus)) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only approve, cancel, or confirm for a received order');
+    }
+    if ((newStatus === OrderStatus.Approved || newStatus === OrderStatus.Confirmed) && (order.items.length === 0 || !order.shippingAddress)) {
+      throw new ApiError(status.BAD_REQUEST, 'You cannot approve or confirm an order with no items or without a shipping address');
+    }
+    if (newStatus === OrderStatus.Confirmed) {
+      const wallet = await Wallet.findOne({ user: order.user });
+      if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
 
-  if (newStatus === OrderStatus.Delivered && oldStatus !== OrderStatus.Delivered) {
+      wallet.balance -= order.totalAmount;
+      wallet.transactions.push({
+        amount: -order.totalAmount,
+        description: `Payment for order #${order.id}`,
+        createdAt: new Date()
+      });
+      await wallet.save();
+    }
+    order.status = newStatus;
+  }
+  else if (oldStatus === OrderStatus.Approved) {
+    if (![OrderStatus.Cancelled, OrderStatus.Confirmed].includes(newStatus)) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only cancel or confirm an approved order');
+    }
+
+    if (newStatus === OrderStatus.Confirmed) {
+      const wallet = await Wallet.findOne({ user: order.user });
+      if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
+
+      wallet.balance -= order.totalAmount;
+      wallet.transactions.push({
+        amount: -order.totalAmount,
+        description: `Payment for order #${order.id}`,
+        createdAt: new Date()
+      });
+      await wallet.save();
+    }
+
+    order.status = newStatus;
+  }
+  else if (oldStatus === OrderStatus.Confirmed) {
+    if (![OrderStatus.Shipped, OrderStatus.Cancelled].includes(newStatus)) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only ship or cancel a confirmed order');
+    }
+    order.status = newStatus;
+  }
+  else if (oldStatus === OrderStatus.Shipped) {
+    if (newStatus !== OrderStatus.OutForDelivery) {
+      throw new ApiError(status.BAD_REQUEST, 'A shipped order can only be marked as out for delivery');
+    }
+
+    order.status = newStatus;
+  }
+  else if (oldStatus === OrderStatus.OutForDelivery) {
+    if (newStatus !== OrderStatus.Delivered) {
+      throw new ApiError(status.BAD_REQUEST, 'An order out for delivery can only be marked as delivered');
+    }
+
+    order.status = newStatus;
+
     for (const item of order.items) {
-      await Product.findByIdAndUpdate(item.product,
+      await Product.findByIdAndUpdate(
+        item.product,
         {
           $inc: {
             salesCount: 1,
             totalSold: item.quantity,
-          }
-        })
+          },
+        }
+      );
     }
-    await redis.deleteByPattern('products*')
+
+    await redis.deleteByPattern('products*');
+  }
+  else if (oldStatus === OrderStatus.Delivered) {
+    throw new ApiError(status.BAD_REQUEST, 'Order is already completed, cannot do anything anymore');
+  }
+  else if (oldStatus === OrderStatus.Cancelled) {
+    if (newStatus !== OrderStatus.Refunded) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only refund a cancelled order');
+    }
+
+    order.status = newStatus;
+
+    const wallet = await Wallet.findOne({ user: order.user });
+    if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
+
+    wallet.balance += order.totalAmount;
+    wallet.transactions.push({
+      amount: order.totalAmount,
+      description: `Refund for order ${order.id}`,
+      createdAt: new Date()
+    });
+
+    await wallet.save();
+  }
+  else if (oldStatus === OrderStatus.Refunded) {
+    throw new ApiError(status.BAD_REQUEST, 'Order is already refunded, cannot do anything anymore');
   }
 
-  await redis.delete('dashboard:stats')
-  await redis.deleteByPattern(`orders:user:${order.user}*`);
-  await redis.deleteByPattern("orders*")
-  await redis.delete(`order:${orderId}`)
+  order.history.push({
+    status: newStatus,
+    timestamp: new Date()
+  });
 
-  res.status(status.OK).json(
+  await order.save();
+
+  await redis.delete('dashboard:stats');
+  await redis.deleteByPattern(`orders:user:${order.user}*`);
+  await redis.deleteByPattern("orders*");
+  await redis.delete(`order:${orderId}`);
+
+  return res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order status updated successfully', order)
   );
-  return;
 });
 
 export const cancelOrder = asyncHandler(async (req, res) => {
@@ -414,10 +517,9 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   if (order.user !== userId) {
     throw new ApiError(status.FORBIDDEN, 'You are not authorized to cancel this order');
   }
-  if (order.status === OrderStatus.Shipped || order.status === OrderStatus.Delivered) {
-    throw new ApiError(status.BAD_REQUEST, 'Order cannot be canceled after shipping');
+  if (![OrderStatus.Received, OrderStatus.Approved, OrderStatus.Confirmed].includes(order.status)) {
+    throw new ApiError(status.BAD_REQUEST, 'only order with status Received, Approved or Confirmed can be cancelled');
   }
-
   order.status = OrderStatus.Cancelled;
   await order.save();
 

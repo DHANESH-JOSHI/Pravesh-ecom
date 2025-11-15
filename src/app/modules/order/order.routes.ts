@@ -4,7 +4,7 @@ import { upload } from '@/config/cloudinary';
 import {
   createCustomOrder,
   updateOrder,
-  confirmCustomOrder,
+  confirmOrder,
   getMyOrders,
   getOrderById,
   getAllOrders,
@@ -19,7 +19,7 @@ router.post('/', auth('user'), authenticatedActionLimiter, createOrder);
 
 router.post('/custom', auth('user'), authenticatedActionLimiter, upload.single('image'), createCustomOrder);
 
-router.post('/confirm/:id', auth('user'), authenticatedActionLimiter, confirmCustomOrder);
+router.post('/confirm/:id', auth('user'), authenticatedActionLimiter, confirmOrder);
 
 router.get('/me', auth('user'), authenticatedActionLimiter, getMyOrders);
 

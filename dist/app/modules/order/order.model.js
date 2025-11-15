@@ -45,6 +45,17 @@ const OrderItemSchema = new mongoose_1.Schema({
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true },
 }, { _id: false });
+const OrderHistorySchema = new mongoose_1.Schema({
+    status: {
+        type: String,
+        enum: order_interface_1.OrderStatus,
+        required: true,
+    },
+    timestamp: {
+        type: Date,
+        default: Date.now,
+    },
+});
 const OrderSchema = new mongoose_1.Schema({
     user: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     items: [OrderItemSchema],
@@ -57,8 +68,11 @@ const OrderSchema = new mongoose_1.Schema({
     status: {
         type: String,
         enum: order_interface_1.OrderStatus,
-        default: order_interface_1.OrderStatus.Processing,
+        default: order_interface_1.OrderStatus.Received,
     },
+    history: [
+        OrderHistorySchema
+    ],
     isCustomOrder: {
         type: Boolean,
         default: false,

@@ -8,6 +8,18 @@ const OrderItemSchema = new Schema<IOrderItem>({
   price: { type: Number, required: true },
 }, { _id: false });
 
+const OrderHistorySchema = new Schema({
+  status: {
+    type: String,
+    enum: OrderStatus,
+    required: true,
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
 const OrderSchema = new Schema<IOrder>(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -21,8 +33,11 @@ const OrderSchema = new Schema<IOrder>(
     status: {
       type: String,
       enum: OrderStatus,
-      default: OrderStatus.Processing,
+      default: OrderStatus.Received,
     },
+    history: [
+      OrderHistorySchema
+    ],
     isCustomOrder: {
       type: Boolean,
       default: false,
@@ -40,4 +55,4 @@ OrderSchema.index({ user: 1, status: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });
 
-export const Order: mongoose.Model<IOrder> =  mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);
+export const Order: mongoose.Model<IOrder> = mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);
