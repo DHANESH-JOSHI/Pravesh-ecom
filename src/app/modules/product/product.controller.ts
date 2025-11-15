@@ -148,7 +148,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const sortMap: Record<string, string> = {
     trending: 'salesCount',
     bestSelling: 'totalSold',
-    newArrivals: 'createdAt',
+    newArrivals: 'isNewArrival',
     featured: 'isFeatured',
     rating: 'rating',
     price: 'originalPrice',
