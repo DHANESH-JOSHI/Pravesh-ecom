@@ -65,7 +65,7 @@ exports.getAddressById = (0, utils_1.asyncHandler)(async (req, res) => {
         address = await address_model_1.Address.findOne({
             _id: addressId,
             isDeleted: false,
-        }).populate('user', '_id name email');
+        }).populate('user', 'name email');
     }
     if (!address) {
         throw new ApiError(http_status_1.default.NOT_FOUND, "Address not found or you are not authorized to access it");

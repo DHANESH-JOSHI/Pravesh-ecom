@@ -42,7 +42,7 @@ export const getAllWallets = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))
-      .populate('user', '_id name email'),
+      .populate('user', 'name email'),
     Wallet.countDocuments(filter),
   ]);
   const totalPages = Math.ceil(total / Number(limit));

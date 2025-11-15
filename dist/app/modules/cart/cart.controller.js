@@ -142,7 +142,7 @@ exports.getAllCarts = (0, utils_1.asyncHandler)(async (req, res) => {
     const cartsQuery = cart_model_1.Cart.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(Number(limit)).populate('user', '_id name email').populate('items.product', 'originalPrice');
+        .limit(Number(limit)).populate('user', 'name email').populate('items.product', 'originalPrice');
     const [carts, total] = await Promise.all([
         cartsQuery,
         cart_model_1.Cart.countDocuments(filter),

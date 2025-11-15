@@ -78,7 +78,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
   let product;
   if (populate === 'true') {
     product = await Product.findOne({ slug, isDeleted: false })
-      .populate('category', 'brand')
+      .populate('category brand')
   } else {
     product = await Product.findOne({ slug, isDeleted: false });
   }
@@ -163,7 +163,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
   const [products, total] = await Promise.all([
     Product.find(filter)
-      .populate('category', 'title slug')
+      .populate('category', 'title slug path')
       .populate('brand', 'name slug')
       .sort(sortObj as any)
       .skip(skip)
@@ -206,7 +206,7 @@ export const getProductById = asyncHandler(async (req, res) => {
   }
   let product;
   if (populate == 'true') {
-    product = await Product.findById(id).populate('category', 'slug title').populate('brand', 'slug name').populate({
+    product = await Product.findById(id).populate('category', 'slug title path').populate('brand', 'slug name').populate({
       path: 'reviews',
       populate: {
         path: 'user',
@@ -295,7 +295,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       brand: updateData.brandId,
     },
     { new: true, runValidators: true }
-  ).populate('category', 'brand');
+  ).populate('category brand');
 
   await redis.deleteByPattern('products*');
   await redis.deleteByPattern(`product:${id}*`);

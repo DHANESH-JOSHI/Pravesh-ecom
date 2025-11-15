@@ -343,7 +343,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   if (isCustomOrder !== undefined) filter.isCustomOrder = isCustomOrder === 'true';
 
   const [orders, total] = await Promise.all([
-    Order.find(filter).sort({ createdAt: -1 }).populate('user', '_id name email').select('-items').skip(skip).limit(Number(limit)),
+    Order.find(filter).sort({ createdAt: -1 }).populate('user', 'name email').select('-items').skip(skip).limit(Number(limit)),
     Order.countDocuments(filter)
   ]);
 

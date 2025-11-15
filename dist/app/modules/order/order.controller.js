@@ -303,7 +303,7 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
     if (isCustomOrder !== undefined)
         filter.isCustomOrder = isCustomOrder === 'true';
     const [orders, total] = await Promise.all([
-        order_model_1.Order.find(filter).sort({ createdAt: -1 }).populate('user', '_id name email').select('-items').skip(skip).limit(Number(limit)),
+        order_model_1.Order.find(filter).sort({ createdAt: -1 }).populate('user', 'name email').select('-items').skip(skip).limit(Number(limit)),
         order_model_1.Order.countDocuments(filter)
     ]);
     const totalPages = Math.ceil(total / Number(limit));
