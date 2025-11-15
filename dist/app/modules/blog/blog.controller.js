@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBlog = exports.updateBlog = exports.getAllBlogs = exports.getBlogById = exports.createBlog = void 0;
+exports.deleteBlog = exports.updateBlog = exports.getAllBlogs = exports.getBlogBySlug = exports.getBlogById = exports.createBlog = void 0;
 const utils_1 = require("../../utils");
 const redis_1 = require("../../config/redis");
 const interface_1 = require("../../interface");
@@ -34,6 +34,24 @@ exports.getBlogById = (0, utils_1.asyncHandler)(async (req, res) => {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Blog retrieved successfully', cachedBlog));
     }
     const post = await blog_model_1.Blog.findOne({ _id: id, isDeleted: false });
+    if (!post) {
+        throw new ApiError(http_status_1.default.NOT_FOUND, 'Blog not found');
+    }
+    await redis_1.redis.set(cacheKey, post, 3600);
+    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Blog retrieved successfully', post));
+    return;
+});
+exports.getBlogBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
+    const { slug } = req.params;
+    if (!slug || !slug.trim()) {
+        throw new ApiError(http_status_1.default.BAD_REQUEST, 'Invalid blog slug');
+    }
+    const cacheKey = `blog:${slug}`;
+    const cachedBlog = await redis_1.redis.get(cacheKey);
+    if (cachedBlog) {
+        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Blog retrieved successfully', cachedBlog));
+    }
+    const post = await blog_model_1.Blog.findOne({ slug, isDeleted: false });
     if (!post) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Blog not found');
     }

@@ -14,11 +14,11 @@ const router = express.Router();
 
 router.post('/', auth('admin'), authenticatedActionLimiter, upload.single('image'), createBrand);
 
+router.get('/slug/:slug', getBrandBySlug);
+
 router.get('/', getAllBrands);
 
 router.get('/:id', getBrandById);
-
-router.get('/slug/:slug', getBrandBySlug);
 
 router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single('image'), updateBrand);
 

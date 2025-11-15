@@ -42,6 +42,29 @@ export const getBlogById = asyncHandler(async (req, res) => {
   return;
 });
 
+export const getBlogBySlug = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  if (!slug || !slug.trim()) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid blog slug');
+  }
+  const cacheKey = `blog:${slug}`;
+  const cachedBlog = await redis.get(cacheKey);
+
+  if (cachedBlog) {
+    return res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', cachedBlog));
+  }
+
+  const post = await Blog.findOne({ slug, isDeleted: false })
+
+  if (!post) {
+    throw new ApiError(status.NOT_FOUND, 'Blog not found');
+  }
+
+  await redis.set(cacheKey, post, 3600);
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', post));
+  return;
+});
+
 export const getAllBlogs = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, isPublished, isDeleted } = req.query;
   const cacheKey = generateCacheKey('blogs', req.query);

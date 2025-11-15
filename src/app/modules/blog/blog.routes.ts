@@ -1,13 +1,15 @@
 import express from 'express';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
-import { createBlog, deleteBlog, getAllBlogs, getBlogById, updateBlog } from './blog.controller';
+import { createBlog, deleteBlog, getAllBlogs, getBlogById, updateBlog, getBlogBySlug } from './blog.controller';
 import { upload } from '@/config/cloudinary';
 
 const router = express.Router();
 
-router.get('/', getAllBlogs);
+router.get('/slug/:slug', getBlogBySlug);
 
 router.get('/:id', getBlogById);
+
+router.get('/', getAllBlogs);
 
 router.use(auth('admin'), authenticatedActionLimiter);
 
