@@ -122,7 +122,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
   const skip = (Number(page) - 1) * Number(limit);
   const [reviews, total] = await Promise.all([
     Review.find({ product: productId })
-      .populate('user', 'name email')
+      .populate('user', 'name email img')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
