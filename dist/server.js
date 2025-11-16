@@ -9,11 +9,11 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const app_1 = __importDefault(require("./app"));
 const redis_1 = require("./app/config/redis");
 const db_1 = require("./app/config/db");
-const seeder_1 = require("./seeder");
+// import { seedDefaultAdmin } from "./seeder";
 async function main() {
     try {
         await (0, db_1.connectDB)();
-        await (0, seeder_1.seedDefaultAdmin)();
+        // await seedDefaultAdmin()
         await redis_1.redis.flushAll();
         logger_1.logger.info('[Redis] Cache flushed successfully.');
         const server = app_1.default.listen(config_1.default.PORT, () => {

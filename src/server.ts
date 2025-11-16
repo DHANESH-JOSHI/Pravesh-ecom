@@ -4,12 +4,12 @@ import mongoose from 'mongoose';
 import app from './app';
 import { redis } from "@/config/redis";
 import { connectDB } from "@/config/db";
-import { seedDefaultAdmin } from "./seeder";
+// import { seedDefaultAdmin } from "./seeder";
 
 async function main() {
   try {
     await connectDB()
-    await seedDefaultAdmin()
+    // await seedDefaultAdmin()
     await redis.flushAll();
     logger.info('[Redis] Cache flushed successfully.');
     const server = app.listen(config.PORT, () => {
