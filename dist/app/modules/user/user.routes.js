@@ -7,6 +7,7 @@ exports.userRouter = void 0;
 const express_1 = __importDefault(require("express"));
 const user_controller_1 = require("./user.controller");
 const middlewares_1 = require("../../middlewares");
+const cloudinary_1 = require("../../config/cloudinary");
 const router = express_1.default.Router();
 router.get("/me", (0, middlewares_1.auth)(), middlewares_1.authenticatedActionLimiter, user_controller_1.getMe);
 router.post("/phone/:phone", middlewares_1.dataCheckLimiter, user_controller_1.checkPhoneExists);
@@ -17,7 +18,7 @@ router.get("/:id", (0, middlewares_1.auth)(), middlewares_1.authenticatedActionL
 router.post("/:id/recover", (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, user_controller_1.recoverUser);
 router.delete("/:id", (0, middlewares_1.auth)('admin'), middlewares_1.authenticatedActionLimiter, user_controller_1.deleteUser);
 router.patch("/password", (0, middlewares_1.auth)('user'), middlewares_1.authenticatedActionLimiter, user_controller_1.updatePassword);
-router.patch("/", (0, middlewares_1.auth)('user'), middlewares_1.authenticatedActionLimiter, user_controller_1.updateUser);
+router.patch("/", (0, middlewares_1.auth)('user'), middlewares_1.authenticatedActionLimiter, cloudinary_1.upload.single('image'), user_controller_1.updateUser);
 router.post('/password/reset', (0, middlewares_1.auth)('user'), middlewares_1.authenticatedActionLimiter, user_controller_1.resetPassword);
 exports.userRouter = router;
 //# sourceMappingURL=user.routes.js.map

@@ -13,6 +13,7 @@ import {
   resetPassword
 } from "./user.controller";
 import { auth, authenticatedActionLimiter, dataCheckLimiter } from "@/middlewares";
+import { upload } from "@/config/cloudinary";
 
 const router = express.Router();
 
@@ -34,8 +35,8 @@ router.delete("/:id", auth('admin'), authenticatedActionLimiter, deleteUser);
 
 router.patch("/password", auth('user'), authenticatedActionLimiter, updatePassword);
 
-router.patch("/", auth('user'), authenticatedActionLimiter, updateUser);
+router.patch("/", auth('user'), authenticatedActionLimiter, upload.single('image'), updateUser);
 
-router.post('/password/reset',auth('user'), authenticatedActionLimiter, resetPassword);
+router.post('/password/reset', auth('user'), authenticatedActionLimiter, resetPassword);
 
 export const userRouter = router;
