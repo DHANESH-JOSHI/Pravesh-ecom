@@ -47,54 +47,54 @@ const userSchema = new mongoose_1.Schema({
     phone: { type: String, required: true },
     email: { type: String },
     img: { type: String },
-    role: { type: String, enum: user_interface_1.UserRole, default: user_interface_1.UserRole.USER },
+    role: { type: String, enum: user_interface_1.UserRole, default: "user" },
     status: { type: String, enum: user_interface_1.UserStatus, default: user_interface_1.UserStatus.PENDING },
     otp: { type: String },
     otpExpires: { type: Date },
-    isDeleted: { type: Boolean, default: false }
+    isDeleted: { type: Boolean, default: false },
 }, {
     timestamps: true,
 });
 (0, mongooseToJSON_1.default)(userSchema);
-userSchema.virtual('wallet', {
-    ref: 'Wallet',
-    localField: '_id',
-    foreignField: 'user',
+userSchema.virtual("wallet", {
+    ref: "Wallet",
+    localField: "_id",
+    foreignField: "user",
     justOne: true,
 });
-userSchema.virtual('cart', {
-    ref: 'Cart',
-    localField: '_id',
-    foreignField: 'user',
+userSchema.virtual("cart", {
+    ref: "Cart",
+    localField: "_id",
+    foreignField: "user",
     justOne: true,
 });
-userSchema.virtual('wishlist', {
-    ref: 'Wishlist',
-    localField: '_id',
-    foreignField: 'user',
+userSchema.virtual("wishlist", {
+    ref: "Wishlist",
+    localField: "_id",
+    foreignField: "user",
     justOne: true,
 });
-userSchema.virtual('orders', {
-    ref: 'Order',
-    localField: '_id',
-    foreignField: 'user',
+userSchema.virtual("orders", {
+    ref: "Order",
+    localField: "_id",
+    foreignField: "user",
     justOne: false,
 });
-userSchema.virtual('addresses', {
-    ref: 'Address',
-    localField: '_id',
-    foreignField: 'user',
+userSchema.virtual("addresses", {
+    ref: "Address",
+    localField: "_id",
+    foreignField: "user",
     justOne: false,
-    match: { isDeleted: false }
+    match: { isDeleted: false },
 });
-userSchema.virtual('reviews', {
-    ref: 'Review',
-    localField: '_id',
-    foreignField: 'user',
+userSchema.virtual("reviews", {
+    ref: "Review",
+    localField: "_id",
+    foreignField: "user",
     justOne: false,
 });
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) {
+userSchema.pre("save", async function (next) {
+    if (!this.isModified("password")) {
         return next();
     }
     const salt = await bcrypt_1.default.genSalt(10);
@@ -107,9 +107,9 @@ userSchema.methods.comparePassword = async function (password) {
 userSchema.methods.compareOtp = function (otp) {
     return this.otp === otp && this.otpExpires && this.otpExpires > new Date();
 };
-userSchema.index({ name: 'text', phone: 1, email: 'text' });
+userSchema.index({ name: "text", phone: 1, email: "text" });
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ createdAt: -1 });
-exports.User = mongoose_1.default.models.User || mongoose_1.default.model('User', userSchema);
+exports.User = mongoose_1.default.models.User || mongoose_1.default.model("User", userSchema);
 //# sourceMappingURL=user.model.js.map

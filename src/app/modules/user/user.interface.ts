@@ -1,13 +1,13 @@
 import { Document } from "mongoose";
 
 export enum UserRole {
-  ADMIN = 'admin',
-  USER = 'user'
+  ADMIN = "admin",
+  USER = "user",
 }
 
 export enum UserStatus {
-  PENDING = 'pending',
-  ACTIVE = 'active'
+  PENDING = "pending",
+  ACTIVE = "active",
 }
 
 export interface IUser extends Document {
@@ -17,7 +17,7 @@ export interface IUser extends Document {
   status: UserStatus;
   phone: string;
   email?: string;
-  role: UserRole;
+  role: string;
   otp?: string;
   otpExpires?: Date;
   isDeleted: boolean;

@@ -59,7 +59,8 @@ exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.getProductBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
     const { slug } = req.params;
     const { populate = 'false' } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)(`product:${slug}`, req.query);
+    const includePrice = req.query?.includePrice !== 'false';
+    const cacheKey = (0, utils_1.generateCacheKey)(`product:${slug}`, { ...req.query, includePrice });
     const cachedProduct = await redis_1.redis.get(cacheKey);
     if (cachedProduct) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved', cachedProduct));
@@ -78,13 +79,18 @@ exports.getProductBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!product) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Product not found');
     }
+    if (!includePrice) {
+        product = product.toObject ? product.toObject() : product;
+        delete product.originalPrice;
+    }
     await redis_1.redis.set(cacheKey, product, 3600);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved', product));
     return;
 });
 exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     const query = product_validation_1.productsQueryValidation.parse(req.query);
-    const cacheKey = (0, utils_1.generateCacheKey)('products', query);
+    const includePrice = req.query?.includePrice !== 'false';
+    const cacheKey = (0, utils_1.generateCacheKey)('products', { ...query, includePrice });
     const cachedProducts = await redis_1.redis.get(cacheKey);
     if (cachedProducts) {
         return res
@@ -140,7 +146,7 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     ]);
     const totalPages = Math.ceil(total / Number(limit));
     const result = {
-        products,
+        products: includePrice ? products : products.map(({ originalPrice, ...rest }) => rest),
         page: Number(page),
         limit: Number(limit),
         total,
@@ -154,7 +160,8 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.getProductById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const { populate = 'false' } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)(`product:${id}`, req.query);
+    const includePrice = req.query?.includePrice !== 'false';
+    const cacheKey = (0, utils_1.generateCacheKey)(`product:${id}`, { ...req.query, includePrice });
     const cachedProduct = await redis_1.redis.get(cacheKey);
     if (cachedProduct) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved successfully', cachedProduct));
@@ -177,6 +184,10 @@ exports.getProductById = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     if (!product) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Product not found');
+    }
+    if (!includePrice) {
+        product = product.toObject ? product.toObject() : product;
+        delete product.originalPrice;
     }
     await redis_1.redis.set(cacheKey, product, 3600);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product retrieved successfully', product));
