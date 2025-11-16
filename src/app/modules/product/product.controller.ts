@@ -62,7 +62,8 @@ export const createProduct = asyncHandler(async (req, res) => {
 export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
   const { populate = 'false' } = req.query;
-  const cacheKey = generateCacheKey(`product:${slug}`, req.query);
+  const includePrice = (req.query as any)?.includePrice !== 'false';
+  const cacheKey = generateCacheKey(`product:${slug}`, { ...(req.query as any), includePrice });
   const cachedProduct = await redis.get(cacheKey);
 
   if (cachedProduct) {
@@ -87,6 +88,11 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
+  if (!includePrice) {
+    product = (product as any).toObject ? (product as any).toObject() : product;
+    delete (product as any).originalPrice;
+  }
+
   await redis.set(cacheKey, product, 3600);
 
   res.status(status.OK).json(
@@ -97,7 +103,8 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
 
 export const getAllProducts = asyncHandler(async (req, res) => {
   const query = productsQueryValidation.parse(req.query) as IProductQuery;
-  const cacheKey = generateCacheKey('products', query);
+  const includePrice = (req.query as any)?.includePrice !== 'false';
+  const cacheKey = generateCacheKey('products', { ...query, includePrice });
   const cachedProducts = await redis.get(cacheKey);
 
   if (cachedProducts) {
@@ -175,7 +182,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const totalPages = Math.ceil(total / Number(limit));
 
   const result = {
-    products,
+    products: includePrice ? products : products.map(({ originalPrice, ...rest }) => rest),
     page: Number(page),
     limit: Number(limit),
     total,
@@ -192,7 +199,8 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { populate = 'false' } = req.query;
-  const cacheKey = generateCacheKey(`product:${id}`, req.query);
+  const includePrice = (req.query as any)?.includePrice !== 'false';
+  const cacheKey = generateCacheKey(`product:${id}`, { ...(req.query as any), includePrice });
   const cachedProduct = await redis.get(cacheKey);
 
   if (cachedProduct) {
@@ -218,6 +226,11 @@ export const getProductById = asyncHandler(async (req, res) => {
   }
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
+  }
+
+  if (!includePrice) {
+    product = (product as any).toObject ? (product as any).toObject() : product;
+    delete (product as any).originalPrice;
   }
 
   await redis.set(cacheKey, product, 3600);
