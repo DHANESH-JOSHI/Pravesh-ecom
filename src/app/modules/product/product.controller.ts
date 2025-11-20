@@ -151,7 +151,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
   if (rating) filter.rating = { $gte: Number(rating) };
 
-  // ⚡ Sorting (supports trending, best-selling, new arrivals)
   const sortMap: Record<string, string> = {
     trending: 'salesCount',
     bestSelling: 'totalSold',

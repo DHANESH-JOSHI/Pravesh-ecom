@@ -11,7 +11,7 @@ const OrderItemSchema = new Schema<IOrderItem>({
 const OrderHistorySchema = new Schema({
   status: {
     type: String,
-    enum: OrderStatus,
+    enum: Object.values(OrderStatus),
     required: true,
   },
   timestamp: {
@@ -32,7 +32,7 @@ const OrderSchema = new Schema<IOrder>(
     },
     status: {
       type: String,
-      enum: OrderStatus,
+      enum: Object.values(OrderStatus),
       default: OrderStatus.Received,
     },
     history: [

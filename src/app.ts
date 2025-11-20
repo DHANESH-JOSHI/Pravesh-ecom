@@ -4,18 +4,20 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import router from '@/routes';
 import { apiLimiter, errorHandler, notFound } from '@/middlewares';
-import status from 'http-status';
 
 const app: Application = express();
 
-// Trust proxy for Vercel/reverse proxy environments
 app.set('trust proxy', 1);
 
 const corsOptions = {
   origin: true,
   credentials: true,
-  optionsSuccessStatus: status.OK
+  optionsSuccessStatus: 200
 };
+app.use(express.json());
+app.use(cookieParser());
+app.use(cors(corsOptions));
+app.use(morgan('dev'));
 
 app.use(express.json());
 app.use(cookieParser());

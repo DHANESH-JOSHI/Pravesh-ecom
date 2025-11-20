@@ -9,7 +9,6 @@ export const connectDB = async () => {
     logger.info('[DB] Using existing database connection');
     return;
   }
-
   try {
     await mongoose.connect(config.DATABASE_URL as string);
     isConnected = true;

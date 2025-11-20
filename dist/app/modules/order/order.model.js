@@ -48,7 +48,7 @@ const OrderItemSchema = new mongoose_1.Schema({
 const OrderHistorySchema = new mongoose_1.Schema({
     status: {
         type: String,
-        enum: order_interface_1.OrderStatus,
+        enum: Object.values(order_interface_1.OrderStatus),
         required: true,
     },
     timestamp: {
@@ -67,7 +67,7 @@ const OrderSchema = new mongoose_1.Schema({
     },
     status: {
         type: String,
-        enum: order_interface_1.OrderStatus,
+        enum: Object.values(order_interface_1.OrderStatus),
         default: order_interface_1.OrderStatus.Received,
     },
     history: [

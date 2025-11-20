@@ -120,7 +120,6 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
         filter.isNewArrival = isNewArrival;
     if (rating)
         filter.rating = { $gte: Number(rating) };
-    // ⚡ Sorting (supports trending, best-selling, new arrivals)
     const sortMap = {
         trending: 'salesCount',
         bestSelling: 'totalSold',

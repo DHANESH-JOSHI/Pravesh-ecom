@@ -46,7 +46,7 @@ const bannerSchema = new mongoose_1.Schema({
     targetUrl: { type: String },
     type: {
         type: String,
-        enum: banner_interface_1.BannerType,
+        enum: Object.values(banner_interface_1.BannerType),
         required: true,
     },
     targetId: { type: mongoose_1.Schema.Types.ObjectId },

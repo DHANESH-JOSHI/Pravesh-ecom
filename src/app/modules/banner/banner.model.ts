@@ -9,7 +9,7 @@ const bannerSchema = new Schema<IBanner>(
     targetUrl: { type: String },
     type: {
       type: String,
-      enum: BannerType,
+      enum: Object.values(BannerType),
       required: true,
     },
     targetId: { type: Schema.Types.ObjectId },
