@@ -104,10 +104,30 @@ export const getAllCarts = asyncHandler(async (req, res) => {
         {
           $search: {
             index: "autocomplete_index",
-            autocomplete: {
-              query: user,
-              path: ["name", "email", "phone"],
-              fuzzy: { maxEdits: 1 }
+            compound: {
+              should: [
+                {
+                  autocomplete: {
+                    query: user,
+                    path: "name",
+                    fuzzy: { maxEdits: 1 }
+                  }
+                },
+                {
+                  autocomplete: {
+                    query: user,
+                    path: "email",
+                    fuzzy: { maxEdits: 1 }
+                  }
+                },
+                {
+                  autocomplete: {
+                    query: user,
+                    path: "phone",
+                    fuzzy: { maxEdits: 1 }
+                  }
+                }
+              ]
             }
           }
         },
