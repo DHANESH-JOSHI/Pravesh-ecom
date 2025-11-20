@@ -170,7 +170,7 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
     throw new ApiError(status.FORBIDDEN, "You are not authorized to set this address as default");
   }
   await Address.findOneAndUpdate(
-    { user: userId,isDefault: true },
+    { user: userId, isDefault: true },
     { $set: { isDefault: false } }
   );
   address.isDefault = true;
@@ -207,7 +207,7 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
             index: "autocomplete_index",
             autocomplete: {
               query: user,
-              path: ["name", "email"],
+              path: ["name", "email", "phone"],
               fuzzy: { maxEdits: 1 }
             }
           }

@@ -82,7 +82,7 @@ exports.getAllBlogs = (0, utils_1.asyncHandler)(async (req, res) => {
                 index: "autocomplete_index",
                 autocomplete: {
                     query: search,
-                    path: ["title", "content"],
+                    path: ["title", "content", "slug"],
                     fuzzy: { maxEdits: 1 }
                 }
             }

@@ -238,35 +238,185 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
 export const getMyOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
+
   const cacheKey = generateCacheKey(`orders:user:${userId}`, req.query);
-  const cachedOrders = await redis.get(cacheKey);
-
-  if (cachedOrders) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', cachedOrders));
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Your orders retrieved successfully", cached));
   }
 
-  const { populate = 'false', page = 1, limit = 10 } = req.query;
+  const {
+    search,
+    status: statusQuery,
+    time,
+    populate = "false",
+    page = 1,
+    limit = 10,
+  } = req.query;
+
   const skip = (Number(page) - 1) * Number(limit);
-  let query = Order.find({ user: userId }).sort({ createdAt: -1 });
-  if (populate === 'true') {
-    query = query.populate('items.product shippingAddress');
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const timeConditions: any[] = [];
+
+  if (time) {
+    const filters = (time as string).split(",");
+
+    if (filters.includes("Last 30 days")) {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      timeConditions.push({ createdAt: { $gte: d } });
+    }
+
+    if (filters.includes(currentYear.toString())) {
+      timeConditions.push({
+        createdAt: {
+          $gte: new Date(currentYear, 0, 1),
+          $lt: new Date(currentYear + 1, 0, 1),
+        },
+      });
+    }
+
+    if (filters.includes((currentYear - 1).toString())) {
+      timeConditions.push({
+        createdAt: {
+          $gte: new Date(currentYear - 1, 0, 1),
+          $lt: new Date(currentYear, 0, 1),
+        },
+      });
+    }
+
+    if (filters.includes("Older")) {
+      timeConditions.push({
+        createdAt: { $lt: new Date(currentYear - 1, 0, 1) },
+      });
+    }
   }
-  const [orders, total] = await Promise.all([
-    query.skip(skip).limit(Number(limit)),
-    Order.countDocuments({ user: userId })
+
+  let productIds: any[] = [];
+
+  if (search) {
+    const productSearchResults = await Product.aggregate([
+      {
+        $search: {
+          index: "unified_index",
+          autocomplete: {
+            query: search,
+            path: ["name", "slug", "tags"],
+            fuzzy: { maxEdits: 1 },
+          },
+        },
+      },
+      { $project: { _id: 1 } },
+    ]);
+
+    productIds = productSearchResults.map((p) => p._id);
+  }
+
+  const pipeline: any[] = [];
+
+  pipeline.push({ $match: { user: userId } });
+
+  if (statusQuery) {
+    pipeline.push({ $match: { status: { $in: (statusQuery as string).split(",") } } });
+  }
+
+  if (timeConditions.length > 0) {
+    pipeline.push({ $match: { $or: timeConditions } });
+  }
+
+  if (search) {
+    const orConditions: any[] = [{ orderId: { $regex: search, $options: "i" } }];
+    if (productIds.length > 0) {
+      orConditions.push({ "items.product": { $in: productIds } });
+    }
+    pipeline.push({ $match: { $or: orConditions } });
+  }
+
+  if (populate === "true") {
+    pipeline.push({
+      $lookup: {
+        from: "products",
+        localField: "items.product",
+        foreignField: "_id",
+        as: "productDocs",
+      },
+    });
+
+    pipeline.push({
+      $lookup: {
+        from: "addresses",
+        localField: "shippingAddress",
+        foreignField: "_id",
+        as: "shippingAddressDoc",
+      },
+    });
+
+    pipeline.push({
+      $addFields: {
+        shippingAddress: { $arrayElemAt: ["$shippingAddressDoc", 0] },
+        items: {
+          $map: {
+            input: "$items",
+            as: "i",
+            in: {
+              $mergeObjects: [
+                "$$i",
+                {
+                  product: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$productDocs",
+                          as: "p",
+                          cond: { $eq: ["$$p._id", "$$i.product"] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    pipeline.push({ $project: { productDocs: 0, shippingAddressDoc: 0 } });
+  }
+
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  const countPipeline = [
+    ...pipeline.filter((p) => !("$skip" in p) && !("$limit" in p) && !("$sort" in p)),
+    { $count: "total" },
+  ];
+
+  const [orders, totalAgg] = await Promise.all([
+    Order.aggregate(pipeline),
+    Order.aggregate(countPipeline),
   ]);
-  const totalPages = Math.ceil(total / Number(limit));
+
+  const total = totalAgg?.[0]?.total || 0;
+
   const result = {
     orders,
     page: Number(page),
     limit: Number(limit),
     total,
-    totalPages
+    totalPages: Math.ceil(total / Number(limit)),
   };
 
   await redis.set(cacheKey, result, 600);
 
-  return res.status(status.OK).json(new ApiResponse(status.OK, 'Your orders retrieved successfully', result));
+  return res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Your orders retrieved successfully", result));
 });
 
 

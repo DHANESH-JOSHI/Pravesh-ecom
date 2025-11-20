@@ -214,30 +214,150 @@ exports.confirmOrder = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
     const cacheKey = (0, utils_1.generateCacheKey)(`orders:user:${userId}`, req.query);
-    const cachedOrders = await redis_1.redis.get(cacheKey);
-    if (cachedOrders) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Your orders retrieved successfully', cachedOrders));
+    const cached = await redis_1.redis.get(cacheKey);
+    if (cached) {
+        return res
+            .status(http_status_1.default.OK)
+            .json(new ApiResponse(http_status_1.default.OK, "Your orders retrieved successfully", cached));
     }
-    const { populate = 'false', page = 1, limit = 10 } = req.query;
+    const { search, status: statusQuery, time, populate = "false", page = 1, limit = 10, } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
-    let query = order_model_1.Order.find({ user: userId }).sort({ createdAt: -1 });
-    if (populate === 'true') {
-        query = query.populate('items.product shippingAddress');
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const timeConditions = [];
+    if (time) {
+        const filters = time.split(",");
+        if (filters.includes("Last 30 days")) {
+            const d = new Date();
+            d.setDate(d.getDate() - 30);
+            timeConditions.push({ createdAt: { $gte: d } });
+        }
+        if (filters.includes(currentYear.toString())) {
+            timeConditions.push({
+                createdAt: {
+                    $gte: new Date(currentYear, 0, 1),
+                    $lt: new Date(currentYear + 1, 0, 1),
+                },
+            });
+        }
+        if (filters.includes((currentYear - 1).toString())) {
+            timeConditions.push({
+                createdAt: {
+                    $gte: new Date(currentYear - 1, 0, 1),
+                    $lt: new Date(currentYear, 0, 1),
+                },
+            });
+        }
+        if (filters.includes("Older")) {
+            timeConditions.push({
+                createdAt: { $lt: new Date(currentYear - 1, 0, 1) },
+            });
+        }
     }
-    const [orders, total] = await Promise.all([
-        query.skip(skip).limit(Number(limit)),
-        order_model_1.Order.countDocuments({ user: userId })
+    let productIds = [];
+    if (search) {
+        const productSearchResults = await product_model_1.Product.aggregate([
+            {
+                $search: {
+                    index: "unified_index",
+                    autocomplete: {
+                        query: search,
+                        path: ["name", "slug", "tags"],
+                        fuzzy: { maxEdits: 1 },
+                    },
+                },
+            },
+            { $project: { _id: 1 } },
+        ]);
+        productIds = productSearchResults.map((p) => p._id);
+    }
+    const pipeline = [];
+    pipeline.push({ $match: { user: userId } });
+    if (statusQuery) {
+        pipeline.push({ $match: { status: { $in: statusQuery.split(",") } } });
+    }
+    if (timeConditions.length > 0) {
+        pipeline.push({ $match: { $or: timeConditions } });
+    }
+    if (search) {
+        const orConditions = [{ orderId: { $regex: search, $options: "i" } }];
+        if (productIds.length > 0) {
+            orConditions.push({ "items.product": { $in: productIds } });
+        }
+        pipeline.push({ $match: { $or: orConditions } });
+    }
+    if (populate === "true") {
+        pipeline.push({
+            $lookup: {
+                from: "products",
+                localField: "items.product",
+                foreignField: "_id",
+                as: "productDocs",
+            },
+        });
+        pipeline.push({
+            $lookup: {
+                from: "addresses",
+                localField: "shippingAddress",
+                foreignField: "_id",
+                as: "shippingAddressDoc",
+            },
+        });
+        pipeline.push({
+            $addFields: {
+                shippingAddress: { $arrayElemAt: ["$shippingAddressDoc", 0] },
+                items: {
+                    $map: {
+                        input: "$items",
+                        as: "i",
+                        in: {
+                            $mergeObjects: [
+                                "$$i",
+                                {
+                                    product: {
+                                        $arrayElemAt: [
+                                            {
+                                                $filter: {
+                                                    input: "$productDocs",
+                                                    as: "p",
+                                                    cond: { $eq: ["$$p._id", "$$i.product"] },
+                                                },
+                                            },
+                                            0,
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            },
+        });
+        pipeline.push({ $project: { productDocs: 0, shippingAddressDoc: 0 } });
+    }
+    pipeline.push({ $sort: { createdAt: -1 } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    const countPipeline = [
+        ...pipeline.filter((p) => !("$skip" in p) && !("$limit" in p) && !("$sort" in p)),
+        { $count: "total" },
+    ];
+    const [orders, totalAgg] = await Promise.all([
+        order_model_1.Order.aggregate(pipeline),
+        order_model_1.Order.aggregate(countPipeline),
     ]);
-    const totalPages = Math.ceil(total / Number(limit));
+    const total = totalAgg?.[0]?.total || 0;
     const result = {
         orders,
         page: Number(page),
         limit: Number(limit),
         total,
-        totalPages
+        totalPages: Math.ceil(total / Number(limit)),
     };
     await redis_1.redis.set(cacheKey, result, 600);
-    return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Your orders retrieved successfully', result));
+    return res
+        .status(http_status_1.default.OK)
+        .json(new ApiResponse(http_status_1.default.OK, "Your orders retrieved successfully", result));
 });
 exports.getOrderById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id: orderId } = req.params;

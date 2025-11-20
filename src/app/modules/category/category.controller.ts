@@ -86,7 +86,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
         index: "autocomplete_index",
         autocomplete: {
           query: search,
-          path: "title",
+          path: ["title", "slug"],
           fuzzy: { maxEdits: 1 },
         },
       },

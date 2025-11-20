@@ -191,7 +191,7 @@ exports.getAllAddresses = (0, utils_1.asyncHandler)(async (req, res) => {
                         index: "autocomplete_index",
                         autocomplete: {
                             query: user,
-                            path: ["name", "email"],
+                            path: ["name", "email", "phone"],
                             fuzzy: { maxEdits: 1 }
                         }
                     }

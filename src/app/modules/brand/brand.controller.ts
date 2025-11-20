@@ -87,7 +87,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
         index: "autocomplete_index",
         autocomplete: {
           query: search,
-          path: "name",
+          path: ["name", "slug"],
           fuzzy: { maxEdits: 1 },
         },
       },

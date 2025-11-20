@@ -91,7 +91,7 @@ export const getAllBlogs = asyncHandler(async (req, res) => {
         index: "autocomplete_index",
         autocomplete: {
           query: search,
-          path: ["title", "content"],
+          path: ["title", "content", "slug"],
           fuzzy: { maxEdits: 1 }
         }
       }

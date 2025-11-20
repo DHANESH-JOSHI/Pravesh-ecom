@@ -137,7 +137,7 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
                 index: "autocomplete_index",
                 autocomplete: {
                     query: search,
-                    path: ["name", "tags"],
+                    path: ["name", "tags", "slug"],
                     fuzzy: { maxEdits: 1 },
                 },
             },
