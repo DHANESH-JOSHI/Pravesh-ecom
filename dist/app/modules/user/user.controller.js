@@ -94,48 +94,56 @@ exports.updateUser = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getAllUsers = (0, utils_1.asyncHandler)(async (req, res) => {
     const { page = 1, limit = 10, search, role, status: userStatus, isDeleted } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)('users', req.query);
-    const cachedUsers = await redis_1.redis.get(cacheKey);
-    if (cachedUsers) {
-        return res.json(new ApiResponse(http_status_1.default.OK, "Users retrieved successfully", cachedUsers));
-    }
+    const cacheKey = (0, utils_1.generateCacheKey)("users", req.query);
+    const cached = await redis_1.redis.get(cacheKey);
+    if (cached)
+        return res.json(new ApiResponse(http_status_1.default.OK, "Users retrieved successfully", cached));
     const filter = {};
-    if (search) {
-        filter.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { email: { $regex: search, $options: 'i' } },
-            { phone: { $regex: search, $options: 'i' } }
-        ];
-    }
     if (role)
         filter.role = role;
     if (userStatus)
         filter.status = userStatus;
-    if (isDeleted !== undefined) {
-        filter.isDeleted = isDeleted === 'true';
-    }
-    else {
+    if (isDeleted !== undefined)
+        filter.isDeleted = isDeleted === "true";
+    else
         filter.isDeleted = false;
-    }
     const skip = (Number(page) - 1) * Number(limit);
-    const [users, total] = await Promise.all([
-        user_model_1.User.find(filter)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(Number(limit)).select('-password -otp -otpExpires'),
-        user_model_1.User.countDocuments(filter),
-    ]);
+    const pipeline = [];
+    if (search) {
+        pipeline.push({
+            $search: {
+                index: "autocomplete_index",
+                autocomplete: {
+                    query: search,
+                    path: ["name", "email", "phone"],
+                    fuzzy: { maxEdits: 1 }
+                }
+            }
+        });
+    }
+    pipeline.push({ $match: filter });
+    pipeline.push({ $sort: { createdAt: -1 } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    pipeline.push({
+        $project: {
+            password: 0,
+            otp: 0,
+            otpExpires: 0
+        }
+    });
+    const users = await user_model_1.User.aggregate(pipeline);
+    const total = await user_model_1.User.countDocuments(filter);
     const totalPages = Math.ceil(total / Number(limit));
     const result = {
         users,
         page: Number(page),
         limit: Number(limit),
         total,
-        totalPages,
+        totalPages
     };
     await redis_1.redis.set(cacheKey, result, 600);
     res.json(new ApiResponse(http_status_1.default.OK, "Users retrieved successfully", result));
-    return;
 });
 exports.getUserById = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.params.id;

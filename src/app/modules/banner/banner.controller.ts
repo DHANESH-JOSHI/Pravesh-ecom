@@ -21,40 +21,59 @@ export const createBanner = asyncHandler(async (req, res) => {
 
 export const getAllBanners = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, type, isDeleted } = req.query;
-  const cacheKey = generateCacheKey('banners', req.query);
-  const cachedBanners = await redis.get(cacheKey);
 
-  if (cachedBanners) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved all banners`, cachedBanners));
-  }
+  const cacheKey = generateCacheKey("banners", req.query);
+  const cached = await redis.get(cacheKey);
+
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Successfully retrieved all banners", cached));
 
   const filter: any = {};
-  if (search) filter.$text = { $search: search };
   if (type) filter.type = type;
-  if (isDeleted !== undefined) {
-    filter.isDeleted = isDeleted === 'true';
-  } else {
-    filter.isDeleted = false;
-  }
+  if (isDeleted !== undefined) filter.isDeleted = isDeleted === "true";
+  else filter.isDeleted = false;
 
   const skip = (Number(page) - 1) * Number(limit);
-  const [banners, total] = await Promise.all([
-    Banner.find(filter).sort({ order: 'asc' }).skip(skip).limit(Number(limit)),
-    Banner.countDocuments(filter),
-  ]);
 
+  const pipeline: any[] = [];
+
+  if (search) {
+    pipeline.push({
+      $search: {
+        index: "autocomplete_index",
+        autocomplete: {
+          query: search,
+          path: "title",
+          fuzzy: { maxEdits: 1 }
+        }
+      }
+    });
+  }
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { order: 1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  const banners = await Banner.aggregate(pipeline);
+  const total = await Banner.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
     banners,
     page: Number(page),
     limit: Number(limit),
     total,
-    totalPages,
+    totalPages
   };
 
   await redis.set(cacheKey, result, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Successfully retrieved banners`, result));
-  return;
+
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Successfully retrieved banners", result));
 });
 
 export const getBannerById = asyncHandler(async (req, res) => {

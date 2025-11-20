@@ -83,42 +83,107 @@ export const getMyCart = asyncHandler(async (req, res) => {
 
 export const getAllCarts = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, user } = req.query;
+
   const skip = (Number(page) - 1) * Number(limit);
 
-  const cacheKey = generateCacheKey('carts', req.query);
-  const cachedResult = await redis.get(cacheKey);
-  if (cachedResult) {
-    res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', cachedResult));
-    return;
-  }
+  const cacheKey = generateCacheKey("carts", req.query);
+  const cached = await redis.get(cacheKey);
+
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Carts retrieved successfully", cached));
 
   const filter: any = {};
+
   if (user) {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
-      filter.user = user;
+      filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
-      const users = await User.find({
-        $or: [
-          { name: { $regex: user, $options: 'i' } },
-          { email: { $regex: user, $options: 'i' } },
-          { phone: { $regex: user, $options: 'i' } }
-        ]
-      }).select('_id');
+      const users = await User.aggregate([
+        {
+          $search: {
+            index: "autocomplete_index",
+            autocomplete: {
+              query: user,
+              path: ["name", "email", "phone"],
+              fuzzy: { maxEdits: 1 }
+            }
+          }
+        },
+        { $project: { _id: 1 } }
+      ]);
 
-      const userIds = users.map(u => u._id);
+      const userIds = users.map((u) => u._id);
       filter.user = { $in: userIds };
     }
   }
 
-  const cartsQuery = Cart.find(filter)
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(Number(limit)).populate('user', 'name email').populate('items.product', 'originalPrice');
-  const [carts, total] = await Promise.all([
-    cartsQuery,
-    Cart.countDocuments(filter),
-  ]);
+  const pipeline: any[] = [];
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  pipeline.push({
+    $lookup: {
+      from: "users",
+      localField: "user",
+      foreignField: "_id",
+      pipeline: [
+        { $project: { _id: 1, name: 1, email: 1 } }
+      ],
+      as: "user"
+    }
+  });
+  pipeline.push({
+    $unwind: { path: "$user", preserveNullAndEmptyArrays: true }
+  });
+
+  pipeline.push({
+    $lookup: {
+      from: "products",
+      localField: "items.product",
+      foreignField: "_id",
+      pipeline: [
+        { $project: { _id: 1, originalPrice: 1 } }
+      ],
+      as: "productData"
+    }
+  });
+
+  pipeline.push({
+    $addFields: {
+      items: {
+        $map: {
+          input: "$items",
+          as: "item",
+          in: {
+            product: {
+              $arrayElemAt: [
+                {
+                  $filter: {
+                    input: "$productData",
+                    cond: { $eq: ["$$item.product", "$$this._id"] }
+                  }
+                },
+                0
+              ]
+            },
+            quantity: "$$item.quantity"
+          }
+        }
+      }
+    }
+  });
+
+  pipeline.push({ $project: { productData: 0 } });
+
+  const carts = await Cart.aggregate(pipeline);
+  const total = await Cart.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
     carts,
     page: Number(page),
@@ -128,8 +193,10 @@ export const getAllCarts = asyncHandler(async (req, res) => {
   };
 
   await redis.set(cacheKey, result, 600);
-  res.status(status.OK).json(new ApiResponse(status.OK, 'Carts retrieved successfully', result));
-  return;
+
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Carts retrieved successfully", result));
 });
 
 export const addToCart = asyncHandler(async (req, res) => {

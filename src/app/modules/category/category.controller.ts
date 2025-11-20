@@ -43,7 +43,12 @@ export const createCategory = asyncHandler(async (req, res) => {
 export const getAllCategories = asyncHandler(async (req, res) => {
   const cacheKey = generateCacheKey("categories", req.query);
   const cached = await redis.get(cacheKey);
-  if (cached) return res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved", cached));
+
+  if (cached) {
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Categories retrieved", cached));
+  }
 
   const {
     page = 1,
@@ -56,40 +61,106 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     order = "desc",
   } = req.query;
 
-  const filter: any = { isDeleted: isDeleted === "true" };
+  const filter: any = {
+    isDeleted: isDeleted === "true",
+  };
 
-  if (search) filter.title = { $regex: search, $options: "i" };
-  if (parentCategoryId) filter.parentCategory = parentCategoryId === "null" ? null : parentCategoryId;
-  if (brandId) filter._id = { $in: (await Brand.findById(brandId).select("categories"))?.categories || [] };
+  if (parentCategoryId) {
+    filter.parentCategory =
+      parentCategoryId === "null" ? null : parentCategoryId;
+  }
 
+  if (brandId) {
+    const brand = await Brand.findById(brandId).select("categories");
+    filter._id = { $in: brand?.categories || [] };
+  }
+
+  const sortOrder = order === "desc" ? -1 : 1;
   const skip = (Number(page) - 1) * Number(limit);
-  const [categories, total] = await Promise.all([
-    Category.find(filter)
-      .sort({ [sort as string]: order === "desc" ? -1 : 1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .populate("parentCategory", "slug title")
-      .select('-brands'),
-    Category.countDocuments(filter),
-  ]);
+
+  const pipeline: any[] = [];
+
+  if (search) {
+    pipeline.push({
+      $search: {
+        index: "autocomplete_index",
+        autocomplete: {
+          query: search,
+          path: "title",
+          fuzzy: { maxEdits: 1 },
+        },
+      },
+    });
+  }
+
+  pipeline.push({ $match: filter });
+
+  pipeline.push({ $sort: { [sort as string]: sortOrder } });
+
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  pipeline.push({
+    $lookup: {
+      from: "categories",
+      localField: "parentCategory",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            slug: 1,
+          },
+        },
+      ],
+      as: "parentCategory",
+    },
+  });
+
+  pipeline.push({
+    $unwind: {
+      path: "$parentCategory",
+      preserveNullAndEmptyArrays: true,
+    },
+  });
+
+  const categories = await Category.aggregate(pipeline);
+
+  const total = await Category.countDocuments(filter);
+  const totalPages = Math.ceil(total / Number(limit));
 
   const augmented = await Promise.all(
     categories.map(async (c) => {
       const [productCount, childCount, brandCount] = await Promise.all([
-        await countProducts(c._id as string),
+        countProducts(c._id),
         Category.countDocuments({ parentCategory: c._id, isDeleted: false }),
-        await countBrands(c._id as any)
+        countBrands(c._id),
       ]);
-      return { ...c.toJSON(), productCount, childCount, brandCount };
+
+      return {
+        ...c,
+        productCount,
+        childCount,
+        brandCount,
+      };
     })
   );
 
-  const totalPages = Math.ceil(total / Number(limit));
-  const result = { categories: augmented, total, page: Number(page), totalPages };
+  const result = {
+    categories: augmented,
+    total,
+    page: Number(page),
+    totalPages,
+  };
 
   await redis.set(cacheKey, result, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, "Categories retrieved", result));
+
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Categories retrieved", result));
 });
+
 
 export const getCategoryTree = asyncHandler(async (req, res) => {
   const cacheKey = "categories:tree";

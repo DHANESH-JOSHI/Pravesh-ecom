@@ -69,7 +69,6 @@ productSchema.virtual('reviews', {
   justOne: false,
 });
 
-productSchema.index({ name: 'text', tags: 'text' });
 productSchema.index({ slug: 1, isDeleted: 1 });
 productSchema.index({ sku: 1, isDeleted: 1 });
 productSchema.index({ isDeleted: 1, isFeatured: 1, createdAt: -1 });
@@ -150,4 +149,4 @@ productSchema.pre("save", function (next) {
   next();
 });
 
-export const Product: mongoose.Model<IProduct> =  mongoose.models.Product || mongoose.model<IProduct>('Product', productSchema);
+export const Product: mongoose.Model<IProduct> = mongoose.models.Product || mongoose.model<IProduct>('Product', productSchema);

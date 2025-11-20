@@ -146,57 +146,114 @@ export const getProductReviews = asyncHandler(async (req, res) => {
 
 export const getAllReviews = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, rating, user, product, search } = req.query;
-  const cacheKey = generateCacheKey('reviews:all', req.query);
-  const cachedReviews = await redis.get(cacheKey);
 
-  if (cachedReviews) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, "All reviews retrieved successfully", cachedReviews))
-  }
+  const cacheKey = generateCacheKey("reviews:all", req.query);
+  const cached = await redis.get(cacheKey);
+
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "All reviews retrieved successfully", cached));
 
   const filter: any = {};
   if (rating) filter.rating = Number(rating);
 
   if (user) {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
-      filter.user = user;
+      filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
-      const users = await User.find({
-        $or: [
-          { name: { $regex: user, $options: 'i' } },
-          { email: { $regex: user, $options: 'i' } },
-          { phone: { $regex: user, $options: 'i' } }
-        ]
-      }).select('_id');
-
-      const userIds = users.map(u => u._id);
-      filter.user = { $in: userIds };
+      const users = await User.aggregate([
+        {
+          $search: {
+            index: "autocomplete_index",
+            autocomplete: {
+              query: user,
+              path: ["name", "email", "phone"],
+              fuzzy: { maxEdits: 1 }
+            }
+          }
+        },
+        { $project: { _id: 1 } }
+      ]);
+      const ids = users.map((u) => u._id);
+      filter.user = { $in: ids };
     }
   }
 
   if (product) {
     if (mongoose.Types.ObjectId.isValid(product as string)) {
-      filter.product = product;
+      filter.product = new mongoose.Types.ObjectId(product as string);
     } else {
-      const products = await Product.find({ name: { $regex: product, $options: 'i' } }).select('_id');
-      const productIds = products.map(p => p._id);
-      filter.product = { $in: productIds };
+      const products = await Product.aggregate([
+        {
+          $search: {
+            index: "autocomplete_index",
+            autocomplete: {
+              query: product,
+              path: "name",
+              fuzzy: { maxEdits: 1 }
+            }
+          }
+        },
+        { $project: { _id: 1 } }
+      ]);
+      const ids = products.map((p) => p._id);
+      filter.product = { $in: ids };
     }
   }
 
-  if (search) filter.comment = { $regex: search, $options: 'i' };
-
   const skip = (Number(page) - 1) * Number(limit);
-  const [reviews, total] = await Promise.all([
-    Review.find(filter)
-      .populate('user', 'name email')
-      .populate('product', 'name')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit)),
-    Review.countDocuments(filter)
-  ]);
 
+  const pipeline: any[] = [];
+
+  if (search) {
+    pipeline.push({
+      $search: {
+        index: "autocomplete_index",
+        autocomplete: {
+          query: search,
+          path: "comment",
+          fuzzy: { maxEdits: 1 }
+        }
+      }
+    });
+  }
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  pipeline.push({
+    $lookup: {
+      from: "users",
+      localField: "user",
+      foreignField: "_id",
+      pipeline: [{ $project: { _id: 1, name: 1, email: 1 } }],
+      as: "user"
+    }
+  });
+  pipeline.push({
+    $unwind: { path: "$user", preserveNullAndEmptyArrays: true }
+  });
+
+  pipeline.push({
+    $lookup: {
+      from: "products",
+      localField: "product",
+      foreignField: "_id",
+      pipeline: [{ $project: { _id: 1, name: 1 } }],
+      as: "product"
+    }
+  });
+  pipeline.push({
+    $unwind: { path: "$product", preserveNullAndEmptyArrays: true }
+  });
+
+  const reviews = await Review.aggregate(pipeline);
+  const total = await Review.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
     reviews,
     page: Number(page),
@@ -207,9 +264,10 @@ export const getAllReviews = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 600);
 
-  res.status(status.OK).json(new ApiResponse(status.OK, "All reviews retrieved successfully", result))
-  return;
-})
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "All reviews retrieved successfully", result));
+});
 
 export const getMyReviews = asyncHandler(async (req, res) => {
   const userId = req.user?._id;

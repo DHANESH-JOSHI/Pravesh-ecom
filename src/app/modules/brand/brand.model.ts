@@ -47,6 +47,5 @@ brandSchema.pre("validate", async function (next) {
   next();
 });
 
-brandSchema.index({ name: 'text' });
 brandSchema.index({ createdAt: -1, isDeleted: 1 });
 export const Brand: mongoose.Model<IBrand> = mongoose.models.Brand || mongoose.model<IBrand>('Brand', brandSchema);

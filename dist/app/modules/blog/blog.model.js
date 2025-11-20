@@ -53,7 +53,6 @@ const blogSchema = new mongoose_1.Schema({
 });
 (0, mongooseToJSON_1.default)(blogSchema);
 blogSchema.index({ isPublished: 1, isDeleted: 1, createdAt: -1 });
-blogSchema.index({ title: 'text', content: 'text' });
 blogSchema.index({ slug: 1, isDeleted: 1 });
 blogSchema.pre("validate", async function (next) {
     if (!this.slug && this.title) {

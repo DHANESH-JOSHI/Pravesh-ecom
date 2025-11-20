@@ -60,7 +60,6 @@ categorySchema.virtual('products', {
 })
 
 categorySchema.index({ createdAt: -1 });
-categorySchema.index({ title: 'text' });
 categorySchema.index({ parentCategory: -1 });
 categorySchema.index({ isDeleted: -1 });
 categorySchema.index({ parentCategory: 1, title: 1 }, { unique: true });

@@ -323,12 +323,13 @@ export const getOrderById = asyncHandler(async (req, res) => {
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey('orders', req.query);
-  const cachedOrders = await redis.get(cacheKey);
+  const cacheKey = generateCacheKey("orders", req.query);
+  const cached = await redis.get(cacheKey);
 
-  if (cachedOrders) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', cachedOrders));
-  }
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "All orders retrieved successfully", cached));
 
   const { page = 1, limit = 10, status: orderStatus, user, isCustomOrder } = req.query;
 
@@ -336,30 +337,62 @@ export const getAllOrders = asyncHandler(async (req, res) => {
 
   const filter: any = {};
   if (orderStatus) filter.status = orderStatus;
+  if (isCustomOrder !== undefined) filter.isCustomOrder = isCustomOrder === "true";
+
   if (user) {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
-      filter.user = user;
+      filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
-      const users = await User.find({
-        $or: [
-          { name: { $regex: user, $options: 'i' } },
-          { email: { $regex: user, $options: 'i' } },
-          { phone: { $regex: user, $options: 'i' } }
-        ]
-      }).select('_id');
+      const users = await User.aggregate([
+        {
+          $search: {
+            index: "autocomplete_index",
+            autocomplete: {
+              query: user,
+              path: ["name", "email", "phone"],
+              fuzzy: { maxEdits: 1 }
+            }
+          }
+        },
+        { $project: { _id: 1 } }
+      ]);
 
-      const userIds = users.map(u => u._id);
-      filter.user = { $in: userIds };
+      const ids = users.map((u) => u._id);
+      filter.user = { $in: ids };
     }
   }
-  if (isCustomOrder !== undefined) filter.isCustomOrder = isCustomOrder === 'true';
 
-  const [orders, total] = await Promise.all([
-    Order.find(filter).sort({ createdAt: -1 }).populate('user', 'name email').select('-items').skip(skip).limit(Number(limit)),
-    Order.countDocuments(filter)
-  ]);
+  const pipeline: any[] = [];
 
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  pipeline.push({
+    $lookup: {
+      from: "users",
+      localField: "user",
+      foreignField: "_id",
+      pipeline: [
+        { $project: { _id: 1, name: 1, email: 1 } }
+      ],
+      as: "user"
+    }
+  });
+
+  pipeline.push({
+    $unwind: { path: "$user", preserveNullAndEmptyArrays: true }
+  });
+
+  pipeline.push({
+    $project: { items: 0 }
+  });
+
+  const orders = await Order.aggregate(pipeline);
+  const total = await Order.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
     orders,
     page: Number(page),
@@ -370,8 +403,9 @@ export const getAllOrders = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 600);
 
-  res.status(status.OK).json(new ApiResponse(status.OK, 'All orders retrieved successfully', result));
-  return;
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "All orders retrieved successfully", result));
 });
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {

@@ -24,38 +24,51 @@ exports.createBanner = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getAllBanners = (0, utils_1.asyncHandler)(async (req, res) => {
     const { page = 1, limit = 10, search, type, isDeleted } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)('banners', req.query);
-    const cachedBanners = await redis_1.redis.get(cacheKey);
-    if (cachedBanners) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Successfully retrieved all banners`, cachedBanners));
-    }
+    const cacheKey = (0, utils_1.generateCacheKey)("banners", req.query);
+    const cached = await redis_1.redis.get(cacheKey);
+    if (cached)
+        return res
+            .status(http_status_1.default.OK)
+            .json(new ApiResponse(http_status_1.default.OK, "Successfully retrieved all banners", cached));
     const filter = {};
-    if (search)
-        filter.$text = { $search: search };
     if (type)
         filter.type = type;
-    if (isDeleted !== undefined) {
-        filter.isDeleted = isDeleted === 'true';
-    }
-    else {
+    if (isDeleted !== undefined)
+        filter.isDeleted = isDeleted === "true";
+    else
         filter.isDeleted = false;
-    }
     const skip = (Number(page) - 1) * Number(limit);
-    const [banners, total] = await Promise.all([
-        banner_model_1.Banner.find(filter).sort({ order: 'asc' }).skip(skip).limit(Number(limit)),
-        banner_model_1.Banner.countDocuments(filter),
-    ]);
+    const pipeline = [];
+    if (search) {
+        pipeline.push({
+            $search: {
+                index: "autocomplete_index",
+                autocomplete: {
+                    query: search,
+                    path: "title",
+                    fuzzy: { maxEdits: 1 }
+                }
+            }
+        });
+    }
+    pipeline.push({ $match: filter });
+    pipeline.push({ $sort: { order: 1 } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    const banners = await banner_model_1.Banner.aggregate(pipeline);
+    const total = await banner_model_1.Banner.countDocuments(filter);
     const totalPages = Math.ceil(total / Number(limit));
     const result = {
         banners,
         page: Number(page),
         limit: Number(limit),
         total,
-        totalPages,
+        totalPages
     };
     await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Successfully retrieved banners`, result));
-    return;
+    res
+        .status(http_status_1.default.OK)
+        .json(new ApiResponse(http_status_1.default.OK, "Successfully retrieved banners", result));
 });
 exports.getBannerById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id: bannerId } = req.params;

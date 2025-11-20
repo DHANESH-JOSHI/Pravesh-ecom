@@ -23,7 +23,7 @@ const bannerSchema = new Schema<IBanner>(
 
 applyMongooseToJSON(bannerSchema);
 
-bannerSchema.index({ title: 'text', type: 1 })
+bannerSchema.index({ type: 1 })
 bannerSchema.index({ createdAt: -1, isDeleted: 1 })
 
 export const Banner: mongoose.Model<IBanner> = mongoose.models.Banner || mongoose.model<IBanner>('Banner', bannerSchema);

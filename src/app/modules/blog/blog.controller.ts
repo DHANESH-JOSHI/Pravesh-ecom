@@ -67,42 +67,60 @@ export const getBlogBySlug = asyncHandler(async (req, res) => {
 
 export const getAllBlogs = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, isPublished, isDeleted } = req.query;
-  const cacheKey = generateCacheKey('blogs', req.query);
-  const cachedBlogs = await redis.get(cacheKey);
 
-  if (cachedBlogs) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved blogs`, cachedBlogs));
-  }
+  const cacheKey = generateCacheKey("blogs", req.query);
+  const cached = await redis.get(cacheKey);
+
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Retrieved blogs", cached));
 
   const filter: any = {};
-  if (search) {
-    filter.$text = { $search: search };
-  }
-  if (isPublished !== undefined) filter.isPublished = isPublished === 'true';
-  if (isDeleted !== undefined) {
-    filter.isDeleted = isDeleted === 'true';
-  } else {
-    filter.isDeleted = false;
-  }
+  if (isPublished !== undefined) filter.isPublished = isPublished === "true";
+  if (isDeleted !== undefined) filter.isDeleted = isDeleted === "true";
+  else filter.isDeleted = false;
 
   const skip = (Number(page) - 1) * Number(limit);
-  const [posts, total] = await Promise.all([
-    Blog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
-    Blog.countDocuments(filter),
-  ]);
+
+  const pipeline: any[] = [];
+
+  if (search) {
+    pipeline.push({
+      $search: {
+        index: "autocomplete_index",
+        autocomplete: {
+          query: search,
+          path: ["title", "content"],
+          fuzzy: { maxEdits: 1 }
+        }
+      }
+    });
+  }
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  const blogs = await Blog.aggregate(pipeline);
+  const total = await Blog.countDocuments(filter);
 
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
-    blogs: posts,
+    blogs,
     page: Number(page),
     limit: Number(limit),
     total,
-    totalPages,
+    totalPages
   };
 
   await redis.set(cacheKey, result, 3600);
-  res.status(status.OK).json(new ApiResponse(status.OK, `Retrieved blogs`, result));
-  return;
+
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Retrieved blogs", result));
 });
 
 export const updateBlog = asyncHandler(async (req, res) => {

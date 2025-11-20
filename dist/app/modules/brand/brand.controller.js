@@ -59,26 +59,38 @@ exports.getAllBrands = (0, utils_1.asyncHandler)(async (req, res) => {
             .status(http_status_1.default.OK)
             .json(new ApiResponse(http_status_1.default.OK, "Brands retrieved successfully", cached));
     const { page = 1, limit = 10, search, categoryId, sort = "createdAt", order = "desc", isDeleted = "false", } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
     const filter = { isDeleted: isDeleted === "true" };
-    if (search)
-        filter.$text = { $search: search };
     if (categoryId) {
         const allCategoryIds = await (0, exports.getLeafCategoryIds)(categoryId);
         filter.categories = { $in: allCategoryIds };
     }
     const sortOrder = order === "asc" ? 1 : -1;
-    const sortObj = { [sort]: sortOrder };
-    const [brands, total] = await Promise.all([
-        brand_model_1.Brand.find(filter).sort(sortObj).skip(skip).limit(Number(limit)),
-        brand_model_1.Brand.countDocuments(filter),
-    ]);
+    const skip = (Number(page) - 1) * Number(limit);
+    const pipeline = [];
+    if (search) {
+        pipeline.push({
+            $search: {
+                index: "autocomplete_index",
+                autocomplete: {
+                    query: search,
+                    path: "name",
+                    fuzzy: { maxEdits: 1 },
+                },
+            },
+        });
+    }
+    pipeline.push({ $match: filter });
+    pipeline.push({ $sort: { [sort]: sortOrder } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    const brands = await brand_model_1.Brand.aggregate(pipeline);
+    const total = await brand_model_1.Brand.countDocuments(filter);
     const augmented = await Promise.all(brands.map(async (b) => {
         const [productCount, categoryCount] = await Promise.all([
             product_model_1.Product.countDocuments({ brand: b._id, isDeleted: false }),
             category_model_1.Category.countDocuments({ brands: b._id, isDeleted: false }),
         ]);
-        return { ...b.toJSON(), productCount, categoryCount };
+        return { ...b, productCount, categoryCount };
     }));
     const totalPages = Math.ceil(total / Number(limit));
     const result = { brands: augmented, total, page: Number(page), totalPages };

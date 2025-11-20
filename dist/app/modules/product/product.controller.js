@@ -89,18 +89,16 @@ exports.getProductBySlug = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     const query = product_validation_1.productsQueryValidation.parse(req.query);
-    const includePrice = req.query?.includePrice !== 'false';
-    const cacheKey = (0, utils_1.generateCacheKey)('products', { ...query, includePrice });
+    const includePrice = req.query?.includePrice !== "false";
+    const cacheKey = (0, utils_1.generateCacheKey)("products", { ...query, includePrice });
     const cachedProducts = await redis_1.redis.get(cacheKey);
     if (cachedProducts) {
         return res
             .status(http_status_1.default.OK)
-            .json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', cachedProducts));
+            .json(new ApiResponse(http_status_1.default.OK, "Products retrieved successfully", cachedProducts));
     }
-    const { page = 1, limit = 10, sort = 'createdAt', order = 'desc', categoryId, brandId, minPrice, maxPrice, isFeatured, isNewArrival, search, rating, isDeleted, } = query;
+    const { page = 1, limit = 10, sort = "createdAt", order = "desc", categoryId, brandId, minPrice, maxPrice, isFeatured, isNewArrival, search, rating, isDeleted, } = query;
     const filter = { isDeleted: isDeleted ?? false };
-    if (search)
-        filter.$text = { $search: search };
     if (categoryId) {
         const allIds = await (0, brand_controller_1.getLeafCategoryIds)(categoryId);
         filter.category = { $in: allIds.map((id) => new mongoose_1.default.Types.ObjectId(id)) };
@@ -121,40 +119,93 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     if (rating)
         filter.rating = { $gte: Number(rating) };
     const sortMap = {
-        trending: 'salesCount',
-        bestSelling: 'totalSold',
-        newArrivals: 'isNewArrival',
-        featured: 'isFeatured',
-        rating: 'rating',
-        price: 'originalPrice',
-        createdAt: 'createdAt',
+        trending: "salesCount",
+        bestSelling: "totalSold",
+        newArrivals: "createdAt",
+        featured: "isFeatured",
+        rating: "rating",
+        price: "originalPrice",
+        createdAt: "createdAt",
     };
-    const sortField = sortMap[sort] || 'createdAt';
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const sortObj = { [sortField]: sortOrder };
+    const sortField = sortMap[sort] || "createdAt";
+    const sortOrder = order === "asc" ? 1 : -1;
     const skip = (Number(page) - 1) * Number(limit);
+    const pipeline = [];
+    if (search) {
+        pipeline.push({
+            $search: {
+                index: "autocomplete_index",
+                autocomplete: {
+                    query: search,
+                    path: ["name", "tags"],
+                    fuzzy: { maxEdits: 1 },
+                },
+            },
+        });
+    }
+    pipeline.push({ $match: filter });
+    pipeline.push({ $sort: { [sortField]: sortOrder } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    pipeline.push({
+        $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            pipeline: [
+                {
+                    $project: {
+                        _id: 1,
+                        title: 1,
+                        slug: 1,
+                        path: 1,
+                    },
+                },
+            ],
+            as: "category",
+        },
+    });
+    pipeline.push({
+        $unwind: { path: "$category", preserveNullAndEmptyArrays: true },
+    });
+    pipeline.push({
+        $lookup: {
+            from: "brands",
+            localField: "brand",
+            foreignField: "_id",
+            pipeline: [
+                {
+                    $project: {
+                        _id: 1,
+                        name: 1,
+                        slug: 1,
+                    },
+                },
+            ],
+            as: "brand",
+        },
+    });
+    pipeline.push({
+        $unwind: { path: "$brand", preserveNullAndEmptyArrays: true },
+    });
     const [products, total] = await Promise.all([
-        product_model_1.Product.find(filter)
-            .populate('category', 'title slug path')
-            .populate('brand', 'name slug')
-            .sort(sortObj)
-            .skip(skip)
-            .limit(Number(limit))
-            .lean(),
+        product_model_1.Product.aggregate(pipeline),
         product_model_1.Product.countDocuments(filter),
     ]);
     const totalPages = Math.ceil(total / Number(limit));
     const result = {
-        products: includePrice ? products : products.map(({ originalPrice, ...rest }) => rest),
+        products: includePrice
+            ? products
+            : products.map(({ originalPrice, ...rest }) => rest),
         page: Number(page),
         limit: Number(limit),
         total,
         totalPages,
     };
     await redis_1.redis.set(cacheKey, result, 3600);
-    res
+    return res
         .status(http_status_1.default.OK)
-        .json(new ApiResponse(http_status_1.default.OK, 'Products retrieved successfully', result));
+        .json(new ApiResponse(http_status_1.default.OK, "Products retrieved successfully", result));
 });
 exports.getProductById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;

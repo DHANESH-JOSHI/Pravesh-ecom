@@ -56,7 +56,7 @@ const bannerSchema = new mongoose_1.Schema({
     timestamps: true,
 });
 (0, mongooseToJSON_1.default)(bannerSchema);
-bannerSchema.index({ title: 'text', type: 1 });
+bannerSchema.index({ type: 1 });
 bannerSchema.index({ createdAt: -1, isDeleted: 1 });
 exports.Banner = mongoose_1.default.models.Banner || mongoose_1.default.model('Banner', bannerSchema);
 //# sourceMappingURL=banner.model.js.map

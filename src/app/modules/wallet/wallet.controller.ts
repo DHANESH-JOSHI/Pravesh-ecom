@@ -11,49 +11,75 @@ const ApiResponse = getApiResponseClass("WALLET");
 
 export const getAllWallets = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, user } = req.query;
-  const cacheKey = generateCacheKey('wallets', req.query);
-  const cachedWallets = await redis.get(cacheKey);
 
-  if (cachedWallets) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', cachedWallets));
-  }
+  const cacheKey = generateCacheKey("wallets", req.query);
+  const cached = await redis.get(cacheKey);
+
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "Wallets retrieved successfully", cached));
+
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {};
+
   if (user) {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
-      filter.user = user;
+      filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
-      const users = await User.find({
-        $or: [
-          { name: { $regex: user, $options: 'i' } },
-          { email: { $regex: user, $options: 'i' } },
-          { phone: { $regex: user, $options: 'i' } }
-        ]
-      }).select('_id');
+      const users = await User.aggregate([
+        {
+          $search: {
+            index: "autocomplete_index",
+            autocomplete: {
+              query: user,
+              path: ["name", "email", "phone"],
+              fuzzy: { maxEdits: 1 }
+            }
+          }
+        },
+        { $project: { _id: 1 } }
+      ]);
 
-      const userIds = users.map(u => u._id);
-      filter.user = { $in: userIds };
+      filter.user = { $in: users.map((u) => u._id) };
     }
   }
 
-  const [wallets, total] = await Promise.all([
-    Wallet.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .populate('user', 'name email'),
-    Wallet.countDocuments(filter),
-  ]);
+  const pipeline: any[] = [];
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  pipeline.push({
+    $lookup: {
+      from: "users",
+      localField: "user",
+      foreignField: "_id",
+      pipeline: [
+        { $project: { _id: 1, name: 1, email: 1 } }
+      ],
+      as: "user"
+    }
+  });
+
+  pipeline.push({
+    $unwind: { path: "$user", preserveNullAndEmptyArrays: true }
+  });
+
+  const wallets = await Wallet.aggregate(pipeline);
+  const total = await Wallet.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
-    wallets: wallets.map(wallet => {
-      const walletObject = wallet.toJSON();
-      return {
-        ...walletObject,
-        transactions: walletObject.transactions?.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime()) || []
-      }
-    }),
+    wallets: wallets.map((w) => ({
+      ...w,
+      transactions: w.transactions?.sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ) || []
+    })),
     page: Number(page),
     limit: Number(limit),
     total,
@@ -62,8 +88,9 @@ export const getAllWallets = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 600);
 
-  res.status(status.OK).json(new ApiResponse(status.OK, 'Wallets retrieved successfully', result));
-  return;
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "Wallets retrieved successfully", result));
 });
 
 export const getWalletBalance = asyncHandler(async (req, res) => {

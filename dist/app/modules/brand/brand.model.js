@@ -44,7 +44,6 @@ brandSchema.pre("validate", async function (next) {
     }
     next();
 });
-brandSchema.index({ name: 'text' });
 brandSchema.index({ createdAt: -1, isDeleted: 1 });
 exports.Brand = mongoose_1.default.models.Brand || mongoose_1.default.model('Brand', brandSchema);
 //# sourceMappingURL=brand.model.js.map

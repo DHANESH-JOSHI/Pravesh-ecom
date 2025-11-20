@@ -184,41 +184,68 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
 
 export const getAllAddresses = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, user, isDeleted } = req.query;
-  const cacheKey = generateCacheKey('addresses:all', req.query);
-  const cachedAddresses = await redis.get(cacheKey);
 
-  if (cachedAddresses) {
-    return res.status(status.OK).json(new ApiResponse(status.OK, "All addresses retrieved successfully", cachedAddresses));
-  }
+  const cacheKey = generateCacheKey("addresses:all", req.query);
+  const cached = await redis.get(cacheKey);
 
-  const filter: any = { isDeleted: false };
-  if (isDeleted !== undefined) {
-    filter.isDeleted = isDeleted === 'true';
-  } else {
-    filter.isDeleted = false;
-  }
+  if (cached)
+    return res
+      .status(status.OK)
+      .json(new ApiResponse(status.OK, "All addresses retrieved successfully", cached));
+
+  const filter: any = {};
+  if (isDeleted !== undefined) filter.isDeleted = isDeleted === "true";
+  else filter.isDeleted = false;
+
   if (user) {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = user;
     } else {
-      const users = await User.find({ $text: { $search: user as string } }).select('_id');
-      const userIds = users.map(u => u._id);
+      const users = await User.aggregate([
+        {
+          $search: {
+            index: "autocomplete_index",
+            autocomplete: {
+              query: user,
+              path: ["name", "email"],
+              fuzzy: { maxEdits: 1 }
+            }
+          }
+        },
+        { $project: { _id: 1 } }
+      ]);
+
+      const userIds = users.map((u) => u._id);
       filter.user = { $in: userIds };
     }
   }
-  if (search) {
-    filter.$text = { $search: search };
-  }
+
   const skip = (Number(page) - 1) * Number(limit);
 
-  const [addresses, total] = await Promise.all([
-    Address.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit)),
-    Address.countDocuments(filter),
-  ]);
+  const pipeline: any[] = [];
+
+  if (search) {
+    pipeline.push({
+      $search: {
+        index: "autocomplete_index",
+        autocomplete: {
+          query: search,
+          path: ["fullname", "phone", "city", "state", "postalCode", "country"],
+          fuzzy: { maxEdits: 1 }
+        }
+      }
+    });
+  }
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { createdAt: -1 } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  const addresses = await Address.aggregate(pipeline);
+  const total = await Address.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
   const result = {
     addresses,
     page: Number(page),
@@ -229,6 +256,7 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
 
   await redis.set(cacheKey, result, 600);
 
-  res.status(status.OK).json(new ApiResponse(status.OK, "All addresses retrieved successfully", result));
-  return;
-})
+  res
+    .status(status.OK)
+    .json(new ApiResponse(status.OK, "All addresses retrieved successfully", result));
+});

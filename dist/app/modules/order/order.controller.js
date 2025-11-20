@@ -284,38 +284,65 @@ exports.getOrderById = (0, utils_1.asyncHandler)(async (req, res) => {
     return;
 });
 exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
-    const cacheKey = (0, utils_1.generateCacheKey)('orders', req.query);
-    const cachedOrders = await redis_1.redis.get(cacheKey);
-    if (cachedOrders) {
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'All orders retrieved successfully', cachedOrders));
-    }
+    const cacheKey = (0, utils_1.generateCacheKey)("orders", req.query);
+    const cached = await redis_1.redis.get(cacheKey);
+    if (cached)
+        return res
+            .status(http_status_1.default.OK)
+            .json(new ApiResponse(http_status_1.default.OK, "All orders retrieved successfully", cached));
     const { page = 1, limit = 10, status: orderStatus, user, isCustomOrder } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
     const filter = {};
     if (orderStatus)
         filter.status = orderStatus;
+    if (isCustomOrder !== undefined)
+        filter.isCustomOrder = isCustomOrder === "true";
     if (user) {
         if (mongoose_1.default.Types.ObjectId.isValid(user)) {
-            filter.user = user;
+            filter.user = new mongoose_1.default.Types.ObjectId(user);
         }
         else {
-            const users = await user_model_1.User.find({
-                $or: [
-                    { name: { $regex: user, $options: 'i' } },
-                    { email: { $regex: user, $options: 'i' } },
-                    { phone: { $regex: user, $options: 'i' } }
-                ]
-            }).select('_id');
-            const userIds = users.map(u => u._id);
-            filter.user = { $in: userIds };
+            const users = await user_model_1.User.aggregate([
+                {
+                    $search: {
+                        index: "autocomplete_index",
+                        autocomplete: {
+                            query: user,
+                            path: ["name", "email", "phone"],
+                            fuzzy: { maxEdits: 1 }
+                        }
+                    }
+                },
+                { $project: { _id: 1 } }
+            ]);
+            const ids = users.map((u) => u._id);
+            filter.user = { $in: ids };
         }
     }
-    if (isCustomOrder !== undefined)
-        filter.isCustomOrder = isCustomOrder === 'true';
-    const [orders, total] = await Promise.all([
-        order_model_1.Order.find(filter).sort({ createdAt: -1 }).populate('user', 'name email').select('-items').skip(skip).limit(Number(limit)),
-        order_model_1.Order.countDocuments(filter)
-    ]);
+    const pipeline = [];
+    pipeline.push({ $match: filter });
+    pipeline.push({ $sort: { createdAt: -1 } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    pipeline.push({
+        $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            pipeline: [
+                { $project: { _id: 1, name: 1, email: 1 } }
+            ],
+            as: "user"
+        }
+    });
+    pipeline.push({
+        $unwind: { path: "$user", preserveNullAndEmptyArrays: true }
+    });
+    pipeline.push({
+        $project: { items: 0 }
+    });
+    const orders = await order_model_1.Order.aggregate(pipeline);
+    const total = await order_model_1.Order.countDocuments(filter);
     const totalPages = Math.ceil(total / Number(limit));
     const result = {
         orders,
@@ -325,8 +352,9 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
         totalPages
     };
     await redis_1.redis.set(cacheKey, result, 600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'All orders retrieved successfully', result));
-    return;
+    res
+        .status(http_status_1.default.OK)
+        .json(new ApiResponse(http_status_1.default.OK, "All orders retrieved successfully", result));
 });
 exports.updateOrderStatus = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id: orderId } = req.params;

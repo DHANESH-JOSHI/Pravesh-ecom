@@ -55,7 +55,6 @@ export const createBrand = asyncHandler(async (req, res) => {
 export const getAllBrands = asyncHandler(async (req, res) => {
   const cacheKey = generateCacheKey("brands", req.query);
   const cached = await redis.get(cacheKey);
-
   if (cached)
     return res
       .status(status.OK)
@@ -71,22 +70,37 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     isDeleted = "false",
   } = req.query;
 
-  const skip = (Number(page) - 1) * Number(limit);
   const filter: any = { isDeleted: isDeleted === "true" };
-
-  if (search) filter.$text = { $search: search };
   if (categoryId) {
     const allCategoryIds = await getLeafCategoryIds(categoryId as string);
     filter.categories = { $in: allCategoryIds };
   }
 
   const sortOrder = order === "asc" ? 1 : -1;
-  const sortObj: any = { [sort as string]: sortOrder };
+  const skip = (Number(page) - 1) * Number(limit);
 
-  const [brands, total] = await Promise.all([
-    Brand.find(filter).sort(sortObj).skip(skip).limit(Number(limit)),
-    Brand.countDocuments(filter),
-  ]);
+  const pipeline: any[] = [];
+
+  if (search) {
+    pipeline.push({
+      $search: {
+        index: "autocomplete_index",
+        autocomplete: {
+          query: search,
+          path: "name",
+          fuzzy: { maxEdits: 1 },
+        },
+      },
+    });
+  }
+
+  pipeline.push({ $match: filter });
+  pipeline.push({ $sort: { [sort as string]: sortOrder } });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: Number(limit) });
+
+  const brands = await Brand.aggregate(pipeline);
+  const total = await Brand.countDocuments(filter);
 
   const augmented = await Promise.all(
     brands.map(async (b) => {
@@ -94,7 +108,8 @@ export const getAllBrands = asyncHandler(async (req, res) => {
         Product.countDocuments({ brand: b._id, isDeleted: false }),
         Category.countDocuments({ brands: b._id, isDeleted: false }),
       ]);
-      return { ...b.toJSON(), productCount, categoryCount };
+
+      return { ...b, productCount, categoryCount };
     })
   );
 
@@ -102,6 +117,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
   const result = { brands: augmented, total, page: Number(page), totalPages };
 
   await redis.set(cacheKey, result, 3600);
+
   res
     .status(status.OK)
     .json(new ApiResponse(status.OK, "Brands retrieved successfully", result));

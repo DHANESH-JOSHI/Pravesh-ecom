@@ -40,38 +40,91 @@ exports.createCategory = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.getAllCategories = (0, utils_1.asyncHandler)(async (req, res) => {
     const cacheKey = (0, utils_1.generateCacheKey)("categories", req.query);
     const cached = await redis_1.redis.get(cacheKey);
-    if (cached)
-        return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Categories retrieved", cached));
+    if (cached) {
+        return res
+            .status(http_status_1.default.OK)
+            .json(new ApiResponse(http_status_1.default.OK, "Categories retrieved", cached));
+    }
     const { page = 1, limit = 20, search, parentCategoryId, brandId, isDeleted = "false", sort = "createdAt", order = "desc", } = req.query;
-    const filter = { isDeleted: isDeleted === "true" };
-    if (search)
-        filter.title = { $regex: search, $options: "i" };
-    if (parentCategoryId)
-        filter.parentCategory = parentCategoryId === "null" ? null : parentCategoryId;
-    if (brandId)
-        filter._id = { $in: (await brand_model_1.Brand.findById(brandId).select("categories"))?.categories || [] };
+    const filter = {
+        isDeleted: isDeleted === "true",
+    };
+    if (parentCategoryId) {
+        filter.parentCategory =
+            parentCategoryId === "null" ? null : parentCategoryId;
+    }
+    if (brandId) {
+        const brand = await brand_model_1.Brand.findById(brandId).select("categories");
+        filter._id = { $in: brand?.categories || [] };
+    }
+    const sortOrder = order === "desc" ? -1 : 1;
     const skip = (Number(page) - 1) * Number(limit);
-    const [categories, total] = await Promise.all([
-        category_model_1.Category.find(filter)
-            .sort({ [sort]: order === "desc" ? -1 : 1 })
-            .skip(skip)
-            .limit(Number(limit))
-            .populate("parentCategory", "slug title")
-            .select('-brands'),
-        category_model_1.Category.countDocuments(filter),
-    ]);
+    const pipeline = [];
+    if (search) {
+        pipeline.push({
+            $search: {
+                index: "autocomplete_index",
+                autocomplete: {
+                    query: search,
+                    path: "title",
+                    fuzzy: { maxEdits: 1 },
+                },
+            },
+        });
+    }
+    pipeline.push({ $match: filter });
+    pipeline.push({ $sort: { [sort]: sortOrder } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+    pipeline.push({
+        $lookup: {
+            from: "categories",
+            localField: "parentCategory",
+            foreignField: "_id",
+            pipeline: [
+                {
+                    $project: {
+                        _id: 1,
+                        title: 1,
+                        slug: 1,
+                    },
+                },
+            ],
+            as: "parentCategory",
+        },
+    });
+    pipeline.push({
+        $unwind: {
+            path: "$parentCategory",
+            preserveNullAndEmptyArrays: true,
+        },
+    });
+    const categories = await category_model_1.Category.aggregate(pipeline);
+    const total = await category_model_1.Category.countDocuments(filter);
+    const totalPages = Math.ceil(total / Number(limit));
     const augmented = await Promise.all(categories.map(async (c) => {
         const [productCount, childCount, brandCount] = await Promise.all([
-            await countProducts(c._id),
+            countProducts(c._id),
             category_model_1.Category.countDocuments({ parentCategory: c._id, isDeleted: false }),
-            await countBrands(c._id)
+            countBrands(c._id),
         ]);
-        return { ...c.toJSON(), productCount, childCount, brandCount };
+        return {
+            ...c,
+            productCount,
+            childCount,
+            brandCount,
+        };
     }));
-    const totalPages = Math.ceil(total / Number(limit));
-    const result = { categories: augmented, total, page: Number(page), totalPages };
+    const result = {
+        categories: augmented,
+        total,
+        page: Number(page),
+        totalPages,
+    };
     await redis_1.redis.set(cacheKey, result, 3600);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Categories retrieved", result));
+    res
+        .status(http_status_1.default.OK)
+        .json(new ApiResponse(http_status_1.default.OK, "Categories retrieved", result));
 });
 exports.getCategoryTree = (0, utils_1.asyncHandler)(async (req, res) => {
     const cacheKey = "categories:tree";

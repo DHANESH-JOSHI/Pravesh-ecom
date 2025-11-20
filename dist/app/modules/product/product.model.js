@@ -93,7 +93,6 @@ productSchema.virtual('reviews', {
     foreignField: 'product',
     justOne: false,
 });
-productSchema.index({ name: 'text', tags: 'text' });
 productSchema.index({ slug: 1, isDeleted: 1 });
 productSchema.index({ sku: 1, isDeleted: 1 });
 productSchema.index({ isDeleted: 1, isFeatured: 1, createdAt: -1 });
