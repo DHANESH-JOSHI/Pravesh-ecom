@@ -40,6 +40,7 @@ exports.Category = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const mongooseToJSON_1 = __importDefault(require("../../utils/mongooseToJSON"));
 const slugify_1 = require("../../utils/slugify");
+const pixabay_1 = require("../../utils/pixabay");
 const categorySchema = new mongoose_1.Schema({
     title: {
         type: String,
@@ -48,9 +49,9 @@ const categorySchema = new mongoose_1.Schema({
         unique: true
     },
     slug: { type: String, required: true, unique: true, lowercase: true },
-    // image: {
-    //   type: String,
-    // },
+    image: {
+        type: String,
+    },
     brands: [
         {
             type: mongoose_1.Schema.Types.ObjectId,
@@ -100,6 +101,7 @@ categorySchema.pre("validate", async function (next) {
     next();
 });
 categorySchema.pre("save", async function (next) {
+    // Build hierarchical path first
     if (this.parentCategory) {
         const parent = await mongoose_1.default.model("Category").findById(this.parentCategory);
         if (parent) {
@@ -108,6 +110,17 @@ categorySchema.pre("save", async function (next) {
     }
     else {
         this.path = [this.slug];
+    }
+    try {
+        if (!this.image && this.title && Array.isArray(this.path)) {
+            const pixabayUrl = await (0, pixabay_1.getPixabayImageForCategory)(this.title, Array.isArray(this.path) ? this.path : []);
+            if (pixabayUrl) {
+                this.image = pixabayUrl;
+            }
+        }
+    }
+    catch (err) {
+        console.error('[CATEGORY_IMAGE] Generation failed:', err?.message || err);
     }
     next();
 });

@@ -41,6 +41,9 @@ const envSchema = z.object({
   REDIS_URL: z.string({
     error: "REDIS_URL is required",
   }),
+  PIXABAY_API_KEY: z.string({
+    error: "PIXABAY_API_KEY is required",
+  }),
 });
 
 let envVars: z.infer<typeof envSchema>;

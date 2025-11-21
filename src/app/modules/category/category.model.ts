@@ -2,6 +2,7 @@ import mongoose, { Schema } from 'mongoose';
 import { ICategory } from './category.interface';
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
 import { generateUniqueSlug } from '@/utils/slugify';
+import { getPixabayImageForCategory } from '@/utils/pixabay';
 
 const categorySchema: Schema = new Schema<ICategory>(
   {
@@ -12,9 +13,9 @@ const categorySchema: Schema = new Schema<ICategory>(
       unique: true
     },
     slug: { type: String, required: true, unique: true, lowercase: true },
-    // image: {
-    //   type: String,
-    // },
+    image: {
+      type: String,
+    },
     brands: [
       {
         type: Schema.Types.ObjectId,
@@ -72,6 +73,7 @@ categorySchema.pre("validate", async function (next) {
 });
 
 categorySchema.pre("save", async function (next) {
+  // Build hierarchical path first
   if (this.parentCategory) {
     const parent = await mongoose.model("Category").findById(this.parentCategory);
     if (parent) {
@@ -80,6 +82,18 @@ categorySchema.pre("save", async function (next) {
   } else {
     this.path = [this.slug];
   }
+
+  try {
+    if (!this.image && this.title && Array.isArray(this.path)) {
+      const pixabayUrl = await getPixabayImageForCategory(this.title as string, Array.isArray(this.path) ? this.path : []);
+      if (pixabayUrl) {
+        this.image = pixabayUrl;
+      }
+    }
+  } catch (err: any) {
+    console.error('[CATEGORY_IMAGE] Generation failed:', err?.message || err);
+  }
+
   next();
 });
 export const Category: mongoose.Model<ICategory> =  mongoose.models.Category || mongoose.model<ICategory>('Category', categorySchema);

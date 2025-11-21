@@ -45,6 +45,9 @@ const envSchema = zod_1.default.object({
     REDIS_URL: zod_1.default.string({
         error: "REDIS_URL is required",
     }),
+    PIXABAY_API_KEY: zod_1.default.string({
+        error: "PIXABAY_API_KEY is required",
+    }),
 });
 let envVars;
 try {
