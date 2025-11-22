@@ -260,7 +260,7 @@ exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
         const productSearchResults = await product_model_1.Product.aggregate([
             {
                 $search: {
-                    index: "autocomplete_index",
+                    index: "product_search",
                     compound: {
                         should: [
                             {
@@ -439,7 +439,7 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
             const users = await user_model_1.User.aggregate([
                 {
                     $search: {
-                        index: "autocomplete_index",
+                        index: "user_search",
                         autocomplete: {
                             query: user,
                             path: ["name", "email", "phone"],

@@ -146,7 +146,7 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
             const users = await user_model_1.User.aggregate([
                 {
                     $search: {
-                        index: "autocomplete_index",
+                        index: "user_search",
                         compound: {
                             should: [
                                 {
@@ -188,7 +188,7 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
             const products = await product_model_1.Product.aggregate([
                 {
                     $search: {
-                        index: "autocomplete_index",
+                        index: "product_search",
                         compound: {
                             should: [
                                 {
@@ -227,7 +227,7 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
     if (search) {
         pipeline.push({
             $search: {
-                index: "autocomplete_index",
+                index: "review_search",
                 autocomplete: {
                     query: search,
                     path: "comment",

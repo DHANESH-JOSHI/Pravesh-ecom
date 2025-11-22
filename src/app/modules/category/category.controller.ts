@@ -83,7 +83,7 @@ export const getAllCategories = asyncHandler(async (req, res) => {
   if (search) {
     pipeline.push({
       $search: {
-        index: "autocomplete_index",
+        index: "category_search",
         compound: {
           should: [
             {

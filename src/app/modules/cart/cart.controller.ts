@@ -103,7 +103,7 @@ export const getAllCarts = asyncHandler(async (req, res) => {
       const users = await User.aggregate([
         {
           $search: {
-            index: "autocomplete_index",
+            index: "user_search",
             compound: {
               should: [
                 {

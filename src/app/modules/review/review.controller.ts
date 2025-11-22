@@ -165,7 +165,7 @@ export const getAllReviews = asyncHandler(async (req, res) => {
       const users = await User.aggregate([
         {
           $search: {
-            index: "autocomplete_index",
+            index: "user_search",
             compound: {
               should: [
                 {
@@ -207,7 +207,7 @@ export const getAllReviews = asyncHandler(async (req, res) => {
       const products = await Product.aggregate([
         {
           $search: {
-            index: "autocomplete_index",
+            index: "product_search",
             compound: {
               should: [
                 {
@@ -249,7 +249,7 @@ export const getAllReviews = asyncHandler(async (req, res) => {
   if (search) {
     pipeline.push({
       $search: {
-        index: "autocomplete_index",
+        index: "review_search",
         autocomplete: {
           query: search,
           path: "comment",

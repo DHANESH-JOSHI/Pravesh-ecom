@@ -302,7 +302,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     const productSearchResults = await Product.aggregate([
       {
         $search: {
-          index: "autocomplete_index",
+          index: "product_search",
           compound: {
             should: [
               {
@@ -508,7 +508,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
       const users = await User.aggregate([
         {
           $search: {
-            index: "autocomplete_index",
+            index: "user_search",
             autocomplete: {
               query: user,
               path: ["name", "email", "phone"],

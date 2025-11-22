@@ -134,7 +134,7 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     if (search) {
         pipeline.push({
             $search: {
-                index: "autocomplete_index",
+                index: "product_search",
                 compound: {
                     should: [
                         {

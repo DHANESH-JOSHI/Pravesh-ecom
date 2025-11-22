@@ -42,7 +42,7 @@ export const getAllBanners = asyncHandler(async (req, res) => {
   if (search) {
     pipeline.push({
       $search: {
-        index: "autocomplete_index",
+        index: "banner_search",
         autocomplete: {
           query: search,
           path: "title",

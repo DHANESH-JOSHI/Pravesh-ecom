@@ -84,7 +84,7 @@ export const getAllBrands = asyncHandler(async (req, res) => {
   if (search) {
     pipeline.push({
       $search: {
-        index: "autocomplete_index",
+        index: "brand_search",
         compound: {
           should: [
             {

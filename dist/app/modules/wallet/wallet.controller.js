@@ -32,7 +32,7 @@ exports.getAllWallets = (0, utils_1.asyncHandler)(async (req, res) => {
             const users = await user_model_1.User.aggregate([
                 {
                     $search: {
-                        index: "autocomplete_index",
+                        index: "user_search",
                         compound: {
                             should: [
                                 {

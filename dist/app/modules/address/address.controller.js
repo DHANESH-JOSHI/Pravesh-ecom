@@ -188,7 +188,7 @@ exports.getAllAddresses = (0, utils_1.asyncHandler)(async (req, res) => {
             const users = await user_model_1.User.aggregate([
                 {
                     $search: {
-                        index: "autocomplete_index",
+                        index: "user_search",
                         compound: {
                             should: [
                                 {
@@ -227,7 +227,7 @@ exports.getAllAddresses = (0, utils_1.asyncHandler)(async (req, res) => {
     if (search) {
         pipeline.push({
             $search: {
-                index: "autocomplete_index",
+                index: "address_search",
                 compound: {
                     should: [
                         {
