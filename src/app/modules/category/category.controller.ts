@@ -84,11 +84,24 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     pipeline.push({
       $search: {
         index: "autocomplete_index",
-        autocomplete: {
-          query: search,
-          path: ["title", "slug"],
-          fuzzy: { maxEdits: 1 },
-        },
+        compound: {
+          should: [
+            {
+              autocomplete: {
+                query: search,
+                path: "name",
+                fuzzy: { maxEdits: 1 }
+              }
+            },
+            {
+              autocomplete: {
+                query: search,
+                path: "slug",
+                fuzzy: { maxEdits: 1 }
+              }
+            }
+          ]
+        }
       },
     });
   }

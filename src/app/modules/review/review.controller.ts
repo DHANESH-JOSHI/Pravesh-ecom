@@ -208,10 +208,30 @@ export const getAllReviews = asyncHandler(async (req, res) => {
         {
           $search: {
             index: "autocomplete_index",
-            autocomplete: {
-              query: product,
-              path: "name",
-              fuzzy: { maxEdits: 1 }
+            compound: {
+              should: [
+                {
+                  autocomplete: {
+                    query: product,
+                    path: "name",
+                    fuzzy: { maxEdits: 1 }
+                  }
+                },
+                {
+                  autocomplete: {
+                    query: product,
+                    path: "tags",
+                    fuzzy: { maxEdits: 1 }
+                  }
+                },
+                {
+                  autocomplete: {
+                    query: product,
+                    path: "slug",
+                    fuzzy: { maxEdits: 1 }
+                  }
+                }
+              ]
             }
           }
         },

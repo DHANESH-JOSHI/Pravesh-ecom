@@ -189,10 +189,30 @@ exports.getAllAddresses = (0, utils_1.asyncHandler)(async (req, res) => {
                 {
                     $search: {
                         index: "autocomplete_index",
-                        autocomplete: {
-                            query: user,
-                            path: ["name", "email", "phone"],
-                            fuzzy: { maxEdits: 1 }
+                        compound: {
+                            should: [
+                                {
+                                    autocomplete: {
+                                        query: user,
+                                        path: "name",
+                                        fuzzy: { maxEdits: 1 }
+                                    }
+                                },
+                                {
+                                    autocomplete: {
+                                        query: user,
+                                        path: "email",
+                                        fuzzy: { maxEdits: 1 }
+                                    }
+                                },
+                                {
+                                    autocomplete: {
+                                        query: user,
+                                        path: "phone",
+                                        fuzzy: { maxEdits: 1 }
+                                    }
+                                }
+                            ]
                         }
                     }
                 },
@@ -208,10 +228,51 @@ exports.getAllAddresses = (0, utils_1.asyncHandler)(async (req, res) => {
         pipeline.push({
             $search: {
                 index: "autocomplete_index",
-                autocomplete: {
-                    query: search,
-                    path: ["fullname", "phone", "city", "state", "postalCode", "country"],
-                    fuzzy: { maxEdits: 1 }
+                compound: {
+                    should: [
+                        {
+                            autocomplete: {
+                                query: search,
+                                path: "fullname",
+                                fuzzy: { maxEdits: 1 }
+                            }
+                        },
+                        {
+                            autocomplete: {
+                                query: search,
+                                path: "phone",
+                                fuzzy: { maxEdits: 1 }
+                            }
+                        },
+                        {
+                            autocomplete: {
+                                query: search,
+                                path: "city",
+                                fuzzy: { maxEdits: 1 }
+                            }
+                        },
+                        {
+                            autocomplete: {
+                                query: search,
+                                path: "state",
+                                fuzzy: { maxEdits: 1 }
+                            }
+                        },
+                        {
+                            autocomplete: {
+                                query: search,
+                                path: "postalCode",
+                                fuzzy: { maxEdits: 1 }
+                            }
+                        },
+                        {
+                            autocomplete: {
+                                query: search,
+                                path: "country",
+                                fuzzy: { maxEdits: 1 }
+                            }
+                        }
+                    ]
                 }
             }
         });

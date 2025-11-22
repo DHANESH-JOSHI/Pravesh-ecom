@@ -255,36 +255,50 @@ exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
         }
     }
     let productIds = [];
+    const pipeline = [];
     if (search) {
         const productSearchResults = await product_model_1.Product.aggregate([
             {
                 $search: {
-                    index: "unified_index",
-                    autocomplete: {
-                        query: search,
-                        path: ["name", "slug", "tags"],
-                        fuzzy: { maxEdits: 1 },
-                    },
+                    index: "autocomplete_index",
+                    compound: {
+                        should: [
+                            {
+                                autocomplete: {
+                                    query: search,
+                                    path: "name",
+                                    fuzzy: { maxEdits: 1 }
+                                }
+                            },
+                            {
+                                autocomplete: {
+                                    query: search,
+                                    path: "slug",
+                                    fuzzy: { maxEdits: 1 }
+                                }
+                            },
+                            {
+                                autocomplete: {
+                                    query: search,
+                                    path: "tags",
+                                    fuzzy: { maxEdits: 1 }
+                                }
+                            }
+                        ]
+                    }
                 },
             },
             { $project: { _id: 1 } },
         ]);
         productIds = productSearchResults.map((p) => p._id);
+        pipeline.push({ $match: { $or: { "items.product": { $in: productIds } } } });
     }
-    const pipeline = [];
     pipeline.push({ $match: { user: userId } });
     if (statusQuery) {
-        pipeline.push({ $match: { status: { $in: statusQuery.split(",") } } });
+        pipeline.push({ $match: { status: statusQuery } });
     }
     if (timeConditions.length > 0) {
         pipeline.push({ $match: { $or: timeConditions } });
-    }
-    if (search) {
-        const orConditions = [{ orderId: { $regex: search, $options: "i" } }];
-        if (productIds.length > 0) {
-            orConditions.push({ "items.product": { $in: productIds } });
-        }
-        pipeline.push({ $match: { $or: orConditions } });
     }
     if (populate === "true") {
         pipeline.push({
