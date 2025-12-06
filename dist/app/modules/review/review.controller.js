@@ -143,41 +143,16 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
             filter.user = new mongoose_1.default.Types.ObjectId(user);
         }
         else {
-            const users = await user_model_1.User.aggregate([
-                {
-                    $search: {
-                        index: "user_search",
-                        compound: {
-                            should: [
-                                {
-                                    autocomplete: {
-                                        query: user,
-                                        path: "name",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                },
-                                {
-                                    autocomplete: {
-                                        query: user,
-                                        path: "email",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                },
-                                {
-                                    autocomplete: {
-                                        query: user,
-                                        path: "phone",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                },
-                { $project: { _id: 1 } }
-            ]);
-            const ids = users.map((u) => u._id);
-            filter.user = { $in: ids };
+            const userRegex = new RegExp(user, 'i');
+            const users = await user_model_1.User.find({
+                $or: [
+                    { name: { $regex: userRegex } },
+                    { email: { $regex: userRegex } },
+                    { phone: { $regex: userRegex } }
+                ]
+            }, { _id: 1 });
+            const userIds = users.map((u) => u._id);
+            filter.user = userIds.length > 0 ? { $in: userIds } : [];
         }
     }
     if (product) {
@@ -185,41 +160,16 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
             filter.product = new mongoose_1.default.Types.ObjectId(product);
         }
         else {
-            const products = await product_model_1.Product.aggregate([
-                {
-                    $search: {
-                        index: "product_search",
-                        compound: {
-                            should: [
-                                {
-                                    autocomplete: {
-                                        query: product,
-                                        path: "name",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                },
-                                {
-                                    autocomplete: {
-                                        query: product,
-                                        path: "tags",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                },
-                                {
-                                    autocomplete: {
-                                        query: product,
-                                        path: "slug",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                },
-                { $project: { _id: 1 } }
-            ]);
+            const productRegex = new RegExp(product, 'i');
+            const products = await product_model_1.Product.find({
+                $or: [
+                    { name: { $regex: productRegex } },
+                    { tags: { $regex: productRegex } },
+                    { slug: { $regex: productRegex } }
+                ]
+            }, { _id: 1 });
             const ids = products.map((p) => p._id);
-            filter.product = { $in: ids };
+            filter.product = ids.length > 0 ? { $in: ids } : [];
         }
     }
     const skip = (Number(page) - 1) * Number(limit);

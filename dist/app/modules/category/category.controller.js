@@ -61,31 +61,24 @@ exports.getAllCategories = (0, utils_1.asyncHandler)(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const pipeline = [];
     if (search) {
-        pipeline.push({
-            $search: {
-                index: "category_search",
-                compound: {
-                    should: [
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "name",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        },
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "slug",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        }
-                    ]
-                }
-            },
-        });
+        const searchRegex = new RegExp(search, 'i');
+        const searchCriteria = {
+            $or: [
+                { name: { $regex: searchRegex } },
+                { slug: { $regex: searchRegex } }
+            ]
+        };
+        const combinedMatch = {
+            $and: [
+                searchCriteria,
+                filter
+            ]
+        };
+        pipeline.push({ $match: combinedMatch });
     }
-    pipeline.push({ $match: filter });
+    else {
+        pipeline.push({ $match: filter });
+    }
     pipeline.push({ $sort: { [sort]: sortOrder } });
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: Number(limit) });

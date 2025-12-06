@@ -165,36 +165,17 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const pipeline: any[] = [];
 
   if (search) {
-    pipeline.push({
-      $search: {
-        index: "product_search",
-        compound: {
-          should: [
-            {
-              autocomplete: {
-                query: search,
-                path: "name",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "tags",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "slug",
-                fuzzy: { maxEdits: 1 }
-              }
-            }
-          ]
-        }
-      },
-    });
+    const searchRegex = new RegExp(search, 'i');
+
+    const searchCriteria = {
+      $or: [
+        { name: { $regex: searchRegex } },
+        { tags: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } }
+      ]
+    };
+
+    pipeline.push({ $match: searchCriteria });
   }
 
   pipeline.push({ $match: filter });

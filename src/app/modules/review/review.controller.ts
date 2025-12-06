@@ -162,85 +162,47 @@ export const getAllReviews = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
-      const users = await User.aggregate([
+      const userRegex = new RegExp(user as string, 'i');
+      
+      const users = await User.find(
         {
-          $search: {
-            index: "user_search",
-            compound: {
-              should: [
-                {
-                  autocomplete: {
-                    query: user,
-                    path: "name",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                },
-                {
-                  autocomplete: {
-                    query: user,
-                    path: "email",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                },
-                {
-                  autocomplete: {
-                    query: user,
-                    path: "phone",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                }
-              ]
-            }
-          }
+          $or: [
+            { name: { $regex: userRegex } },
+            { email: { $regex: userRegex } },
+            { phone: { $regex: userRegex } }
+          ]
         },
-        { $project: { _id: 1 } }
-      ]);
-      const ids = users.map((u) => u._id);
-      filter.user = { $in: ids };
+        { _id: 1 }
+      );
+      
+      const userIds = users.map((u) => u._id);
+      
+      filter.user = userIds.length > 0 ? { $in: userIds } : [];
     }
-  }
+}
 
   if (product) {
     if (mongoose.Types.ObjectId.isValid(product as string)) {
       filter.product = new mongoose.Types.ObjectId(product as string);
     } else {
-      const products = await Product.aggregate([
+      const productRegex = new RegExp(product as string, 'i');
+      
+      const products = await Product.find(
         {
-          $search: {
-            index: "product_search",
-            compound: {
-              should: [
-                {
-                  autocomplete: {
-                    query: product,
-                    path: "name",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                },
-                {
-                  autocomplete: {
-                    query: product,
-                    path: "tags",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                },
-                {
-                  autocomplete: {
-                    query: product,
-                    path: "slug",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                }
-              ]
-            }
-          }
+          $or: [
+            { name: { $regex: productRegex } },
+            { tags: { $regex: productRegex } },
+            { slug: { $regex: productRegex } }
+          ]
         },
-        { $project: { _id: 1 } }
-      ]);
+        { _id: 1 }
+      );
+      
       const ids = products.map((p) => p._id);
-      filter.product = { $in: ids };
+      
+      filter.product = ids.length > 0 ? { $in: ids } : [];
     }
-  }
+}
 
   const skip = (Number(page) - 1) * Number(limit);
 

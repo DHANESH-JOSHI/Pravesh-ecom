@@ -80,33 +80,27 @@ export const getAllCategories = asyncHandler(async (req, res) => {
 
   const pipeline: any[] = [];
 
-  if (search) {
-    pipeline.push({
-      $search: {
-        index: "category_search",
-        compound: {
-          should: [
-            {
-              autocomplete: {
-                query: search,
-                path: "name",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "slug",
-                fuzzy: { maxEdits: 1 }
-              }
-            }
-          ]
-        }
-      },
-    });
-  }
+if (search) {
+    const searchRegex = new RegExp(search as string, 'i'); 
 
-  pipeline.push({ $match: filter });
+    const searchCriteria = {
+      $or: [
+        { name: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } }
+      ]
+    };
+    const combinedMatch = {
+      $and: [
+        searchCriteria,
+        filter
+      ]
+    };
+
+    pipeline.push({ $match: combinedMatch });
+    
+} else {
+    pipeline.push({ $match: filter });
+}
 
   pipeline.push({ $sort: { [sort as string]: sortOrder } });
 

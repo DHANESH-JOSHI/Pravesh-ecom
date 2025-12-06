@@ -237,6 +237,7 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
 
 export const getMyOrders = asyncHandler(async (req, res) => {
+  console.log('Fetching my orders...');
   const userId = req.user?._id;
 
   const cacheKey = generateCacheKey(`orders:user:${userId}`, req.query);
@@ -246,7 +247,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
       .status(status.OK)
       .json(new ApiResponse(status.OK, "Your orders retrieved successfully", cached));
   }
-
+  console.log('No cache found, querying database...');
   const {
     search,
     status: statusQuery,
@@ -299,42 +300,22 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 
   const pipeline: any[] = [];
   if (search) {
-    const productSearchResults = await Product.aggregate([
+    const searchRegex = new RegExp(search as string, 'i');
+
+    const productSearchResults = await Product.find(
       {
-        $search: {
-          index: "product_search",
-          compound: {
-            should: [
-              {
-                autocomplete: {
-                  query: search,
-                  path: "name",
-                  fuzzy: { maxEdits: 1 }
-                }
-              },
-              {
-                autocomplete: {
-                  query: search,
-                  path: "slug",
-                  fuzzy: { maxEdits: 1 }
-                }
-              },
-              {
-                autocomplete: {
-                  query: search,
-                  path: "tags",
-                  fuzzy: { maxEdits: 1 }
-                }
-              }
-            ]
-          }
-        },
+        $or: [
+          { name: { $regex: searchRegex } },
+          { slug: { $regex: searchRegex } },
+          { tags: { $regex: searchRegex } }
+        ]
       },
-      { $project: { _id: 1 } },
-    ]);
+      { _id: 1 }
+    );
 
     productIds = productSearchResults.map((p) => p._id);
-    pipeline.push({ $match: { $or: { "items.product": { $in: productIds } } } });
+
+    pipeline.push({ $match: { "items.product": { $in: productIds } } });
   }
 
   pipeline.push({ $match: { user: userId } });

@@ -110,36 +110,15 @@ exports.getAllUsers = (0, utils_1.asyncHandler)(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const pipeline = [];
     if (search) {
-        pipeline.push({
-            $search: {
-                index: "user_search",
-                compound: {
-                    should: [
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "name",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        },
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "email",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        },
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "phone",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        }
-                    ]
-                }
-            }
-        });
+        const searchRegex = new RegExp(search, 'i');
+        const searchCriteria = {
+            $or: [
+                { name: { $regex: searchRegex } },
+                { email: { $regex: searchRegex } },
+                { phone: { $regex: searchRegex } }
+            ]
+        };
+        pipeline.push({ $match: searchCriteria });
     }
     pipeline.push({ $match: filter });
     pipeline.push({ $sort: { createdAt: -1 } });

@@ -29,40 +29,16 @@ exports.getAllWallets = (0, utils_1.asyncHandler)(async (req, res) => {
             filter.user = new mongoose_1.default.Types.ObjectId(user);
         }
         else {
-            const users = await user_model_1.User.aggregate([
-                {
-                    $search: {
-                        index: "user_search",
-                        compound: {
-                            should: [
-                                {
-                                    autocomplete: {
-                                        query: user,
-                                        path: "name",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                },
-                                {
-                                    autocomplete: {
-                                        query: user,
-                                        path: "email",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                },
-                                {
-                                    autocomplete: {
-                                        query: user,
-                                        path: "phone",
-                                        fuzzy: { maxEdits: 1 }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                },
-                { $project: { _id: 1 } }
-            ]);
-            filter.user = { $in: users.map((u) => u._id) };
+            const userRegex = new RegExp(user, 'i');
+            const users = await user_model_1.User.find({
+                $or: [
+                    { name: { $regex: userRegex } },
+                    { email: { $regex: userRegex } },
+                    { phone: { $regex: userRegex } }
+                ]
+            }, { _id: 1 });
+            const userIds = users.map((u) => u._id);
+            filter.user = { $in: userIds ?? [] };
         }
     }
     const pipeline = [];

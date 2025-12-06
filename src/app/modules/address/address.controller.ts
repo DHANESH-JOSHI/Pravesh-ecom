@@ -201,107 +201,56 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = user;
     } else {
-      const users = await User.aggregate([
-        {
-          $search: {
-            index: "user_search",
-            compound: {
-              should: [
-                {
-                  autocomplete: {
-                    query: user,
-                    path: "name",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                },
-                {
-                  autocomplete: {
-                    query: user,
-                    path: "email",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                },
-                {
-                  autocomplete: {
-                    query: user,
-                    path: "phone",
-                    fuzzy: { maxEdits: 1 }
-                  }
-                }
-              ]
-            }
-          }
-        },
-        { $project: { _id: 1 } }
-      ]);
+      const userRegex = new RegExp(user as string, 'i');
+      const users = await User.find({
+        $or: [
+          { name: { $regex: userRegex } },
+          { email: { $regex: userRegex } },
+          { phone: { $regex: userRegex } },
+        ]
+      }, { _id: 1 });
 
       const userIds = users.map((u) => u._id);
-      filter.user = { $in: userIds };
+      
+      filter.user = userIds.length > 0 ? { $in: userIds } : new mongoose.Types.ObjectId(0);
     }
-  }
+}
 
-  const skip = (Number(page) - 1) * Number(limit);
+const skip = (Number(page) - 1) * Number(limit);
 
-  const pipeline: any[] = [];
+const pipeline: any[] = [];
 
-  if (search) {
-    pipeline.push({
-      $search: {
-        index: "address_search",
-        compound: {
-          should: [
-            {
-              autocomplete: {
-                query: search,
-                path: "fullname",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "phone",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "city",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "state",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "postalCode",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "country",
-                fuzzy: { maxEdits: 1 }
-              }
-            }
-          ]
-        }
-      }
-    });
-  }
+if (search) {
+    const searchRegex = new RegExp(search as string, 'i');
 
-  pipeline.push({ $match: filter });
-  pipeline.push({ $sort: { createdAt: -1 } });
-  pipeline.push({ $skip: skip });
-  pipeline.push({ $limit: Number(limit) });
+    const searchCriteria = {
+      $or: [
+        { fullname: { $regex: searchRegex } },
+        { phone: { $regex: searchRegex } },
+        { city: { $regex: searchRegex } },
+        { state: { $regex: searchRegex } },
+        { postalCode: { $regex: searchRegex } },
+        { country: { $regex: searchRegex } },
+      ]
+    };
+
+    const combinedMatch = {
+      $and: [
+        searchCriteria,
+        filter 
+      ]
+    };
+    
+    pipeline.push({ $match: combinedMatch });
+    
+} else {
+    pipeline.push({ $match: filter });
+}
+
+
+pipeline.push({ $sort: { createdAt: -1 } });
+pipeline.push({ $skip: skip });
+pipeline.push({ $limit: Number(limit) });
 
   const addresses = await Address.aggregate(pipeline);
   const total = await Address.countDocuments(filter);

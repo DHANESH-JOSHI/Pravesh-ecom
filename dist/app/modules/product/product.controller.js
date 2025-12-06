@@ -132,36 +132,15 @@ exports.getAllProducts = (0, utils_1.asyncHandler)(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const pipeline = [];
     if (search) {
-        pipeline.push({
-            $search: {
-                index: "product_search",
-                compound: {
-                    should: [
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "name",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        },
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "tags",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        },
-                        {
-                            autocomplete: {
-                                query: search,
-                                path: "slug",
-                                fuzzy: { maxEdits: 1 }
-                            }
-                        }
-                    ]
-                }
-            },
-        });
+        const searchRegex = new RegExp(search, 'i');
+        const searchCriteria = {
+            $or: [
+                { name: { $regex: searchRegex } },
+                { tags: { $regex: searchRegex } },
+                { slug: { $regex: searchRegex } }
+            ]
+        };
+        pipeline.push({ $match: searchCriteria });
     }
     pipeline.push({ $match: filter });
     pipeline.push({ $sort: { [sortField]: sortOrder } });

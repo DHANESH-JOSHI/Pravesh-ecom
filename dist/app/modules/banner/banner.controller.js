@@ -40,18 +40,21 @@ exports.getAllBanners = (0, utils_1.asyncHandler)(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const pipeline = [];
     if (search) {
-        pipeline.push({
-            $search: {
-                index: "banner_search",
-                autocomplete: {
-                    query: search,
-                    path: "title",
-                    fuzzy: { maxEdits: 1 }
-                }
-            }
-        });
+        const searchRegex = new RegExp(search, 'i');
+        const searchCriteria = {
+            title: { $regex: searchRegex }
+        };
+        const combinedMatch = {
+            $and: [
+                searchCriteria,
+                filter
+            ]
+        };
+        pipeline.push({ $match: combinedMatch });
     }
-    pipeline.push({ $match: filter });
+    else {
+        pipeline.push({ $match: filter });
+    }
     pipeline.push({ $sort: { order: 1 } });
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: Number(limit) });

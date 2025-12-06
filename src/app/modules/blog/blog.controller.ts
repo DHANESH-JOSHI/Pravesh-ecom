@@ -86,39 +86,28 @@ export const getAllBlogs = asyncHandler(async (req, res) => {
   const pipeline: any[] = [];
 
   if (search) {
-    pipeline.push({
-      $search: {
-        index: "blog_search",
-        compound: {
-          should: [
-            {
-              autocomplete: {
-                query: search,
-                path: "title",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "content",
-                fuzzy: { maxEdits: 1 }
-              }
-            },
-            {
-              autocomplete: {
-                query: search,
-                path: "slug",
-                fuzzy: { maxEdits: 1 }
-              }
-            }
-          ]
-        }
-      }
-    });
-  }
+    const searchRegex = new RegExp(search as string, 'i');
 
-  pipeline.push({ $match: filter });
+    const searchCriteria = {
+      $or: [
+        { title: { $regex: searchRegex } },
+        { content: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } }
+      ]
+    };
+
+    const combinedMatch = {
+      $and: [
+        searchCriteria,
+        filter
+      ]
+    };
+
+    pipeline.push({ $match: combinedMatch });
+
+  } else {
+    pipeline.push({ $match: filter });
+  }
   pipeline.push({ $sort: { createdAt: -1 } });
   pipeline.push({ $skip: skip });
   pipeline.push({ $limit: Number(limit) });
