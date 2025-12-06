@@ -212,7 +212,6 @@ exports.confirmOrder = (0, utils_1.asyncHandler)(async (req, res) => {
     }
 });
 exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
-    console.log('Fetching my orders...');
     const userId = req.user?._id;
     const cacheKey = (0, utils_1.generateCacheKey)(`orders:user:${userId}`, req.query);
     const cached = await redis_1.redis.get(cacheKey);
@@ -221,7 +220,6 @@ exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
             .status(http_status_1.default.OK)
             .json(new ApiResponse(http_status_1.default.OK, "Your orders retrieved successfully", cached));
     }
-    console.log('No cache found, querying database...');
     const { search, status: statusQuery, time, populate = "false", page = 1, limit = 10, } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
     const now = new Date();
@@ -270,7 +268,7 @@ exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
         productIds = productSearchResults.map((p) => p._id);
         pipeline.push({ $match: { "items.product": { $in: productIds } } });
     }
-    pipeline.push({ $match: { user: userId } });
+    pipeline.push({ $match: { user: new mongoose_1.default.Types.ObjectId(userId) } });
     if (statusQuery) {
         pipeline.push({ $match: { status: statusQuery } });
     }
@@ -413,21 +411,16 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
             filter.user = new mongoose_1.default.Types.ObjectId(user);
         }
         else {
-            const users = await user_model_1.User.aggregate([
-                {
-                    $search: {
-                        index: "user_search",
-                        autocomplete: {
-                            query: user,
-                            path: ["name", "email", "phone"],
-                            fuzzy: { maxEdits: 1 }
-                        }
-                    }
-                },
-                { $project: { _id: 1 } }
-            ]);
-            const ids = users.map((u) => u._id);
-            filter.user = { $in: ids };
+            const userRegex = new RegExp(user, 'i');
+            const users = await user_model_1.User.find({
+                $or: [
+                    { name: { $regex: userRegex } },
+                    { email: { $regex: userRegex } },
+                    { phone: { $regex: userRegex } }
+                ]
+            }, { _id: 1 });
+            const userIds = users.map((u) => u._id);
+            filter.user = userIds.length > 0 ? { $in: userIds } : [];
         }
     }
     const pipeline = [];

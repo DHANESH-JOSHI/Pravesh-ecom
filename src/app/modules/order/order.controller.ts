@@ -237,7 +237,6 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
 
 export const getMyOrders = asyncHandler(async (req, res) => {
-  console.log('Fetching my orders...');
   const userId = req.user?._id;
 
   const cacheKey = generateCacheKey(`orders:user:${userId}`, req.query);
@@ -247,7 +246,6 @@ export const getMyOrders = asyncHandler(async (req, res) => {
       .status(status.OK)
       .json(new ApiResponse(status.OK, "Your orders retrieved successfully", cached));
   }
-  console.log('No cache found, querying database...');
   const {
     search,
     status: statusQuery,
@@ -318,8 +316,8 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     pipeline.push({ $match: { "items.product": { $in: productIds } } });
   }
 
-  pipeline.push({ $match: { user: userId } });
-
+  pipeline.push({ $match: { user: new mongoose.Types.ObjectId(userId as string) } });
+ 
   if (statusQuery) {
     pipeline.push({ $match: { status: statusQuery } });
   }
@@ -486,24 +484,24 @@ export const getAllOrders = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user as string)) {
       filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
-      const users = await User.aggregate([
+      const userRegex = new RegExp(user as string, 'i');
+      
+      const users = await User.find(
         {
-          $search: {
-            index: "user_search",
-            autocomplete: {
-              query: user,
-              path: ["name", "email", "phone"],
-              fuzzy: { maxEdits: 1 }
-            }
-          }
+          $or: [
+            { name: { $regex: userRegex } },
+            { email: { $regex: userRegex } },
+            { phone: { $regex: userRegex } }
+          ]
         },
-        { $project: { _id: 1 } }
-      ]);
-
-      const ids = users.map((u) => u._id);
-      filter.user = { $in: ids };
+        { _id: 1 }
+      );
+      
+      const userIds = users.map((u) => u._id);
+      
+      filter.user = userIds.length > 0 ? { $in: userIds } : [];
     }
-  }
+}
 
   const pipeline: any[] = [];
 

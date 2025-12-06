@@ -41,6 +41,9 @@ const storage = new multer_storage_cloudinary_1.CloudinaryStorage({
             else if (req.originalUrl.includes('/banners')) {
                 folderName = 'pravesh-banners';
             }
+            else if (req.originalUrl.includes('/settings')) {
+                folderName = 'pravesh-logo';
+            }
             logger_1.logger.info(`[CLOUDINARY]: ${file.originalname} (${file.mimetype}) uploaded to folder: ${folderName}`);
             return folderName;
         },
