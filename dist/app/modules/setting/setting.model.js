@@ -54,6 +54,7 @@ const SettingSchema = new mongoose_1.Schema({
     yearsOfExperience: { type: String },
     happyCustomers: { type: String },
     productsAvailable: { type: String },
+    workingHours: { type: String },
     citiesServed: { type: String },
     whyChooseUs: { type: String },
 }, { timestamps: true });

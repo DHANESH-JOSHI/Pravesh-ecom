@@ -13,13 +13,12 @@ const parseJsonIfString = (schema) => zod_1.z.preprocess((val) => {
     }
     return val;
 }, schema);
-const urlOrString = zod_1.z.union([zod_1.z.string().url(), zod_1.z.string()]).optional();
 exports.settingValidation = zod_1.z.object({
     businessName: zod_1.z.string().max(200).optional(),
     email: zod_1.z.string().email().optional(),
     phone: zod_1.z.string().optional(),
     address: zod_1.z.string().optional(),
-    logo: parseJsonIfString(urlOrString),
+    logo: zod_1.z.string().optional(),
     socialLinks: parseJsonIfString(zod_1.z.object({
         facebook: zod_1.z.string().url().optional(),
         twitter: zod_1.z.string().url().optional(),
@@ -30,6 +29,7 @@ exports.settingValidation = zod_1.z.object({
     aboutTitle: zod_1.z.string().max(300).optional(),
     aboutDescription: zod_1.z.string().optional(),
     whyChooseUs: zod_1.z.string().optional(),
+    workingHours: zod_1.z.string().optional(),
     yearsOfExperience: zod_1.z.string().optional(),
     happyCustomers: zod_1.z.string().optional(),
     productsAvailable: zod_1.z.string().optional(),

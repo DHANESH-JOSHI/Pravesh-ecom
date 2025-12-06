@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { SettingDocument } from "./setting.interface";
+import { ISetting } from "./setting.interface";
 
 const SocialLinksSchema = new Schema(
   {
@@ -12,7 +12,7 @@ const SocialLinksSchema = new Schema(
   { _id: false }
 );
 
-const SettingSchema = new Schema<SettingDocument>(
+const SettingSchema = new Schema<ISetting>(
   {
     businessName: { type: String },
     email: { type: String },
@@ -25,10 +25,11 @@ const SettingSchema = new Schema<SettingDocument>(
     yearsOfExperience: { type: String },
     happyCustomers: { type: String },
     productsAvailable: { type: String },
+    workingHours: { type: String },
     citiesServed: { type: String },
     whyChooseUs: { type: String },
   },
   { timestamps: true }
 );
 
-export const Setting = mongoose.model<SettingDocument>("Setting", SettingSchema);
+export const Setting = mongoose.model<ISetting>("Setting", SettingSchema);

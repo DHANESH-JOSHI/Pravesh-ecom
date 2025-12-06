@@ -8,7 +8,7 @@ export interface SocialLinks {
   [key: string]: string | undefined;
 }
 
-export interface SettingDocument extends Document {
+export interface ISetting extends Document {
   businessName?: string;
   email?: string;
   phone?: string;
@@ -20,6 +20,7 @@ export interface SettingDocument extends Document {
   yearsOfExperience?: string;
   happyCustomers?: string;
   productsAvailable?: string;
+  workingHours?: string;
   citiesServed?: string;
   whyChooseUs?: string;
   isDeleted?: boolean;

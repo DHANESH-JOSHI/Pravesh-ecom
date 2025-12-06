@@ -1,19 +1,7 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema } from "mongoose";
+import { IContact } from "./contact.interface";
 
-export type ContactStatus = "open" | "resolved";
-
-export interface ContactDocument extends Document {
-  name: string;
-  email: string;
-  subject?: string;
-  message: string;
-  status: ContactStatus;
-  isDeleted?: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const ContactSchema = new Schema<ContactDocument>(
+const ContactSchema = new Schema<IContact>(
   {
     name: { type: String, required: true },
     email: { type: String, required: true },
@@ -25,4 +13,4 @@ const ContactSchema = new Schema<ContactDocument>(
   { timestamps: true }
 );
 
-export const Contact = mongoose.model<ContactDocument>("Contact", ContactSchema);
+export const Contact = mongoose.model<IContact>("Contact", ContactSchema);
