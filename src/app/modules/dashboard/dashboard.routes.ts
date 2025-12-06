@@ -8,4 +8,4 @@ router.use(auth('admin'));
 
 router.get('/stats', authenticatedActionLimiter, getDashboardStats);
 
-export default router;
+export const dashboardRouter = router;

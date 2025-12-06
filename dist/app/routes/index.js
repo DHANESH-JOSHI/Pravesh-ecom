@@ -1,7 +1,4 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_routes_1 = require("../modules/auth/auth.routes");
@@ -17,7 +14,9 @@ const review_routes_1 = require("../modules/review/review.routes");
 const banner_routes_1 = require("../modules/banner/banner.routes");
 const wishlist_routes_1 = require("../modules/wishlist/wishlist.routes");
 const blog_routes_1 = require("../modules/blog/blog.routes");
-const dashboard_routes_1 = __importDefault(require("../modules/dashboard/dashboard.routes"));
+const dashboard_routes_1 = require("../modules/dashboard/dashboard.routes");
+const setting_routes_1 = require("../modules/setting/setting.routes");
+const contact_routes_1 = require("../modules/contact/contact.routes");
 const router = (0, express_1.Router)();
 const moduleRoutes = [
     {
@@ -73,8 +72,16 @@ const moduleRoutes = [
         route: blog_routes_1.blogRouter
     },
     {
+        path: '/settings',
+        route: setting_routes_1.settingRouter
+    },
+    {
+        path: '/contact',
+        route: contact_routes_1.contactRouter
+    },
+    {
         path: '/dashboard',
-        route: dashboard_routes_1.default
+        route: dashboard_routes_1.dashboardRouter
     }
 ];
 moduleRoutes.forEach((route) => router.use(route.path, route.route));
