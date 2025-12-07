@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const createContactValidation = z.object({
+export const createMessageValidation = z.object({
   name: z.string().min(1, "Name is required").max(200),
   email: z.string().email("Invalid email"),
   subject: z.string().max(300).optional(),

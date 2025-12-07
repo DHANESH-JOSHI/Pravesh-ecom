@@ -1,11 +1,11 @@
 import { Document } from "mongoose";
-export type ContactStatus = "open" | "resolved";
-export interface IContact extends Document {
+export type MessageStatus = "open" | "resolved";
+export interface IMessage extends Document {
   name: string;
   email: string;
   subject?: string;
   message: string;
-  status: ContactStatus;
+  status: MessageStatus;
   isDeleted?: boolean;
   createdAt: Date;
   updatedAt: Date;
