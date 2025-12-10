@@ -16,7 +16,7 @@ const wishlist_routes_1 = require("../modules/wishlist/wishlist.routes");
 const blog_routes_1 = require("../modules/blog/blog.routes");
 const dashboard_routes_1 = require("../modules/dashboard/dashboard.routes");
 const setting_routes_1 = require("../modules/setting/setting.routes");
-const contact_routes_1 = require("../modules/contact/contact.routes");
+const message_routes_1 = require("../modules/message/message.routes");
 const router = (0, express_1.Router)();
 const moduleRoutes = [
     {
@@ -76,8 +76,8 @@ const moduleRoutes = [
         route: setting_routes_1.settingRouter
     },
     {
-        path: '/contact',
-        route: contact_routes_1.contactRouter
+        path: '/messages',
+        route: message_routes_1.messageRouter
     },
     {
         path: '/dashboard',

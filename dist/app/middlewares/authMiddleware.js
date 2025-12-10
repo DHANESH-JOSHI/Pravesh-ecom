@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.auth = void 0;
+exports.optionalAuth = exports.auth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const user_model_1 = require("../modules/user/user.model");
 const config_1 = __importDefault(require("../config"));
@@ -41,4 +41,35 @@ const auth = (...requiredRoles) => {
     };
 };
 exports.auth = auth;
+const optionalAuth = () => {
+    return async (req, res, next) => {
+        try {
+            const token = req.cookies?.accessToken || req.headers?.authorization?.replace('Bearer ', '');
+            if (!token) {
+                return next();
+            }
+            try {
+                const decoded = jsonwebtoken_1.default.verify(token, config_1.default.JWT_SECRET);
+                const cacheKey = `user:${decoded.userId}`;
+                let user = await redis_1.redis.get(cacheKey);
+                if (!user) {
+                    user = await user_model_1.User.findById(decoded.userId);
+                }
+                if (user) {
+                    const userObj = user.toJSON ? user.toJSON() : user;
+                    const { password: _, otp, otpExpires, ...userObject } = userObj;
+                    req.user = userObject;
+                    await redis_1.redis.set(cacheKey, userObject, 600);
+                }
+            }
+            catch (error) {
+            }
+            next();
+        }
+        catch (error) {
+            next();
+        }
+    };
+};
+exports.optionalAuth = optionalAuth;
 //# sourceMappingURL=authMiddleware.js.map
