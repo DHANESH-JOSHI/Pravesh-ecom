@@ -42,3 +42,37 @@ export const auth = (...requiredRoles: string[]) => {
     }
   }
 };
+
+export const optionalAuth = () => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const token = req.cookies?.accessToken || req.headers?.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return next();
+      }
+
+      try {
+        const decoded = jwt.verify(token, config.JWT_SECRET) as Payload;
+
+        const cacheKey = `user:${decoded.userId}`;
+        let user: IUser | null = await redis.get(cacheKey);
+
+        if (!user) {
+          user = await User.findById(decoded.userId);
+        }
+
+        if (user) {
+          const userObj = (user as any).toJSON ? (user as any).toJSON() : user;
+          const { password: _, otp, otpExpires, ...userObject } = userObj;
+          req.user = userObject as IUser;
+          await redis.set(cacheKey, userObject, 600);
+        }
+      } catch (error) {
+      }
+      
+      next();
+    } catch (error) {
+      next();
+    }
+  }
+};

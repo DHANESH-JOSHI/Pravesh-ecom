@@ -5,24 +5,26 @@ import {
   getProductById,
   updateProduct,
   deleteProduct,
-  // getDiscountProducts,
   getProductFilters,
   getProductBySlug,
+  getRelatedProducts,
 } from './product.controller';
-import { auth } from '@/middlewares';
+import { auth, optionalAuth } from '@/middlewares';
 import { authenticatedActionLimiter } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 const router = express.Router();
 
 router.post('/', auth('admin'), authenticatedActionLimiter, upload.single("thumbnail"), createProduct);
 
-router.get('/', getAllProducts);
+router.get('/', optionalAuth(), getAllProducts);
 
 router.get('/filters', getProductFilters);
 
-router.get('/slug/:slug', getProductBySlug);
+router.get('/slug/:slug', optionalAuth(), getProductBySlug);
 
-router.get('/:id', getProductById);
+router.get('/:id/related', optionalAuth(), getRelatedProducts);
+
+router.get('/:id', optionalAuth(), getProductById);
 
 router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single("thumbnail"), updateProduct);
 
