@@ -68,8 +68,7 @@ const productSchema = new mongoose_1.Schema({
     //   default: [],
     // },
     specifications: {
-        type: Map,
-        of: String,
+        type: Object,
         default: {},
     },
     // images: [{ type: String, required: true }],
@@ -160,6 +159,25 @@ productSchema.pre("save", function (next) {
     // } else if (this.stock >= this.minStock && this.stockStatus !== StockStatus.InStock) {
     //   this.stockStatus = StockStatus.InStock;
     // }
+    next();
+});
+productSchema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+    const query = this.getQuery();
+    if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+        const productId = query._id;
+        const Review = mongoose_1.default.model("Review");
+        const Cart = mongoose_1.default.model("Cart");
+        const Wishlist = mongoose_1.default.model("Wishlist");
+        const product = await exports.Product.findOne({ _id: productId, isDeleted: false });
+        if (product) {
+            await Promise.all([
+                Review.deleteMany({ product: productId }),
+                Cart.updateMany({ "items.product": productId }, { $pull: { items: { product: productId } } }),
+                Wishlist.updateMany({ items: productId }, { $pull: { items: productId } })
+            ]);
+        }
+    }
     next();
 });
 exports.Product = mongoose_1.default.models.Product || mongoose_1.default.model('Product', productSchema);

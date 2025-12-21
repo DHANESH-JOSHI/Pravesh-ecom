@@ -107,6 +107,45 @@ userSchema.methods.comparePassword = async function (password) {
 userSchema.methods.compareOtp = function (otp) {
     return this.otp === otp && this.otpExpires && this.otpExpires > new Date();
 };
+userSchema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+    const query = this.getQuery();
+    if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+        const userId = query._id;
+        const Review = mongoose_1.default.model("Review");
+        const Address = mongoose_1.default.model("Address");
+        const Cart = mongoose_1.default.model("Cart");
+        const Wishlist = mongoose_1.default.model("Wishlist");
+        const user = await exports.User.findOne({ _id: userId, isDeleted: false });
+        if (user) {
+            await Promise.all([
+                Review.deleteMany({ user: userId }),
+                Address.updateMany({ user: userId, isDeleted: false }, { $set: { isDeleted: true } }),
+                Cart.deleteMany({ user: userId }),
+                Wishlist.deleteMany({ user: userId })
+            ]);
+        }
+    }
+    next();
+});
+userSchema.pre("save", async function (next) {
+    if (this.isModified("isDeleted") && this.isDeleted === true && !this.isNew) {
+        const wasDeleted = await exports.User.findById(this._id).select('isDeleted');
+        if (wasDeleted && !wasDeleted.isDeleted) {
+            const Review = mongoose_1.default.model("Review");
+            const Address = mongoose_1.default.model("Address");
+            const Cart = mongoose_1.default.model("Cart");
+            const Wishlist = mongoose_1.default.model("Wishlist");
+            await Promise.all([
+                Review.deleteMany({ user: this._id }),
+                Address.updateMany({ user: this._id, isDeleted: false }, { $set: { isDeleted: true } }),
+                Cart.deleteMany({ user: this._id }),
+                Wishlist.deleteMany({ user: this._id })
+            ]);
+        }
+    }
+    next();
+});
 userSchema.index({ name: "text", phone: 1, email: "text" });
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cancelOrder = exports.updateOrderStatus = exports.getAllOrders = exports.getOrderById = exports.getMyOrders = exports.confirmOrder = exports.updateOrder = exports.createCustomOrder = exports.createOrder = void 0;
 const utils_1 = require("../../utils");
+const cacheTTL_1 = require("../../utils/cacheTTL");
 const interface_1 = require("../../interface");
 const order_model_1 = require("./order.model");
 const cart_model_1 = require("../cart/cart.model");
@@ -16,6 +17,8 @@ const address_model_1 = require("../address/address.model");
 const http_status_1 = __importDefault(require("http-status"));
 const product_model_1 = require("../product/product.model");
 const redis_1 = require("../../config/redis");
+const redisKeys_1 = require("../../utils/redisKeys");
+const invalidateCache_1 = require("../../utils/invalidateCache");
 const user_model_1 = require("../user/user.model");
 // import { StockStatus } from '../product/product.interface';
 const ApiError = (0, interface_1.getApiErrorClass)("ORDER");
@@ -76,9 +79,11 @@ exports.createOrder = (0, utils_1.asyncHandler)(async (req, res) => {
         cart.items = [];
         await cart.save({ session });
         await session.commitTransaction();
-        await redis_1.redis.deleteByPattern(`orders:user:${userId}*`);
-        await redis_1.redis.deleteByPattern('orders*');
-        await redis_1.redis.delete('dashboard:stats');
+        await (0, invalidateCache_1.invalidateOrderCaches)({
+            userId: String(userId),
+            touchesProducts: true,
+        });
+        await (0, invalidateCache_1.invalidateCartCaches)({ userId: String(userId) });
         res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, 'Order placed successfully', order));
         return;
     }
@@ -104,9 +109,9 @@ exports.createCustomOrder = (0, utils_1.asyncHandler)(async (req, res) => {
         isCustomOrder: true,
         image: customOrderImage,
     });
-    await redis_1.redis.deleteByPattern(`orders:user:${userId}*`);
-    await redis_1.redis.deleteByPattern('orders*');
-    await redis_1.redis.delete('dashboard:stats');
+    await (0, invalidateCache_1.invalidateOrderCaches)({
+        userId: String(userId),
+    });
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
     return;
 });
@@ -145,10 +150,10 @@ exports.updateOrder = (0, utils_1.asyncHandler)(async (req, res) => {
     if (feedback !== undefined)
         order.feedback = feedback;
     await order.save();
-    await redis_1.redis.delete(`order:${orderId}`);
-    await redis_1.redis.deleteByPattern(`orders:user:${order.user}*`);
-    await redis_1.redis.deleteByPattern('orders*');
-    await redis_1.redis.delete('dashboard:stats');
+    await (0, invalidateCache_1.invalidateOrderCaches)({
+        orderId,
+        userId: String(order.user),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Custom order updated successfully', order));
     return;
 });
@@ -196,10 +201,11 @@ exports.confirmOrder = (0, utils_1.asyncHandler)(async (req, res) => {
         order.shippingAddress = shippingAddressId;
         await order.save({ session });
         await session.commitTransaction();
-        await redis_1.redis.deleteByPattern(`orders:user:${userId}*`);
-        await redis_1.redis.delete(`order:${orderId}`);
-        await redis_1.redis.deleteByPattern('orders*');
-        await redis_1.redis.delete('dashboard:stats');
+        await (0, invalidateCache_1.invalidateOrderCaches)({
+            orderId,
+            userId: String(userId),
+        });
+        await (0, invalidateCache_1.invalidateWalletCaches)(String(userId));
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Custom order confirmed and paid successfully', order));
         return;
     }
@@ -213,7 +219,7 @@ exports.confirmOrder = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
-    const cacheKey = (0, utils_1.generateCacheKey)(`orders:user:${userId}`, req.query);
+    const cacheKey = redisKeys_1.RedisKeys.ORDERS_BY_USER(String(userId), req.query);
     const cached = await redis_1.redis.get(cacheKey);
     if (cached) {
         return res
@@ -343,14 +349,14 @@ exports.getMyOrders = (0, utils_1.asyncHandler)(async (req, res) => {
         total,
         totalPages: Math.ceil(total / Number(limit)),
     };
-    await redis_1.redis.set(cacheKey, result, 600);
+    await redis_1.redis.set(cacheKey, result, cacheTTL_1.CacheTTL.SHORT);
     return res
         .status(http_status_1.default.OK)
         .json(new ApiResponse(http_status_1.default.OK, "Your orders retrieved successfully", result));
 });
 exports.getOrderById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id: orderId } = req.params;
-    const cacheKey = `order:${orderId}`;
+    const cacheKey = redisKeys_1.RedisKeys.ORDER_BY_ID(orderId);
     const cachedOrder = await redis_1.redis.get(cacheKey);
     if (cachedOrder) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Order retrieved successfully', cachedOrder));
@@ -362,6 +368,7 @@ exports.getOrderById = (0, utils_1.asyncHandler)(async (req, res) => {
         {
             path: 'user',
             select: 'name email',
+            match: { isDeleted: false },
             populate: {
                 path: 'wallet',
                 select: 'balance'
@@ -373,11 +380,13 @@ exports.getOrderById = (0, utils_1.asyncHandler)(async (req, res) => {
             populate: [
                 {
                     path: 'category',
-                    select: 'slug title path'
+                    select: 'slug title path',
+                    match: { isDeleted: false }
                 },
                 {
                     path: 'brand',
-                    select: 'name slug'
+                    select: 'name slug',
+                    match: { isDeleted: false }
                 }
             ]
         },
@@ -388,12 +397,13 @@ exports.getOrderById = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!order) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Order not found');
     }
-    await redis_1.redis.set(cacheKey, order, 600);
+    const orderObj = order?.toObject ? order.toObject() : order;
+    await redis_1.redis.set(cacheKey, orderObj, cacheTTL_1.CacheTTL.SHORT);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Order retrieved successfully', order));
     return;
 });
 exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
-    const cacheKey = (0, utils_1.generateCacheKey)("orders", req.query);
+    const cacheKey = redisKeys_1.RedisKeys.ORDERS_LIST(req.query);
     const cached = await redis_1.redis.get(cacheKey);
     if (cached)
         return res
@@ -417,7 +427,8 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
                     { name: { $regex: userRegex } },
                     { email: { $regex: userRegex } },
                     { phone: { $regex: userRegex } }
-                ]
+                ],
+                isDeleted: false
             }, { _id: 1 });
             const userIds = users.map((u) => u._id);
             filter.user = userIds.length > 0 ? { $in: userIds } : [];
@@ -434,6 +445,7 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
             localField: "user",
             foreignField: "_id",
             pipeline: [
+                { $match: { isDeleted: false } },
                 { $project: { _id: 1, name: 1, email: 1 } }
             ],
             as: "user"
@@ -455,7 +467,7 @@ exports.getAllOrders = (0, utils_1.asyncHandler)(async (req, res) => {
         total,
         totalPages
     };
-    await redis_1.redis.set(cacheKey, result, 600);
+    await redis_1.redis.set(cacheKey, result, cacheTTL_1.CacheTTL.SHORT);
     res
         .status(http_status_1.default.OK)
         .json(new ApiResponse(http_status_1.default.OK, "All orders retrieved successfully", result));
@@ -535,7 +547,6 @@ exports.updateOrderStatus = (0, utils_1.asyncHandler)(async (req, res) => {
                 },
             });
         }
-        await redis_1.redis.deleteByPattern('products*');
     }
     else if (oldStatus === order_interface_1.OrderStatus.Delivered) {
         throw new ApiError(http_status_1.default.BAD_REQUEST, 'Order is already completed, cannot do anything anymore');
@@ -564,20 +575,28 @@ exports.updateOrderStatus = (0, utils_1.asyncHandler)(async (req, res) => {
         timestamp: new Date()
     });
     await order.save();
-    await redis_1.redis.delete('dashboard:stats');
-    await redis_1.redis.deleteByPattern(`orders:user:${order.user}*`);
-    await redis_1.redis.deleteByPattern("orders*");
-    await redis_1.redis.delete(`order:${orderId}`);
+    const productsTouched = oldStatus === order_interface_1.OrderStatus.OutForDelivery && newStatus === order_interface_1.OrderStatus.Delivered;
+    const walletTouched = (oldStatus === order_interface_1.OrderStatus.Received && newStatus === order_interface_1.OrderStatus.Confirmed) ||
+        (oldStatus === order_interface_1.OrderStatus.Approved && newStatus === order_interface_1.OrderStatus.Confirmed) ||
+        (oldStatus === order_interface_1.OrderStatus.Cancelled && newStatus === order_interface_1.OrderStatus.Refunded);
+    await (0, invalidateCache_1.invalidateOrderCaches)({
+        orderId,
+        userId: String(order.user),
+        touchesProducts: productsTouched,
+    });
+    if (walletTouched) {
+        await (0, invalidateCache_1.invalidateWalletCaches)(String(order.user));
+    }
     return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Order status updated successfully', order));
 });
 exports.cancelOrder = (0, utils_1.asyncHandler)(async (req, res) => {
-    const userId = req.user?.id;
+    const userId = req.user?._id;
     const { id: orderId } = req.params;
     const order = await order_model_1.Order.findById(orderId);
     if (!order) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Order not found');
     }
-    if (order.user !== userId) {
+    if (String(order.user) !== String(userId)) {
         throw new ApiError(http_status_1.default.FORBIDDEN, 'You are not authorized to cancel this order');
     }
     if (![order_interface_1.OrderStatus.Received, order_interface_1.OrderStatus.Approved, order_interface_1.OrderStatus.Confirmed].includes(order.status)) {
@@ -585,10 +604,10 @@ exports.cancelOrder = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     order.status = order_interface_1.OrderStatus.Cancelled;
     await order.save();
-    await redis_1.redis.deleteByPattern(`orders:user:${userId}*`);
-    await redis_1.redis.delete(`order:${orderId}`);
-    await redis_1.redis.deleteByPattern('orders*');
-    await redis_1.redis.delete('dashboard:stats');
+    await (0, invalidateCache_1.invalidateOrderCaches)({
+        orderId,
+        userId: String(userId),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Order canceled successfully', order));
     return;
 });

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDashboardStats = void 0;
 const utils_1 = require("../../utils");
+const redisKeys_1 = require("../../utils/redisKeys");
 const redis_1 = require("../../config/redis");
 const interface_1 = require("../../interface");
 const http_status_1 = __importDefault(require("http-status"));
@@ -15,9 +16,10 @@ const review_model_1 = require("../review/review.model");
 const wishlist_model_1 = require("../wishlist/wishlist.model");
 const cart_model_1 = require("../cart/cart.model");
 const blog_model_1 = require("../blog/blog.model");
+const cacheTTL_1 = require("../../utils/cacheTTL");
 const ApiResponse = (0, interface_1.getApiResponseClass)("DASHBOARD");
 exports.getDashboardStats = (0, utils_1.asyncHandler)(async (req, res) => {
-    const cacheKey = 'dashboard:stats';
+    const cacheKey = redisKeys_1.RedisKeys.DASHBOARD_STATS();
     const cachedStats = await redis_1.redis.get(cacheKey);
     if (cachedStats) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Dashboard stats retrieved successfully", cachedStats));
@@ -64,7 +66,7 @@ exports.getDashboardStats = (0, utils_1.asyncHandler)(async (req, res) => {
         product_model_1.Product.countDocuments({ stock: { $gt: 0, $lt: 10 }, isDeleted: false }),
         product_model_1.Product.countDocuments({ createdAt: { $gte: monthAgo }, isDeleted: false }),
         order_model_1.Order.find()
-            .populate('user', 'name email')
+            .populate({ path: 'user', select: 'name email', match: { isDeleted: false } })
             .sort({ createdAt: -1 })
             .limit(10)
             .select('user totalAmount status createdAt')
@@ -89,6 +91,10 @@ exports.getDashboardStats = (0, utils_1.asyncHandler)(async (req, res) => {
                     from: 'categories',
                     localField: 'category',
                     foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1, title: 1 } }
+                    ],
                     as: 'category'
                 }
             },
@@ -162,18 +168,97 @@ exports.getDashboardStats = (0, utils_1.asyncHandler)(async (req, res) => {
         //   .limit(10)
         //   .select('name')
         //   .lean(),
-        review_model_1.Review.countDocuments(),
         review_model_1.Review.aggregate([
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'product',
+                    foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1 } }
+                    ],
+                    as: 'productCheck'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user',
+                    foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1 } }
+                    ],
+                    as: 'userCheck'
+                }
+            },
+            { $match: { productCheck: { $ne: [] }, userCheck: { $ne: [] } } },
+            { $count: 'total' }
+        ]).then(result => result[0]?.total || 0),
+        review_model_1.Review.aggregate([
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'product',
+                    foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1 } }
+                    ],
+                    as: 'productCheck'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user',
+                    foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1 } }
+                    ],
+                    as: 'userCheck'
+                }
+            },
+            { $match: { productCheck: { $ne: [] }, userCheck: { $ne: [] } } },
             { $group: { _id: null, avg: { $avg: "$rating" } } }
         ]).then(result => result[0]?.avg || 0),
         wishlist_model_1.Wishlist.aggregate([
-            { $group: { _id: null, total: { $sum: { $size: "$items" } } } }
+            { $unwind: "$items" },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'items',
+                    foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1 } }
+                    ],
+                    as: 'productCheck'
+                }
+            },
+            { $match: { productCheck: { $ne: [] } } },
+            { $group: { _id: null, total: { $sum: 1 } } }
         ]).then(result => result[0]?.total || 0),
         cart_model_1.Cart.aggregate([
             { $unwind: "$items" },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'items.product',
+                    foreignField: '_id',
+                    pipeline: [
+                        { $match: { isDeleted: false } },
+                        { $project: { _id: 1 } }
+                    ],
+                    as: 'productCheck'
+                }
+            },
+            { $match: { productCheck: { $ne: [] } } },
             { $group: { _id: null, total: { $sum: "$items.quantity" } } }
         ]).then(result => result[0]?.total || 0),
-        blog_model_1.Blog.countDocuments(),
+        blog_model_1.Blog.countDocuments({ isDeleted: false }),
         blog_model_1.Blog.countDocuments({ isPublished: true, isDeleted: false }),
         user_model_1.User.countDocuments({
             isDeleted: false,
@@ -234,7 +319,7 @@ exports.getDashboardStats = (0, utils_1.asyncHandler)(async (req, res) => {
         publishedBlogs,
         activeUsers
     };
-    await redis_1.redis.set(cacheKey, stats, 600);
+    await redis_1.redis.set(cacheKey, stats, cacheTTL_1.CacheTTL.SHORT);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Dashboard stats retrieved successfully", stats));
     return;
 });

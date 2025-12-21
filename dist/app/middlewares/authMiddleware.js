@@ -10,6 +10,8 @@ const config_1 = __importDefault(require("../config"));
 const interface_1 = require("../interface");
 const http_status_1 = __importDefault(require("http-status"));
 const redis_1 = require("../config/redis");
+const redisKeys_1 = require("../utils/redisKeys");
+const cacheTTL_1 = require("../utils/cacheTTL");
 const auth = (...requiredRoles) => {
     return async (req, res, next) => {
         try {
@@ -18,7 +20,7 @@ const auth = (...requiredRoles) => {
                 return next(new interface_1.ApiError(http_status_1.default.UNAUTHORIZED, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
             }
             const decoded = jsonwebtoken_1.default.verify(token, config_1.default.JWT_SECRET);
-            const cacheKey = `user:${decoded.userId}`;
+            const cacheKey = redisKeys_1.RedisKeys.USER_BY_ID(decoded.userId);
             let user = await redis_1.redis.get(cacheKey);
             if (!user) {
                 user = await user_model_1.User.findById(decoded.userId);
@@ -29,7 +31,7 @@ const auth = (...requiredRoles) => {
             const userObj = user.toJSON ? user.toJSON() : user;
             const { password: _, otp, otpExpires, ...userObject } = userObj;
             req.user = userObject;
-            await redis_1.redis.set(cacheKey, userObject, 600);
+            await redis_1.redis.set(cacheKey, userObject, cacheTTL_1.CacheTTL.SHORT);
             if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
                 return next(new interface_1.ApiError(http_status_1.default.FORBIDDEN, "You do not have permission to perform this action", "AUTH_MIDDLEWARE"));
             }
@@ -50,7 +52,7 @@ const optionalAuth = () => {
             }
             try {
                 const decoded = jsonwebtoken_1.default.verify(token, config_1.default.JWT_SECRET);
-                const cacheKey = `user:${decoded.userId}`;
+                const cacheKey = redisKeys_1.RedisKeys.USER_BY_ID(decoded.userId);
                 let user = await redis_1.redis.get(cacheKey);
                 if (!user) {
                     user = await user_model_1.User.findById(decoded.userId);
@@ -59,10 +61,11 @@ const optionalAuth = () => {
                     const userObj = user.toJSON ? user.toJSON() : user;
                     const { password: _, otp, otpExpires, ...userObject } = userObj;
                     req.user = userObject;
-                    await redis_1.redis.set(cacheKey, userObject, 600);
+                    await redis_1.redis.set(cacheKey, userObject, cacheTTL_1.CacheTTL.SHORT);
                 }
             }
             catch (error) {
+                console.log("Invalid or expired token");
             }
             next();
         }

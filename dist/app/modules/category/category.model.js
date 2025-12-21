@@ -45,8 +45,7 @@ const categorySchema = new mongoose_1.Schema({
     title: {
         type: String,
         required: true,
-        trim: true,
-        unique: true
+        trim: true
     },
     slug: { type: String, required: true, unique: true, lowercase: true },
     image: {
@@ -93,7 +92,10 @@ categorySchema.virtual('products', {
 categorySchema.index({ createdAt: -1 });
 categorySchema.index({ parentCategory: -1 });
 categorySchema.index({ isDeleted: -1 });
-categorySchema.index({ parentCategory: 1, title: 1 }, { unique: true });
+categorySchema.index({ parentCategory: 1, title: 1 }, {
+    unique: true,
+    partialFilterExpression: { isDeleted: false }
+});
 categorySchema.pre("validate", async function (next) {
     if (!this.slug && this.title) {
         this.slug = await (0, slugify_1.generateUniqueSlug)(this.title);
@@ -121,6 +123,25 @@ categorySchema.pre("save", async function (next) {
     }
     catch (err) {
         console.error('[CATEGORY_IMAGE] Generation failed:', err?.message || err);
+    }
+    next();
+});
+categorySchema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+    const query = this.getQuery();
+    if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+        const categoryId = query._id;
+        const Category = mongoose_1.default.model("Category");
+        const Product = mongoose_1.default.model("Product");
+        const Brand = mongoose_1.default.model("Brand");
+        const category = await Category.findOne({ _id: categoryId, isDeleted: false });
+        if (category) {
+            await Promise.all([
+                Category.updateMany({ parentCategory: categoryId, isDeleted: false }, { $set: { isDeleted: true } }),
+                Product.updateMany({ category: categoryId, isDeleted: false }, { $unset: { category: "" } }),
+                Brand.updateMany({ categories: categoryId, isDeleted: false }, { $pull: { categories: categoryId } })
+            ]);
+        }
     }
     next();
 });

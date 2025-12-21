@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteReview = exports.updateReview = exports.getMyReviews = exports.getAllReviews = exports.getProductReviews = exports.createReview = exports.getReviewById = void 0;
 const utils_1 = require("../../utils");
+const redisKeys_1 = require("../../utils/redisKeys");
+const cacheTTL_1 = require("../../utils/cacheTTL");
 const review_validation_1 = require("./review.validation");
 const mongoose_1 = __importDefault(require("mongoose"));
 const interface_1 = require("../../interface");
@@ -13,11 +15,25 @@ const product_model_1 = require("../product/product.model");
 const user_model_1 = require("../user/user.model");
 const review_model_1 = require("./review.model");
 const redis_1 = require("../../config/redis");
+const invalidateCache_1 = require("../../utils/invalidateCache");
 const ApiError = (0, interface_1.getApiErrorClass)("REVIEW");
 const ApiResponse = (0, interface_1.getApiResponseClass)("REVIEW");
 const updateProductRating = async (productId, session) => {
     const stats = await review_model_1.Review.aggregate([
         { $match: { product: new mongoose_1.default.Types.ObjectId(productId) } },
+        {
+            $lookup: {
+                from: 'products',
+                localField: 'product',
+                foreignField: '_id',
+                pipeline: [
+                    { $match: { isDeleted: false } },
+                    { $project: { _id: 1 } }
+                ],
+                as: 'productCheck'
+            }
+        },
+        { $match: { productCheck: { $ne: [] } } },
         {
             $group: {
                 _id: '$product',
@@ -36,20 +52,24 @@ const updateProductRating = async (productId, session) => {
         reviewCount,
         rating
     }, { session });
-    await redis_1.redis.deleteByPattern(`product:${productId}*`);
+    await (0, invalidateCache_1.invalidateProductCaches)({ productId: String(productId) });
     return;
 };
 exports.getReviewById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
-    const cacheKey = `review:${id}`;
+    const cacheKey = redisKeys_1.RedisKeys.REVIEW_BY_ID(id);
     const cachedReview = await redis_1.redis.get(cacheKey);
     if (cachedReview) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Review retrieved successfully', cachedReview));
     }
-    const review = await review_model_1.Review.findById(id).populate('user', 'name email').populate('product', 'name');
+    const review = await review_model_1.Review.findById(id)
+        .populate({ path: 'user', select: 'name email', match: { isDeleted: false } })
+        .populate({ path: 'product', select: 'name', match: { isDeleted: false } });
     if (!review) {
         throw new ApiError(http_status_1.default.NOT_FOUND, "Review not found");
     }
+    const reviewObj = review?.toObject ? review.toObject() : review;
+    await redis_1.redis.set(cacheKey, reviewObj, cacheTTL_1.CacheTTL.SHORT);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Review retrieved successfully', review));
     return;
 });
@@ -74,12 +94,10 @@ exports.createReview = (0, utils_1.asyncHandler)(async (req, res) => {
             }], { session }))[0];
         await updateProductRating(productId, session);
         await session.commitTransaction();
-        await redis_1.redis.deleteByPattern(`reviews:product:${productId}*`);
-        await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);
-        await redis_1.redis.delete(`product:${review.product}?populate=true`);
-        await redis_1.redis.delete(`user:${userId}?populate=true`);
-        await redis_1.redis.deleteByPattern('reviews:all*');
-        await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);
+        await (0, invalidateCache_1.invalidateReviewCaches)({
+            productId: String(review.product),
+            userId: String(userId),
+        });
         res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, "Review created successfully", review));
         return;
     }
@@ -94,7 +112,7 @@ exports.createReview = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.getProductReviews = (0, utils_1.asyncHandler)(async (req, res) => {
     const { productId } = req.params;
     const { page = 1, limit = 10 } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)(`reviews:product:${productId}`, req.query);
+    const cacheKey = redisKeys_1.RedisKeys.REVIEWS_BY_PRODUCT(productId, req.query);
     const cachedReviews = await redis_1.redis.get(cacheKey);
     if (cachedReviews) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Reviews retrieved successfully", cachedReviews));
@@ -109,7 +127,7 @@ exports.getProductReviews = (0, utils_1.asyncHandler)(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [reviews, total] = await Promise.all([
         review_model_1.Review.find({ product: productId })
-            .populate('user', 'name email img')
+            .populate({ path: 'user', select: 'name email img', match: { isDeleted: false } })
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(Number(limit)),
@@ -123,13 +141,13 @@ exports.getProductReviews = (0, utils_1.asyncHandler)(async (req, res) => {
         total,
         totalPages
     };
-    await redis_1.redis.set(cacheKey, result, 600);
+    await redis_1.redis.set(cacheKey, result, cacheTTL_1.CacheTTL.SHORT);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Reviews retrieved successfully", result));
     return;
 });
 exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
     const { page = 1, limit = 10, rating, user, product, search } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)("reviews:all", req.query);
+    const cacheKey = redisKeys_1.RedisKeys.REVIEWS_LIST(req.query);
     const cached = await redis_1.redis.get(cacheKey);
     if (cached)
         return res
@@ -149,7 +167,8 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
                     { name: { $regex: userRegex } },
                     { email: { $regex: userRegex } },
                     { phone: { $regex: userRegex } }
-                ]
+                ],
+                isDeleted: false
             }, { _id: 1 });
             const userIds = users.map((u) => u._id);
             filter.user = userIds.length > 0 ? { $in: userIds } : [];
@@ -162,6 +181,7 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
         else {
             const productRegex = new RegExp(product, 'i');
             const products = await product_model_1.Product.find({
+                isDeleted: false,
                 $or: [
                     { name: { $regex: productRegex } },
                     { tags: { $regex: productRegex } },
@@ -207,7 +227,9 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
             from: "products",
             localField: "product",
             foreignField: "_id",
-            pipeline: [{ $project: { _id: 1, name: 1 } }],
+            pipeline: [
+                { $project: { _id: 1, name: 1 } }
+            ],
             as: "product"
         }
     });
@@ -224,7 +246,7 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
         total,
         totalPages
     };
-    await redis_1.redis.set(cacheKey, result, 600);
+    await redis_1.redis.set(cacheKey, result, cacheTTL_1.CacheTTL.SHORT);
     res
         .status(http_status_1.default.OK)
         .json(new ApiResponse(http_status_1.default.OK, "All reviews retrieved successfully", result));
@@ -232,7 +254,7 @@ exports.getAllReviews = (0, utils_1.asyncHandler)(async (req, res) => {
 exports.getMyReviews = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
     const { page = 1, limit = 10 } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)(`reviews:user:${userId}`, req.query);
+    const cacheKey = redisKeys_1.RedisKeys.REVIEWS_BY_USER(userId, req.query);
     const cachedReviews = await redis_1.redis.get(cacheKey);
     if (cachedReviews) {
         return res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Your reviews retrieved successfully", cachedReviews));
@@ -240,7 +262,7 @@ exports.getMyReviews = (0, utils_1.asyncHandler)(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [reviews, total] = await Promise.all([
         review_model_1.Review.find({ user: userId })
-            .populate('product', 'name thumbnail slug')
+            .populate({ path: 'product', select: 'name thumbnail slug', match: { isDeleted: false } })
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(Number(limit)),
@@ -254,7 +276,7 @@ exports.getMyReviews = (0, utils_1.asyncHandler)(async (req, res) => {
         total,
         totalPages
     };
-    await redis_1.redis.set(cacheKey, result, 600);
+    await redis_1.redis.set(cacheKey, result, cacheTTL_1.CacheTTL.SHORT);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Your reviews retrieved successfully", result));
     return;
 });
@@ -277,12 +299,11 @@ exports.updateReview = (0, utils_1.asyncHandler)(async (req, res) => {
         await existingReview.save({ session });
         await updateProductRating(existingReview.product.toString(), session);
         await session.commitTransaction();
-        await redis_1.redis.delete(`review:${reviewId}`);
-        await redis_1.redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
-        await redis_1.redis.delete(`product:${existingReview.product.toString()}?populate=true`);
-        await redis_1.redis.delete(`user:${userId}?populate=true`);
-        await redis_1.redis.deleteByPattern('reviews:all*');
-        await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);
+        await (0, invalidateCache_1.invalidateReviewCaches)({
+            reviewId: String(reviewId),
+            productId: String(existingReview.product),
+            userId: String(userId),
+        });
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Review updated successfully", existingReview));
         return;
     }
@@ -310,12 +331,11 @@ exports.deleteReview = (0, utils_1.asyncHandler)(async (req, res) => {
         await existingReview.deleteOne({ session });
         await updateProductRating(existingReview.product.toString(), session);
         await session.commitTransaction();
-        await redis_1.redis.delete(`review:${reviewId}`);
-        await redis_1.redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
-        await redis_1.redis.delete(`product:${existingReview.product.toString()}?populate=true`);
-        await redis_1.redis.delete(`user:${userId}?populate=true`);
-        await redis_1.redis.deleteByPattern('reviews:all*');
-        await redis_1.redis.deleteByPattern(`reviews:user:${userId}*`);
+        await (0, invalidateCache_1.invalidateReviewCaches)({
+            reviewId: String(reviewId),
+            productId: String(existingReview.product),
+            userId: String(userId),
+        });
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Review deleted successfully", existingReview));
         return;
     }

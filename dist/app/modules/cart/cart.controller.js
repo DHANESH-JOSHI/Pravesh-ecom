@@ -41,16 +41,19 @@ const cart_model_1 = require("./cart.model");
 const mongoose_1 = __importStar(require("mongoose"));
 const product_model_1 = require("../product/product.model");
 const utils_1 = require("../../utils");
+const cacheTTL_1 = require("../../utils/cacheTTL");
+const redisKeys_1 = require("../../utils/redisKeys");
 const interface_1 = require("../../interface");
 const cart_validation_1 = require("./cart.validation");
 const http_status_1 = __importDefault(require("http-status"));
 const redis_1 = require("../../config/redis");
 const user_model_1 = require("../user/user.model");
+const invalidateCache_1 = require("../../utils/invalidateCache");
 const ApiError = (0, interface_1.getApiErrorClass)("CART");
 const ApiResponse = (0, interface_1.getApiResponseClass)("CART");
 exports.getCartById = (0, utils_1.asyncHandler)(async (req, res) => {
     const { id } = req.params;
-    const cacheKey = `cart:id:${id}`;
+    const cacheKey = redisKeys_1.RedisKeys.CART_BY_ID(id);
     const cachedCart = await redis_1.redis.get(cacheKey);
     if (cachedCart) {
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart retrieved successfully', cachedCart));
@@ -63,6 +66,7 @@ exports.getCartById = (0, utils_1.asyncHandler)(async (req, res) => {
         {
             path: 'user',
             select: '_id name email',
+            match: { isDeleted: false },
             populate: {
                 path: 'wallet',
                 select: 'balance'
@@ -74,26 +78,29 @@ exports.getCartById = (0, utils_1.asyncHandler)(async (req, res) => {
             populate: [
                 {
                     path: 'category',
-                    select: 'title _id'
+                    select: 'title _id',
+                    match: { isDeleted: false }
                 },
                 {
                     path: 'brand',
-                    select: 'name _id'
+                    select: 'name _id',
+                    match: { isDeleted: false }
                 }
             ]
         }
-    ]);
+    ]).lean();
     if (!cart) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Cart not found');
     }
-    await redis_1.redis.set(cacheKey, cart, 900);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart retrieved successfully', cart));
+    const cartObj = cart?.toObject ? cart.toObject() : cart;
+    await redis_1.redis.set(cacheKey, cartObj, cacheTTL_1.CacheTTL.MEDIUM);
+    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart retrieved successfully', cartObj));
     return;
 });
 exports.getMyCart = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
     const { populate = 'false' } = req.query;
-    const cacheKey = (0, utils_1.generateCacheKey)(`cart:user:${userId}`, req.query);
+    const cacheKey = redisKeys_1.RedisKeys.CART_BY_USER(userId, req.query);
     const cachedCart = await redis_1.redis.get(cacheKey);
     if (cachedCart) {
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart retrieved successfully', cachedCart));
@@ -101,22 +108,23 @@ exports.getMyCart = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     let cart;
     if (populate === 'true') {
-        cart = await cart_model_1.Cart.findOne({ user: userId }).populate('items.product');
+        cart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', match: { isDeleted: false } }).lean();
     }
     else {
-        cart = await cart_model_1.Cart.findOne({ user: userId });
+        cart = await cart_model_1.Cart.findOne({ user: userId }).lean();
     }
     if (!cart) {
         cart = await cart_model_1.Cart.create({ user: userId, items: [] });
     }
-    await redis_1.redis.set(cacheKey, cart, 900);
-    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart retrieved successfully', cart));
+    const cartObj = cart?.toObject ? cart.toObject() : cart;
+    await redis_1.redis.set(cacheKey, cartObj, cacheTTL_1.CacheTTL.MEDIUM);
+    res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart retrieved successfully', cartObj));
     return;
 });
 exports.getAllCarts = (0, utils_1.asyncHandler)(async (req, res) => {
     const { page = 1, limit = 10, user } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
-    const cacheKey = (0, utils_1.generateCacheKey)("carts", req.query);
+    const cacheKey = redisKeys_1.RedisKeys.CARTS_LIST(req.query);
     const cached = await redis_1.redis.get(cacheKey);
     if (cached)
         return res
@@ -205,7 +213,7 @@ exports.getAllCarts = (0, utils_1.asyncHandler)(async (req, res) => {
         total,
         totalPages
     };
-    await redis_1.redis.set(cacheKey, result, 600);
+    await redis_1.redis.set(cacheKey, result, cacheTTL_1.CacheTTL.SHORT);
     res
         .status(http_status_1.default.OK)
         .json(new ApiResponse(http_status_1.default.OK, "Carts retrieved successfully", result));
@@ -234,11 +242,11 @@ exports.addToCart = (0, utils_1.asyncHandler)(async (req, res) => {
         cart = new cart_model_1.Cart({ user: userId, items: [] });
     }
     await cart.addItem(productId, quantity);
-    const populatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
-    await redis_1.redis.deleteByPattern(`cart:user:${userId}*`);
-    await redis_1.redis.delete(`cart:summary:${userId}`);
-    await redis_1.redis.deleteByPattern('carts*');
-    await redis_1.redis.delete(`cart:id:${cart._id}`);
+    const populatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
+    await (0, invalidateCache_1.invalidateCartCaches)({
+        cartId: String(cart._id),
+        userId: String(userId),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Item added to cart successfully', populatedCart));
     return;
 });
@@ -272,11 +280,11 @@ exports.updateCartItem = (0, utils_1.asyncHandler)(async (req, res) => {
         }
         throw error;
     }
-    const updatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
-    await redis_1.redis.deleteByPattern(`cart:user:${userId}*`);
-    await redis_1.redis.delete(`cart:summary:${userId}`);
-    await redis_1.redis.deleteByPattern('carts*');
-    await redis_1.redis.delete(`cart:id:${cart._id}`);
+    const updatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
+    await (0, invalidateCache_1.invalidateCartCaches)({
+        cartId: String(cart._id),
+        userId: String(userId),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart item updated successfully', updatedCart));
     return;
 });
@@ -291,11 +299,11 @@ exports.removeFromCart = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Cart not found');
     }
     await cart.removeItem(new mongoose_1.Types.ObjectId(productId));
-    const updatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate('items.product', 'name price thumbnail');
-    await redis_1.redis.deleteByPattern(`cart:user:${userId}*`);
-    await redis_1.redis.delete(`cart:summary:${userId}`);
-    await redis_1.redis.deleteByPattern('carts*');
-    await redis_1.redis.delete(`cart:id:${cart._id}`);
+    const updatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
+    await (0, invalidateCache_1.invalidateCartCaches)({
+        cartId: String(cart._id),
+        userId: String(userId),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Item removed from cart successfully', updatedCart));
     return;
 });
@@ -306,10 +314,10 @@ exports.clearCart = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Cart not found');
     }
     await cart.clearCart();
-    await redis_1.redis.deleteByPattern(`cart:user:${userId}*`);
-    await redis_1.redis.delete(`cart:summary:${userId}`);
-    await redis_1.redis.deleteByPattern('carts*');
-    await redis_1.redis.delete(`cart:id:${cart._id}`);
+    await (0, invalidateCache_1.invalidateCartCaches)({
+        cartId: String(cart._id),
+        userId: String(userId),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart cleared successfully', {
         user: userId,
         items: [],
@@ -321,7 +329,7 @@ exports.clearCart = (0, utils_1.asyncHandler)(async (req, res) => {
 });
 exports.getCartSummary = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
-    const cacheKey = `cart:summary:${userId}`;
+    const cacheKey = redisKeys_1.RedisKeys.CART_SUMMARY_BY_USER(userId);
     const cachedSummary = await redis_1.redis.get(cacheKey);
     if (cachedSummary) {
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart summary retrieved successfully', cachedSummary));
@@ -333,7 +341,7 @@ exports.getCartSummary = (0, utils_1.asyncHandler)(async (req, res) => {
             totalItems: 0,
             itemCount: 0,
         };
-        await redis_1.redis.set(cacheKey, summary, 600);
+        await redis_1.redis.set(cacheKey, summary, cacheTTL_1.CacheTTL.SHORT);
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart summary retrieved successfully', summary));
         return;
     }
@@ -342,13 +350,13 @@ exports.getCartSummary = (0, utils_1.asyncHandler)(async (req, res) => {
         totalItems,
         totalPrice,
     };
-    await redis_1.redis.set(cacheKey, summary, 600);
+    await redis_1.redis.set(cacheKey, summary, cacheTTL_1.CacheTTL.SHORT);
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart summary retrieved successfully', summary));
     return;
 });
 exports.checkoutCart = (0, utils_1.asyncHandler)(async (req, res) => {
     const userId = req.user?._id;
-    const cart = await cart_model_1.Cart.findOne({ user: userId }).populate('items.product', 'originalPrice isDeleted status stock name');
+    const cart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'originalPrice isDeleted status stock name', match: { isDeleted: false } });
     if (!cart || cart.items.length === 0) {
         throw new ApiError(http_status_1.default.BAD_REQUEST, 'Cart is empty');
     }
@@ -363,10 +371,10 @@ exports.checkoutCart = (0, utils_1.asyncHandler)(async (req, res) => {
         // }
         totalPrice += item.quantity * product.originalPrice;
     }
-    await redis_1.redis.deleteByPattern(`cart:user:${userId}*`);
-    await redis_1.redis.delete(`cart:summary:${userId}`);
-    await redis_1.redis.deleteByPattern('carts*');
-    await redis_1.redis.delete(`cart:id:${cart._id}`);
+    await (0, invalidateCache_1.invalidateCartCaches)({
+        cartId: String(cart._id),
+        userId: String(userId),
+    });
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Checkout successful', { totalPrice }));
     return;
 });
