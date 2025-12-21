@@ -10,7 +10,7 @@ import mongoose from "mongoose";
 import { UserStatus } from "./user.interface";
 import { registerValidation } from "../auth/auth.validation";
 import { cloudinary } from "@/config/cloudinary";
-import { invalidateUserCaches } from "@/utils/invalidateCache";
+import { RedisPatterns } from "@/utils/redisKeys";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
@@ -30,7 +30,7 @@ export const createUser = asyncHandler(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    await invalidateUserCaches();
+    await redis.deleteByPattern(RedisPatterns.USERS_ALL());
 
     const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
 
@@ -112,7 +112,8 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  await invalidateUserCaches(String(userId));
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.USERS_ALL());
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
   return;
@@ -263,7 +264,9 @@ export const recoverUser = asyncHandler(async (req, res) => {
 
   user.isDeleted = false;
   await user.save();
-  await invalidateUserCaches(String(id));
+  
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.USERS_ALL());
 
   res.json(new ApiResponse(status.OK, "User recovered successfully"));
   return;
@@ -279,7 +282,8 @@ export const deleteUser = asyncHandler(async (req, res) => {
   user.isDeleted = true;
   await user.save();
 
-  await invalidateUserCaches(String(id));
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.USERS_ALL());
 
   res.json(new ApiResponse(status.OK, "User deleted successfully"));
   return;

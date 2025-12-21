@@ -4,7 +4,7 @@ import { brandValidation, brandUpdateValidation } from "./brand.validation";
 import { cloudinary } from "@/config/cloudinary";
 import { asyncHandler } from "@/utils";
 import { RedisKeys } from "@/utils/redisKeys";
-import { invalidateBrandCaches, invalidateCategoryCaches, invalidateProductCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 import { CacheTTL } from "@/utils/cacheTTL";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
@@ -50,9 +50,15 @@ export const createBrand = asyncHandler(async (req, res) => {
   }
 
   await syncBrandCategories(brand._id as any, expandedLeafIds);
-  await invalidateBrandCaches(String(brand._id));
+  
+  await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
+  if (brand.slug) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
+  }
+  await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  
   for (const categoryId of expandedLeafIds) {
-    await invalidateCategoryCaches(String(categoryId));
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
   }
 
   res
@@ -203,6 +209,7 @@ export const updateBrand = asyncHandler(async (req, res) => {
   if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
 
   const oldName = brand.name;
+  const oldSlug = brand.slug;
   const oldCategoryIds = brand.categories.map(cat => String(cat));
 
   if (name && name !== brand.name) {
@@ -224,15 +231,23 @@ export const updateBrand = asyncHandler(async (req, res) => {
   await brand.save();
 
   await syncBrandCategories(brand._id as any, expandedLeafIds);
-  await invalidateBrandCaches(String(id));
+  
+  await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(oldSlug));
+  
+  if (brand.slug !== oldSlug) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
+  }
+  
+  await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
   const allAffectedCategoryIds = new Set([...oldCategoryIds, ...expandedLeafIds]);
   for (const categoryId of allAffectedCategoryIds) {
-    await invalidateCategoryCaches(String(categoryId));
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
   }
   
   if (name && name !== oldName) {
-    await invalidateProductCaches({ brandId: String(id) });
+    await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
   }
   res
     .status(status.OK)
@@ -251,11 +266,15 @@ export const deleteBrand = asyncHandler(async (req, res) => {
   );
   if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
 
-  await invalidateBrandCaches(String(id));
+  await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
+  await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  
   for (const categoryId of brand.categories) {
-    await invalidateCategoryCaches(String(categoryId));
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
   }
-  await invalidateProductCaches({ brandId: String(id) });
+  
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
 });

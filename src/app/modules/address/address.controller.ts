@@ -8,7 +8,7 @@ import status from "http-status";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import { User } from "../user/user.model";
-import { invalidateAddressCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 const ApiError = getApiErrorClass("ADDRESS");
 const ApiResponse = getApiResponseClass("ADDRESS");
 
@@ -25,7 +25,9 @@ export const createAddress = asyncHandler(async (req, res) => {
     throw new ApiError(status.INTERNAL_SERVER_ERROR, "Failed to create address");
   }
 
-  await invalidateAddressCaches({ userId: String(address.user) });
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_BY_USER(String(address.user)));
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(address.user)));
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Address created successfully", address));
   return;
@@ -95,7 +97,10 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
     ...validatedData,
   }, { new: true });
 
-  await invalidateAddressCaches({ addressId: String(addressId), userId: String(userId) });
+  await redis.deleteByPattern(RedisPatterns.ADDRESS_ANY(String(addressId)));
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_BY_USER(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
 
 
@@ -121,7 +126,10 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
   existingAddress.isDeleted = true;
   await existingAddress.save();
 
-  await invalidateAddressCaches({ addressId: String(addressId), userId: String(userId) });
+  await redis.deleteByPattern(RedisPatterns.ADDRESS_ANY(String(addressId)));
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_BY_USER(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
 
 
@@ -177,7 +185,9 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
   );
   address.isDefault = true;
   await address.save();
-  await invalidateAddressCaches({ userId: String(userId) });
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_BY_USER(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Default address set successfully"));

@@ -11,7 +11,7 @@ import { categoryValidation, categoryUpdateValidation } from "./category.validat
 import { ICategory } from "./category.interface";
 import { Product } from "../product/product.model";
 import { getLeafCategoryIds } from "../brand/brand.controller";
-import { invalidateCategoryCaches, invalidateBrandCaches, invalidateProductCaches } from "@/utils/invalidateCache";
+import { RedisPatterns } from "@/utils/redisKeys";
 
 const ApiError = getApiErrorClass("CATEGORY");
 const ApiResponse = getApiResponseClass("CATEGORY");
@@ -39,7 +39,17 @@ export const createCategory = asyncHandler(async (req, res) => {
       parentCategory: parentCategoryId || null,
     });
   }
-  await invalidateCategoryCaches();
+  await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
+  await redis.delete(RedisKeys.CATEGORY_TREE());
+  await redis.delete(RedisKeys.CATEGORY_LEAF());
+  
+  if (parentCategoryId) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(parentCategoryId)));
+  }
+  
+  if (category && category.slug) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(category.slug));
+  }
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Category created", category));
 });
@@ -318,6 +328,10 @@ export const updateCategory = asyncHandler(async (req, res) => {
   // }
 
 
+  const oldParentCategoryId = category.parentCategory ? String(category.parentCategory) : undefined;
+  const newParentCategoryId = parentCategoryId || undefined;
+  const oldSlug = category.slug;
+
   const updatedCategory = await Category.findByIdAndUpdate(
     categoryId,
     {
@@ -328,11 +342,27 @@ export const updateCategory = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  await invalidateCategoryCaches(String(category._id));
-  for (const brand of category.brands) {
-    await invalidateBrandCaches(String(brand));
+  await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(category._id)));
+  await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(oldSlug));
+  
+  if (updatedCategory && updatedCategory.slug !== oldSlug) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(updatedCategory.slug));
   }
-  await invalidateProductCaches({ categoryId: String(category._id) });
+  
+  if (oldParentCategoryId) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(oldParentCategoryId));
+  }
+  
+  if (oldParentCategoryId !== newParentCategoryId && newParentCategoryId) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(newParentCategoryId));
+  }
+  
+  await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
+  
+  if (oldParentCategoryId !== newParentCategoryId) {
+    await redis.delete(RedisKeys.CATEGORY_TREE());
+    await redis.delete(RedisKeys.CATEGORY_LEAF());
+  }
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
@@ -351,11 +381,16 @@ export const deleteCategory = asyncHandler(async (req, res) => {
   );
   if (!deleted) throw new ApiError(status.NOT_FOUND, "Category not found");
 
-  await invalidateCategoryCaches(String(id));
-  for (const brand of deleted.brands) {
-    await invalidateBrandCaches(String(brand));
+  await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(deleted.slug));
+  
+  if (deleted.parentCategory) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(deleted.parentCategory)));
   }
-  await invalidateProductCaches({ categoryId: String(id) });
+  
+  await redis.delete(RedisKeys.CATEGORY_TREE());
+  await redis.delete(RedisKeys.CATEGORY_LEAF());
+  await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted", deleted));
 });

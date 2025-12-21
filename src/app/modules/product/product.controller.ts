@@ -3,7 +3,7 @@ import { Product } from './product.model';
 import { asyncHandler } from "@/utils";
 import { RedisKeys } from "@/utils/redisKeys";
 import { cloudinary } from '@/config/cloudinary';
-import { invalidateProductCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { createProductValidation, productsQueryValidation } from './product.validation';
 import { Category } from '../category/category.model';
@@ -52,12 +52,19 @@ export const createProduct = asyncHandler(async (req, res) => {
     brand: productData.brandId,
   });
 
-  await invalidateProductCaches({
-    productId: String(product._id),
-    productSlug: product.slug,
-    categoryId: String(product.category),
-    brandId: product.brand ? String(product.brand) : undefined,
-  });
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(product._id)));
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(product.slug));
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_RELATED_ANY(String(product._id)));
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  
+  if (product.category) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(product.category)));
+  }
+  
+  if (product.brand) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(product.brand)));
+  }
   res.status(status.CREATED).json(
     new ApiResponse(status.CREATED, 'Product created successfully', product)
   );
@@ -398,24 +405,31 @@ export const updateProduct = asyncHandler(async (req, res) => {
   const oldBrandId = existingProduct.brand ? String(existingProduct.brand) : undefined;
   const newBrandId = result.brand ? String(result.brand) : undefined;
 
-  await invalidateProductCaches({
-    productId: String(id),
-    productSlug: oldSlug,
-    categoryId: oldCategoryId,
-    brandId: oldBrandId,
-  });
-
-  if (newCategoryId !== oldCategoryId || newBrandId !== oldBrandId) {
-    await invalidateProductCaches({
-      categoryId: newCategoryId,
-      brandId: newBrandId,
-    });
-  }
-
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(oldSlug));
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_RELATED_ANY(String(id)));
+  
   if (newSlug !== oldSlug) {
-    await invalidateProductCaches({
-      productSlug: newSlug,
-    });
+    await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(newSlug));
+  }
+  
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  
+  if (oldCategoryId && oldCategoryId !== newCategoryId) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(oldCategoryId));
+  }
+  
+  if (newCategoryId && newCategoryId !== oldCategoryId) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(newCategoryId));
+  }
+  
+  if (oldBrandId && oldBrandId !== newBrandId) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(oldBrandId));
+  }
+  
+  if (newBrandId && newBrandId !== oldBrandId) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(newBrandId));
   }
 
   res.status(status.OK).json(
@@ -442,12 +456,21 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  await invalidateProductCaches({
-    productId: String(id),
-    productSlug: product.slug,
-    categoryId: String(product.category),
-    brandId: product.brand ? String(product.brand) : undefined,
-  });
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(product.slug));
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_RELATED_ANY(String(id)));
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  
+  if (product.category) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(product.category)));
+  }
+  
+  if (product.brand) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(product.brand)));
+  }
+  
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product deleted successfully', deletedProduct)

@@ -9,7 +9,7 @@ import { Product } from "../product/product.model";
 import { User } from "../user/user.model";
 import { Review } from "./review.model";
 import { redis } from "@/config/redis";
-import { invalidateReviewCaches, invalidateProductCaches } from "@/utils/invalidateCache";
+import { RedisPatterns } from "@/utils/redisKeys";
 const ApiError = getApiErrorClass("REVIEW")
 const ApiResponse = getApiResponseClass("REVIEW")
 
@@ -51,7 +51,7 @@ const updateProductRating = async (productId: string, session: mongoose.ClientSe
     rating
   }, { session });
 
-  await invalidateProductCaches({ productId: String(productId) });
+  await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(productId)));
   return;
 };
 
@@ -104,10 +104,10 @@ export const createReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await invalidateReviewCaches({
-      productId: String(review.product),
-      userId: String(userId),
-    });
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_PRODUCT(String(review.product)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+    await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(review.product)));
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
     return;
@@ -351,11 +351,11 @@ export const updateReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await invalidateReviewCaches({
-      reviewId: String(reviewId),
-      productId: String(existingReview.product),
-      userId: String(userId),
-    });
+    await redis.delete(RedisKeys.REVIEW_BY_ID(String(reviewId)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_PRODUCT(String(existingReview.product)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+    await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
     return;
@@ -387,11 +387,11 @@ export const deleteReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await invalidateReviewCaches({
-      reviewId: String(reviewId),
-      productId: String(existingReview.product),
-      userId: String(userId),
-    });
+    await redis.delete(RedisKeys.REVIEW_BY_ID(String(reviewId)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_PRODUCT(String(existingReview.product)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+    await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))
     return;

@@ -7,7 +7,7 @@ import { cloudinary } from "@/config/cloudinary";
 import { redis } from "@/config/redis";
 import { RedisKeys } from "@/utils/redisKeys";
 import { CacheTTL } from "@/utils/cacheTTL";
-import { invalidateSettingCaches } from "@/utils/invalidateCache";
+import { RedisPatterns } from "@/utils/redisKeys";
 
 const ApiResponse = getApiResponseClass("SETTING");
 
@@ -43,7 +43,7 @@ export const upsertSettings = asyncHandler(async (req, res) => {
     await setting.save();
   }
 
-  await invalidateSettingCaches();
+  await redis.delete(RedisKeys.SETTINGS_LIST());
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Settings saved successfully", setting));
   return;

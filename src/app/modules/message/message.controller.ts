@@ -7,7 +7,7 @@ import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { Setting } from "../setting/setting.model";
 import { redis } from "@/config/redis";
-import { invalidateMessageCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 
 const ApiError = getApiErrorClass("CONTACT");
 const ApiResponse = getApiResponseClass("CONTACT");
@@ -24,7 +24,7 @@ export const createMessage = asyncHandler(async (req, res) => {
       `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`
     );
   }
-  await invalidateMessageCaches();
+  await redis.deleteByPattern(RedisPatterns.MESSAGES_ALL());
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Message received", { id: contact._id }));
   return;
 });
@@ -92,7 +92,8 @@ export const resolveMessage = asyncHandler(async (req, res) => {
   const id = req.params.id;
   const updated = await Message.findOneAndUpdate({ _id: id, isDeleted: false }, { status: "resolved" }, { new: true });
   if (!updated) throw new ApiError(status.NOT_FOUND, "Message not found");
-  await invalidateMessageCaches(id);
+  await redis.delete(RedisKeys.MESSAGE_BY_ID(id));
+  await redis.deleteByPattern(RedisPatterns.MESSAGES_ALL());
   res.json(new ApiResponse(status.OK, "Message marked as resolved", updated));
   return;
 });
@@ -101,7 +102,8 @@ export const deleteMessage = asyncHandler(async (req, res) => {
   const id = req.params.id;
   const deleted = await Message.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { new: true });
   if (!deleted) throw new ApiError(status.NOT_FOUND, "Message not found");
-  await invalidateMessageCaches(id);
+  await redis.delete(RedisKeys.MESSAGE_BY_ID(id));
+  await redis.deleteByPattern(RedisPatterns.MESSAGES_ALL());
   res.json(new ApiResponse(status.OK, "Message deleted", deleted));
   return;
 });

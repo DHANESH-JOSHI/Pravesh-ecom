@@ -12,7 +12,7 @@ import status from 'http-status';
 import { Product } from '../product/product.model';
 import { redis } from "@/config/redis";
 import { RedisKeys } from "@/utils/redisKeys";
-import { invalidateOrderCaches, invalidateCartCaches, invalidateWalletCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 import { User } from '../user/user.model';
 // import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
@@ -83,11 +83,11 @@ export const createOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await invalidateOrderCaches({
-      userId: String(userId),
-      touchesProducts: true,
-    });
-    await invalidateCartCaches({ userId: String(userId) });
+    await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+    await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
     return;
@@ -118,9 +118,8 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     image: customOrderImage,
   });
 
-  await invalidateOrderCaches({
-    userId: String(userId),
-  });
+  await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
   return;
@@ -162,10 +161,9 @@ export const updateOrder = asyncHandler(async (req, res) => {
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
 
-  await invalidateOrderCaches({
-    orderId,
-    userId: String(order.user),
-  });
+  await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(order.user)));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order updated successfully', order));
   return;
@@ -224,11 +222,12 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await invalidateOrderCaches({
-      orderId,
-      userId: String(userId),
-    });
-    await invalidateWalletCaches(String(userId));
+    await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+    await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+    await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(userId)));
+    await redis.delete(RedisKeys.WALLET_BALANCE(String(userId)));
+    await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(userId)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
     return;
@@ -681,21 +680,23 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
+  await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(order.user)));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  
   const productsTouched = oldStatus === OrderStatus.OutForDelivery && newStatus === OrderStatus.Delivered;
+  if (productsTouched) {
+    await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  }
   
   const walletTouched = 
     (oldStatus === OrderStatus.Received && newStatus === OrderStatus.Confirmed) ||
     (oldStatus === OrderStatus.Approved && newStatus === OrderStatus.Confirmed) ||
     (oldStatus === OrderStatus.Cancelled && newStatus === OrderStatus.Refunded);
-
-  await invalidateOrderCaches({
-    orderId,
-    userId: String(order.user),
-    touchesProducts: productsTouched,
-  });
-  
   if (walletTouched) {
-    await invalidateWalletCaches(String(order.user));
+    await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(order.user)));
+    await redis.delete(RedisKeys.WALLET_BALANCE(String(order.user)));
+    await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(order.user)));
   }
 
   return res.status(status.OK).json(
@@ -720,10 +721,9 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   order.status = OrderStatus.Cancelled;
   await order.save();
 
-  await invalidateOrderCaches({
-    orderId,
-    userId: String(userId),
-  });
+  await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order canceled successfully', order)

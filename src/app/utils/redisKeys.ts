@@ -169,12 +169,28 @@ export const RedisPatterns = {
 
   // Wallets
   WALLETS_ALL: () => "wallets*",
+  WALLET_BY_USER_ANY: (userId: StringOrUnknown) => `wallet:user:${userId}*`,
 
   // Dashboard
   DASHBOARD_ALL: () => "dashboard:stats*",
 
   // Product filters
   PRODUCT_FILTERS: () => "product_filters",
+  
+  // Product related
+  PRODUCT_RELATED_ANY: (productId: StringOrUnknown) => `product:${productId}:related*`,
+  
+  // Category by slug
+  CATEGORY_BY_SLUG_ANY: (slug: StringOrUnknown) => `category:${slug}*`,
+  
+  // Brand by slug
+  BRAND_BY_SLUG_ANY: (slug: StringOrUnknown) => `brand:${slug}*`,
+  
+  // Blog by slug
+  BLOG_BY_SLUG_ANY: (slug: StringOrUnknown) => `blog:${slug}*`,
+  
+  // Wishlist by user
+  WISHLIST_BY_USER_ANY: (userId: StringOrUnknown) => `wishlist:user:${userId}*`,
 } as const;
 
 export type RedisPatternBuilders = typeof RedisPatterns;

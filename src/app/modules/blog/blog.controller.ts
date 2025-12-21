@@ -1,6 +1,6 @@
 import { asyncHandler } from '@/utils';
 import { RedisKeys } from '@/utils/redisKeys';
-import { invalidateBlogCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 import { CacheTTL } from '@/utils/cacheTTL';
 import { redis } from '@/config/redis';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
@@ -17,7 +17,7 @@ export const createBlog = asyncHandler(async (req, res) => {
   const blogData: any = createBlogValidation.parse(req.body);
   if (req.file) blogData.featuredImage = req.file?.path;
   const blog = await Blog.create(blogData);
-  await invalidateBlogCaches({});
+  await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Blog post created successfully', blog));
   return;
 });
@@ -170,10 +170,13 @@ export const updateBlog = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Blog not found');
   }
 
-  await invalidateBlogCaches({ 
-    blogId: String(existingBlog._id),
-    slug: oldSlug !== updatedBlog.slug ? oldSlug : undefined
-  });
+  await redis.deleteByPattern(RedisPatterns.BLOG_ANY(String(existingBlog._id)));
+  await redis.deleteByPattern(RedisPatterns.BLOG_BY_SLUG_ANY(oldSlug));
+  await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
+  
+  if (oldSlug !== updatedBlog.slug) {
+    await redis.deleteByPattern(RedisPatterns.BLOG_BY_SLUG_ANY(updatedBlog.slug));
+  }
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog updated successfully`, updatedBlog));
   return;
@@ -197,7 +200,9 @@ export const deleteBlog = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  await invalidateBlogCaches({ blogId: String(existingBlog._id) });
+  await redis.deleteByPattern(RedisPatterns.BLOG_ANY(String(existingBlog._id)));
+  await redis.deleteByPattern(RedisPatterns.BLOG_BY_SLUG_ANY(existingBlog.slug));
+  await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog deleted successfully`, deletedBlog));
   return;

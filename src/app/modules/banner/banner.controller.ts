@@ -1,6 +1,6 @@
 import { asyncHandler } from '@/utils';
 import { RedisKeys } from '@/utils/redisKeys';
-import { invalidateBannerCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 import { CacheTTL } from '@/utils/cacheTTL';
 import { redis } from '@/config/redis';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
@@ -17,7 +17,7 @@ export const createBanner = asyncHandler(async (req, res) => {
   const bannerData = createBannerValidation.parse(req.body);
   bannerData.image = req.file?.path;
   const banner = await Banner.create(bannerData);
-  await invalidateBannerCaches();
+  await redis.deleteByPattern(RedisPatterns.BANNERS_ALL());
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Banner created successfully', banner));
   return;
 });
@@ -131,7 +131,8 @@ export const updateBanner = asyncHandler(async (req, res) => {
 
   const updatedBanner = await Banner.findByIdAndUpdate(bannerId, bannerData, { new: true });
 
-  await invalidateBannerCaches(String(bannerId));
+  await redis.deleteByPattern(RedisPatterns.BANNER_ANY(String(bannerId)));
+  await redis.deleteByPattern(RedisPatterns.BANNERS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner updated successfully`, updatedBanner));
   return;
@@ -153,7 +154,8 @@ export const deleteBanner = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  await invalidateBannerCaches(String(bannerId));
+  await redis.deleteByPattern(RedisPatterns.BANNER_ANY(String(bannerId)));
+  await redis.deleteByPattern(RedisPatterns.BANNERS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner has been deleted successfully`, existingBanner));
   return;

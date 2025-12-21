@@ -8,7 +8,7 @@ import { Wishlist } from './wishlist.model';
 import { addOrRemoveProductValidation } from './wishlist.validation';
 import { Product } from '../product/product.model';
 import { Types } from 'mongoose';
-import { invalidateWishlistCaches } from '@/utils/invalidateCache';
+import { RedisPatterns } from '@/utils/redisKeys';
 
 const ApiError = getApiErrorClass('WISHLIST');
 const ApiResponse = getApiResponseClass('WISHLIST');
@@ -58,7 +58,7 @@ export const addProductToWishlist = asyncHandler(async (req, res) => {
     }
   }
 
-  await invalidateWishlistCaches(String(userId));
+  await redis.deleteByPattern(RedisPatterns.WISHLIST_BY_USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Product '${product.name}' added to wishlist`, wishlist));
   return;
@@ -85,7 +85,7 @@ export const removeProductFromWishlist = asyncHandler(async (req, res) => {
 
   await wishlist.save();
 
-  await invalidateWishlistCaches(String(userId));
+  await redis.deleteByPattern(RedisPatterns.WISHLIST_BY_USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Product removed from wishlist successfully', wishlist));
   return;
