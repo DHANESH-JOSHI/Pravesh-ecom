@@ -14,7 +14,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = require("../user/user.model");
 const http_status_1 = __importDefault(require("http-status"));
 const redis_1 = require("../../config/redis");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("WALLET");
 const ApiResponse = (0, interface_1.getApiResponseClass)("WALLET");
 exports.getAllWallets = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -119,7 +119,10 @@ exports.addFundsToWallet = (0, utils_1.asyncHandler)(async (req, res) => {
         createdAt: new Date(),
     });
     await wallet.save();
-    await (0, invalidateCache_1.invalidateWalletCaches)(String(userId));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.WALLET_BY_USER_ANY(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.WALLET_BALANCE(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.WALLET_TRANSACTIONS(String(userId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.WALLETS_ALL());
     res.json(new ApiResponse(http_status_1.default.OK, 'Funds added to wallet successfully', {
         userId: wallet.user,
         newBalance: wallet.balance

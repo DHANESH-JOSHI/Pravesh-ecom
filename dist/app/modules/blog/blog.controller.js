@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteBlog = exports.updateBlog = exports.getAllBlogs = exports.getBlogBySlug = exports.getBlogById = exports.createBlog = void 0;
 const utils_1 = require("../../utils");
 const redisKeys_1 = require("../../utils/redisKeys");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const cacheTTL_1 = require("../../utils/cacheTTL");
 const redis_1 = require("../../config/redis");
 const interface_1 = require("../../interface");
@@ -22,7 +22,7 @@ exports.createBlog = (0, utils_1.asyncHandler)(async (req, res) => {
     if (req.file)
         blogData.featuredImage = req.file?.path;
     const blog = await blog_model_1.Blog.create(blogData);
-    await (0, invalidateCache_1.invalidateBlogCaches)({});
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOGS_ALL());
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, 'Blog post created successfully', blog));
     return;
 });
@@ -141,10 +141,12 @@ exports.updateBlog = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!updatedBlog) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Blog not found');
     }
-    await (0, invalidateCache_1.invalidateBlogCaches)({
-        blogId: String(existingBlog._id),
-        slug: oldSlug !== updatedBlog.slug ? oldSlug : undefined
-    });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOG_ANY(String(existingBlog._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOG_BY_SLUG_ANY(oldSlug));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOGS_ALL());
+    if (oldSlug !== updatedBlog.slug) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOG_BY_SLUG_ANY(updatedBlog.slug));
+    }
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Blog updated successfully`, updatedBlog));
     return;
 });
@@ -158,7 +160,9 @@ exports.deleteBlog = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Blog not found');
     }
     const deletedBlog = await blog_model_1.Blog.findByIdAndUpdate(existingBlog._id, { isDeleted: true, isPublished: false }, { new: true });
-    await (0, invalidateCache_1.invalidateBlogCaches)({ blogId: String(existingBlog._id) });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOG_ANY(String(existingBlog._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOG_BY_SLUG_ANY(existingBlog.slug));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BLOGS_ALL());
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Blog deleted successfully`, deletedBlog));
     return;
 });

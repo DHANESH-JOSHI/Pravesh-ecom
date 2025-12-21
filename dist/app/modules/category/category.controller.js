@@ -16,7 +16,7 @@ const interface_1 = require("../../interface");
 const category_validation_1 = require("./category.validation");
 const product_model_1 = require("../product/product.model");
 const brand_controller_1 = require("../brand/brand.controller");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("CATEGORY");
 const ApiResponse = (0, interface_1.getApiResponseClass)("CATEGORY");
 exports.createCategory = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -39,7 +39,15 @@ exports.createCategory = (0, utils_1.asyncHandler)(async (req, res) => {
             parentCategory: parentCategoryId || null,
         });
     }
-    await (0, invalidateCache_1.invalidateCategoryCaches)();
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORIES_ALL());
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CATEGORY_TREE());
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CATEGORY_LEAF());
+    if (parentCategoryId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(String(parentCategoryId)));
+    }
+    if (category && category.slug) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_BY_SLUG_ANY(category.slug));
+    }
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, "Category created", category));
 });
 exports.getAllCategories = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -265,16 +273,30 @@ exports.updateCategory = (0, utils_1.asyncHandler)(async (req, res) => {
     //     }
     //   }
     // }
+    const oldParentCategoryId = category.parentCategory ? String(category.parentCategory) : undefined;
+    const newParentCategoryId = parentCategoryId || undefined;
+    const oldSlug = category.slug;
     const updatedCategory = await category_model_1.Category.findByIdAndUpdate(categoryId, {
         title,
         parentCategory: parentCategoryId,
         // image: req.file ? req.file.path : category.image,
     }, { new: true });
-    await (0, invalidateCache_1.invalidateCategoryCaches)(String(category._id));
-    for (const brand of category.brands) {
-        await (0, invalidateCache_1.invalidateBrandCaches)(String(brand));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(String(category._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_BY_SLUG_ANY(oldSlug));
+    if (updatedCategory && updatedCategory.slug !== oldSlug) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_BY_SLUG_ANY(updatedCategory.slug));
     }
-    await (0, invalidateCache_1.invalidateProductCaches)({ categoryId: String(category._id) });
+    if (oldParentCategoryId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(oldParentCategoryId));
+    }
+    if (oldParentCategoryId !== newParentCategoryId && newParentCategoryId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(newParentCategoryId));
+    }
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORIES_ALL());
+    if (oldParentCategoryId !== newParentCategoryId) {
+        await redis_1.redis.delete(redisKeys_1.RedisKeys.CATEGORY_TREE());
+        await redis_1.redis.delete(redisKeys_1.RedisKeys.CATEGORY_LEAF());
+    }
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Category updated successfully", updatedCategory));
     return;
 });
@@ -285,11 +307,14 @@ exports.deleteCategory = (0, utils_1.asyncHandler)(async (req, res) => {
     const deleted = await category_model_1.Category.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { new: true });
     if (!deleted)
         throw new ApiError(http_status_1.default.NOT_FOUND, "Category not found");
-    await (0, invalidateCache_1.invalidateCategoryCaches)(String(id));
-    for (const brand of deleted.brands) {
-        await (0, invalidateCache_1.invalidateBrandCaches)(String(brand));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(String(id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_BY_SLUG_ANY(deleted.slug));
+    if (deleted.parentCategory) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(String(deleted.parentCategory)));
     }
-    await (0, invalidateCache_1.invalidateProductCaches)({ categoryId: String(id) });
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CATEGORY_TREE());
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CATEGORY_LEAF());
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORIES_ALL());
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Category deleted", deleted));
 });
 async function countBrands(categoryId) {

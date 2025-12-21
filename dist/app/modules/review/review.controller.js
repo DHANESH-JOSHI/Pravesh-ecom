@@ -15,7 +15,7 @@ const product_model_1 = require("../product/product.model");
 const user_model_1 = require("../user/user.model");
 const review_model_1 = require("./review.model");
 const redis_1 = require("../../config/redis");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("REVIEW");
 const ApiResponse = (0, interface_1.getApiResponseClass)("REVIEW");
 const updateProductRating = async (productId, session) => {
@@ -52,7 +52,7 @@ const updateProductRating = async (productId, session) => {
         reviewCount,
         rating
     }, { session });
-    await (0, invalidateCache_1.invalidateProductCaches)({ productId: String(productId) });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(productId)));
     return;
 };
 exports.getReviewById = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -94,10 +94,10 @@ exports.createReview = (0, utils_1.asyncHandler)(async (req, res) => {
             }], { session }))[0];
         await updateProductRating(productId, session);
         await session.commitTransaction();
-        await (0, invalidateCache_1.invalidateReviewCaches)({
-            productId: String(review.product),
-            userId: String(userId),
-        });
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_BY_PRODUCT(String(review.product)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_BY_USER(String(userId)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_ALL());
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(review.product)));
         res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, "Review created successfully", review));
         return;
     }
@@ -299,11 +299,11 @@ exports.updateReview = (0, utils_1.asyncHandler)(async (req, res) => {
         await existingReview.save({ session });
         await updateProductRating(existingReview.product.toString(), session);
         await session.commitTransaction();
-        await (0, invalidateCache_1.invalidateReviewCaches)({
-            reviewId: String(reviewId),
-            productId: String(existingReview.product),
-            userId: String(userId),
-        });
+        await redis_1.redis.delete(redisKeys_1.RedisKeys.REVIEW_BY_ID(String(reviewId)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_BY_PRODUCT(String(existingReview.product)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_BY_USER(String(userId)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_ALL());
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Review updated successfully", existingReview));
         return;
     }
@@ -331,11 +331,11 @@ exports.deleteReview = (0, utils_1.asyncHandler)(async (req, res) => {
         await existingReview.deleteOne({ session });
         await updateProductRating(existingReview.product.toString(), session);
         await session.commitTransaction();
-        await (0, invalidateCache_1.invalidateReviewCaches)({
-            reviewId: String(reviewId),
-            productId: String(existingReview.product),
-            userId: String(userId),
-        });
+        await redis_1.redis.delete(redisKeys_1.RedisKeys.REVIEW_BY_ID(String(reviewId)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_BY_PRODUCT(String(existingReview.product)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_BY_USER(String(userId)));
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.REVIEWS_ALL());
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
         res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Review deleted successfully", existingReview));
         return;
     }

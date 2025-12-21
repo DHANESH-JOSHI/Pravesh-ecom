@@ -13,7 +13,7 @@ const http_status_1 = __importDefault(require("http-status"));
 const wishlist_model_1 = require("./wishlist.model");
 const wishlist_validation_1 = require("./wishlist.validation");
 const product_model_1 = require("../product/product.model");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)('WISHLIST');
 const ApiResponse = (0, interface_1.getApiResponseClass)('WISHLIST');
 exports.getWishlist = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -52,7 +52,7 @@ exports.addProductToWishlist = (0, utils_1.asyncHandler)(async (req, res) => {
             await wishlist.save();
         }
     }
-    await (0, invalidateCache_1.invalidateWishlistCaches)(String(userId));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.WISHLIST_BY_USER_ANY(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Product '${product.name}' added to wishlist`, wishlist));
     return;
 });
@@ -69,7 +69,7 @@ exports.removeProductFromWishlist = (0, utils_1.asyncHandler)(async (req, res) =
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Product not found in wishlist');
     }
     await wishlist.save();
-    await (0, invalidateCache_1.invalidateWishlistCaches)(String(userId));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.WISHLIST_BY_USER_ANY(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product removed from wishlist successfully', wishlist));
     return;
 });

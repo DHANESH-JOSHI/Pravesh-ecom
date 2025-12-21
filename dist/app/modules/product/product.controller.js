@@ -9,7 +9,7 @@ const product_model_1 = require("./product.model");
 const utils_1 = require("../../utils");
 const redisKeys_1 = require("../../utils/redisKeys");
 const cloudinary_1 = require("../../config/cloudinary");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const interface_1 = require("../../interface");
 const product_validation_1 = require("./product.validation");
 const category_model_1 = require("../category/category.model");
@@ -52,12 +52,17 @@ exports.createProduct = (0, utils_1.asyncHandler)(async (req, res) => {
         category: productData.categoryId,
         brand: productData.brandId,
     });
-    await (0, invalidateCache_1.invalidateProductCaches)({
-        productId: String(product._id),
-        productSlug: product.slug,
-        categoryId: String(product.category),
-        brandId: product.brand ? String(product.brand) : undefined,
-    });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(product._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(product.slug));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_RELATED_ANY(String(product._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCTS_ALL());
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.PRODUCT_FILTERS());
+    if (product.category) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(String(product.category)));
+    }
+    if (product.brand) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BRAND_ANY(String(product.brand)));
+    }
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, 'Product created successfully', product));
     return;
 });
@@ -328,22 +333,25 @@ exports.updateProduct = (0, utils_1.asyncHandler)(async (req, res) => {
     const newCategoryId = String(result.category);
     const oldBrandId = existingProduct.brand ? String(existingProduct.brand) : undefined;
     const newBrandId = result.brand ? String(result.brand) : undefined;
-    await (0, invalidateCache_1.invalidateProductCaches)({
-        productId: String(id),
-        productSlug: oldSlug,
-        categoryId: oldCategoryId,
-        brandId: oldBrandId,
-    });
-    if (newCategoryId !== oldCategoryId || newBrandId !== oldBrandId) {
-        await (0, invalidateCache_1.invalidateProductCaches)({
-            categoryId: newCategoryId,
-            brandId: newBrandId,
-        });
-    }
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(oldSlug));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_RELATED_ANY(String(id)));
     if (newSlug !== oldSlug) {
-        await (0, invalidateCache_1.invalidateProductCaches)({
-            productSlug: newSlug,
-        });
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(newSlug));
+    }
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCTS_ALL());
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.PRODUCT_FILTERS());
+    if (oldCategoryId && oldCategoryId !== newCategoryId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(oldCategoryId));
+    }
+    if (newCategoryId && newCategoryId !== oldCategoryId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(newCategoryId));
+    }
+    if (oldBrandId && oldBrandId !== newBrandId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BRAND_ANY(oldBrandId));
+    }
+    if (newBrandId && newBrandId !== oldBrandId) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BRAND_ANY(newBrandId));
     }
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product updated successfully', result));
     return;
@@ -358,12 +366,18 @@ exports.deleteProduct = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!deletedProduct) {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Product not found');
     }
-    await (0, invalidateCache_1.invalidateProductCaches)({
-        productId: String(id),
-        productSlug: product.slug,
-        categoryId: String(product.category),
-        brandId: product.brand ? String(product.brand) : undefined,
-    });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(String(id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_ANY(product.slug));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCT_RELATED_ANY(String(id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.PRODUCTS_ALL());
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.PRODUCT_FILTERS());
+    if (product.category) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CATEGORY_ANY(String(product.category)));
+    }
+    if (product.brand) {
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BRAND_ANY(String(product.brand)));
+    }
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CARTS_ALL());
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Product deleted successfully', deletedProduct));
 });
 exports.getRelatedProducts = (0, utils_1.asyncHandler)(async (req, res) => {

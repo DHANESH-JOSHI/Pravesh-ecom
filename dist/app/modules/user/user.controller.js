@@ -16,7 +16,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const user_interface_1 = require("./user.interface");
 const auth_validation_1 = require("../auth/auth.validation");
 const cloudinary_1 = require("../../config/cloudinary");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("USER");
 const ApiResponse = (0, interface_1.getApiResponseClass)("USER");
 exports.createUser = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -32,7 +32,7 @@ exports.createUser = (0, utils_1.asyncHandler)(async (req, res) => {
         await user.save({ session });
         await session.commitTransaction();
         session.endSession();
-        await (0, invalidateCache_1.invalidateUserCaches)();
+        await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USERS_ALL());
         const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
         res
             .status(http_status_1.default.CREATED)
@@ -92,7 +92,8 @@ exports.updateUser = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!updatedUser) {
         throw new ApiError(http_status_1.default.NOT_FOUND, "User not found");
     }
-    await (0, invalidateCache_1.invalidateUserCaches)(String(userId));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(userId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USERS_ALL());
     res.json(new ApiResponse(http_status_1.default.OK, "User updated successfully", updatedUser));
     return;
 });
@@ -220,7 +221,8 @@ exports.recoverUser = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     user.isDeleted = false;
     await user.save();
-    await (0, invalidateCache_1.invalidateUserCaches)(String(id));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USERS_ALL());
     res.json(new ApiResponse(http_status_1.default.OK, "User recovered successfully"));
     return;
 });
@@ -232,7 +234,8 @@ exports.deleteUser = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     user.isDeleted = true;
     await user.save();
-    await (0, invalidateCache_1.invalidateUserCaches)(String(id));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USERS_ALL());
     res.json(new ApiResponse(http_status_1.default.OK, "User deleted successfully"));
     return;
 });

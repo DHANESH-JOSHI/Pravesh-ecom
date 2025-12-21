@@ -13,7 +13,6 @@ const cloudinary_1 = require("../../config/cloudinary");
 const redis_1 = require("../../config/redis");
 const redisKeys_1 = require("../../utils/redisKeys");
 const cacheTTL_1 = require("../../utils/cacheTTL");
-const invalidateCache_1 = require("../../utils/invalidateCache");
 const ApiResponse = (0, interface_1.getApiResponseClass)("SETTING");
 exports.getSettings = (0, utils_1.asyncHandler)(async (_, res) => {
     const cacheKey = redisKeys_1.RedisKeys.SETTINGS_LIST();
@@ -46,7 +45,7 @@ exports.upsertSettings = (0, utils_1.asyncHandler)(async (req, res) => {
         Object.assign(setting, payload);
         await setting.save();
     }
-    await (0, invalidateCache_1.invalidateSettingCaches)();
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.SETTINGS_LIST());
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Settings saved successfully", setting));
     return;
 });

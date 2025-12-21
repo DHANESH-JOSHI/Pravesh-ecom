@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteBanner = exports.updateBanner = exports.getBannerById = exports.getAllBanners = exports.createBanner = void 0;
 const utils_1 = require("../../utils");
 const redisKeys_1 = require("../../utils/redisKeys");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const cacheTTL_1 = require("../../utils/cacheTTL");
 const redis_1 = require("../../config/redis");
 const interface_1 = require("../../interface");
@@ -21,7 +21,7 @@ exports.createBanner = (0, utils_1.asyncHandler)(async (req, res) => {
     const bannerData = banner_validation_1.createBannerValidation.parse(req.body);
     bannerData.image = req.file?.path;
     const banner = await banner_model_1.Banner.create(bannerData);
-    await (0, invalidateCache_1.invalidateBannerCaches)();
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BANNERS_ALL());
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, 'Banner created successfully', banner));
     return;
 });
@@ -115,7 +115,8 @@ exports.updateBanner = (0, utils_1.asyncHandler)(async (req, res) => {
         }
     }
     const updatedBanner = await banner_model_1.Banner.findByIdAndUpdate(bannerId, bannerData, { new: true });
-    await (0, invalidateCache_1.invalidateBannerCaches)(String(bannerId));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BANNER_ANY(String(bannerId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BANNERS_ALL());
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Banner updated successfully`, updatedBanner));
     return;
 });
@@ -129,7 +130,8 @@ exports.deleteBanner = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Banner not found');
     }
     await banner_model_1.Banner.findByIdAndUpdate(bannerId, { isDeleted: true }, { new: true });
-    await (0, invalidateCache_1.invalidateBannerCaches)(String(bannerId));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BANNER_ANY(String(bannerId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.BANNERS_ALL());
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, `Banner has been deleted successfully`, existingBanner));
     return;
 });

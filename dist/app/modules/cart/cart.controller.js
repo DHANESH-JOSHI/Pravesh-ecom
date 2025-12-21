@@ -48,7 +48,7 @@ const cart_validation_1 = require("./cart.validation");
 const http_status_1 = __importDefault(require("http-status"));
 const redis_1 = require("../../config/redis");
 const user_model_1 = require("../user/user.model");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("CART");
 const ApiResponse = (0, interface_1.getApiResponseClass)("CART");
 exports.getCartById = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -243,10 +243,9 @@ exports.addToCart = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     await cart.addItem(productId, quantity);
     const populatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
-    await (0, invalidateCache_1.invalidateCartCaches)({
-        cartId: String(cart._id),
-        userId: String(userId),
-    });
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_BY_ID(String(cart._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Item added to cart successfully', populatedCart));
     return;
 });
@@ -281,10 +280,9 @@ exports.updateCartItem = (0, utils_1.asyncHandler)(async (req, res) => {
         throw error;
     }
     const updatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
-    await (0, invalidateCache_1.invalidateCartCaches)({
-        cartId: String(cart._id),
-        userId: String(userId),
-    });
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_BY_ID(String(cart._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart item updated successfully', updatedCart));
     return;
 });
@@ -300,10 +298,9 @@ exports.removeFromCart = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     await cart.removeItem(new mongoose_1.Types.ObjectId(productId));
     const updatedCart = await cart_model_1.Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
-    await (0, invalidateCache_1.invalidateCartCaches)({
-        cartId: String(cart._id),
-        userId: String(userId),
-    });
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_BY_ID(String(cart._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Item removed from cart successfully', updatedCart));
     return;
 });
@@ -314,10 +311,9 @@ exports.clearCart = (0, utils_1.asyncHandler)(async (req, res) => {
         throw new ApiError(http_status_1.default.NOT_FOUND, 'Cart not found');
     }
     await cart.clearCart();
-    await (0, invalidateCache_1.invalidateCartCaches)({
-        cartId: String(cart._id),
-        userId: String(userId),
-    });
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_BY_ID(String(cart._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Cart cleared successfully', {
         user: userId,
         items: [],
@@ -371,10 +367,9 @@ exports.checkoutCart = (0, utils_1.asyncHandler)(async (req, res) => {
         // }
         totalPrice += item.quantity * product.originalPrice;
     }
-    await (0, invalidateCache_1.invalidateCartCaches)({
-        cartId: String(cart._id),
-        userId: String(userId),
-    });
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_BY_ID(String(cart._id)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, 'Checkout successful', { totalPrice }));
     return;
 });

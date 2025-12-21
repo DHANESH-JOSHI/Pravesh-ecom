@@ -7,7 +7,6 @@ import { cloudinary } from "@/config/cloudinary";
 import { redis } from "@/config/redis";
 import { RedisKeys } from "@/utils/redisKeys";
 import { CacheTTL } from "@/utils/cacheTTL";
-import { RedisPatterns } from "@/utils/redisKeys";
 
 const ApiResponse = getApiResponseClass("SETTING");
 

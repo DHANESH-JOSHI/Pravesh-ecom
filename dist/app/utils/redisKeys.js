@@ -105,9 +105,20 @@ exports.RedisPatterns = {
     ORDER_ANY: (orderId) => `order:${orderId}`,
     // Wallets
     WALLETS_ALL: () => "wallets*",
+    WALLET_BY_USER_ANY: (userId) => `wallet:user:${userId}*`,
     // Dashboard
     DASHBOARD_ALL: () => "dashboard:stats*",
     // Product filters
     PRODUCT_FILTERS: () => "product_filters",
+    // Product related
+    PRODUCT_RELATED_ANY: (productId) => `product:${productId}:related*`,
+    // Category by slug
+    CATEGORY_BY_SLUG_ANY: (slug) => `category:${slug}*`,
+    // Brand by slug
+    BRAND_BY_SLUG_ANY: (slug) => `brand:${slug}*`,
+    // Blog by slug
+    BLOG_BY_SLUG_ANY: (slug) => `blog:${slug}*`,
+    // Wishlist by user
+    WISHLIST_BY_USER_ANY: (userId) => `wishlist:user:${userId}*`,
 };
 //# sourceMappingURL=redisKeys.js.map

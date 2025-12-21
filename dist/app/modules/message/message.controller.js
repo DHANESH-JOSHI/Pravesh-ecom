@@ -13,7 +13,7 @@ const interface_1 = require("../../interface");
 const http_status_1 = __importDefault(require("http-status"));
 const setting_model_1 = require("../setting/setting.model");
 const redis_1 = require("../../config/redis");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("CONTACT");
 const ApiResponse = (0, interface_1.getApiResponseClass)("CONTACT");
 exports.createMessage = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -23,7 +23,7 @@ exports.createMessage = (0, utils_1.asyncHandler)(async (req, res) => {
     if (setting?.email) {
         await (0, utils_1.sendEmail)(setting.email, `New contact message: ${subject || "(no subject)"}`, `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`);
     }
-    await (0, invalidateCache_1.invalidateMessageCaches)();
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.MESSAGES_ALL());
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, "Message received", { id: contact._id }));
     return;
 });
@@ -88,7 +88,8 @@ exports.resolveMessage = (0, utils_1.asyncHandler)(async (req, res) => {
     const updated = await message_model_1.Message.findOneAndUpdate({ _id: id, isDeleted: false }, { status: "resolved" }, { new: true });
     if (!updated)
         throw new ApiError(http_status_1.default.NOT_FOUND, "Message not found");
-    await (0, invalidateCache_1.invalidateMessageCaches)(id);
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.MESSAGE_BY_ID(id));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.MESSAGES_ALL());
     res.json(new ApiResponse(http_status_1.default.OK, "Message marked as resolved", updated));
     return;
 });
@@ -97,7 +98,8 @@ exports.deleteMessage = (0, utils_1.asyncHandler)(async (req, res) => {
     const deleted = await message_model_1.Message.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { new: true });
     if (!deleted)
         throw new ApiError(http_status_1.default.NOT_FOUND, "Message not found");
-    await (0, invalidateCache_1.invalidateMessageCaches)(id);
+    await redis_1.redis.delete(redisKeys_1.RedisKeys.MESSAGE_BY_ID(id));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.MESSAGES_ALL());
     res.json(new ApiResponse(http_status_1.default.OK, "Message deleted", deleted));
     return;
 });

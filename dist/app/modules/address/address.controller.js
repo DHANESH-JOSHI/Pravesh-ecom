@@ -14,7 +14,7 @@ const http_status_1 = __importDefault(require("http-status"));
 const interface_1 = require("../../interface");
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = require("../user/user.model");
-const invalidateCache_1 = require("../../utils/invalidateCache");
+const redisKeys_2 = require("../../utils/redisKeys");
 const ApiError = (0, interface_1.getApiErrorClass)("ADDRESS");
 const ApiResponse = (0, interface_1.getApiResponseClass)("ADDRESS");
 exports.createAddress = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -27,7 +27,9 @@ exports.createAddress = (0, utils_1.asyncHandler)(async (req, res) => {
     if (!address) {
         throw new ApiError(http_status_1.default.INTERNAL_SERVER_ERROR, "Failed to create address");
     }
-    await (0, invalidateCache_1.invalidateAddressCaches)({ userId: String(address.user) });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_BY_USER(String(address.user)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_ALL());
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(address.user)));
     res.status(http_status_1.default.CREATED).json(new ApiResponse(http_status_1.default.CREATED, "Address created successfully", address));
     return;
 });
@@ -94,7 +96,10 @@ exports.updateMyAddress = (0, utils_1.asyncHandler)(async (req, res) => {
     const updatedAddress = await address_model_1.Address.findByIdAndUpdate(existingAddress._id, {
         ...validatedData,
     }, { new: true });
-    await (0, invalidateCache_1.invalidateAddressCaches)({ addressId: String(addressId), userId: String(userId) });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESS_ANY(String(addressId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_BY_USER(String(userId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_ALL());
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Address updated successfully", updatedAddress));
     return;
 });
@@ -114,7 +119,10 @@ exports.deleteMyAddress = (0, utils_1.asyncHandler)(async (req, res) => {
     }
     existingAddress.isDeleted = true;
     await existingAddress.save();
-    await (0, invalidateCache_1.invalidateAddressCaches)({ addressId: String(addressId), userId: String(userId) });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESS_ANY(String(addressId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_BY_USER(String(userId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_ALL());
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Address deleted successfully"));
 });
 exports.getMyAddresses = (0, utils_1.asyncHandler)(async (req, res) => {
@@ -157,7 +165,9 @@ exports.setDefaultAddress = (0, utils_1.asyncHandler)(async (req, res) => {
     await address_model_1.Address.findOneAndUpdate({ user: userId, isDefault: true, isDeleted: false }, { $set: { isDefault: false } });
     address.isDefault = true;
     await address.save();
-    await (0, invalidateCache_1.invalidateAddressCaches)({ userId: String(userId) });
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_BY_USER(String(userId)));
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.ADDRESSES_ALL());
+    await redis_1.redis.deleteByPattern(redisKeys_2.RedisPatterns.USER_ANY(String(userId)));
     res.status(http_status_1.default.OK).json(new ApiResponse(http_status_1.default.OK, "Default address set successfully"));
     return;
 });
