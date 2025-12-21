@@ -4,11 +4,22 @@ import { settingValidation } from "./setting.validation";
 import { getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { cloudinary } from "@/config/cloudinary";
+import { redis } from "@/config/redis";
+import { RedisKeys } from "@/utils/redisKeys";
+import { CacheTTL } from "@/utils/cacheTTL";
+import { invalidateSettingCaches } from "@/utils/invalidateCache";
 
 const ApiResponse = getApiResponseClass("SETTING");
 
 export const getSettings = asyncHandler(async (_, res) => {
+  const cacheKey = RedisKeys.SETTINGS_LIST();
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    res.status(status.OK).json(new ApiResponse(status.OK, "Settings retrieved successfully", cached));
+    return;
+  }
   const setting = await Setting.findOne().lean();
+  await redis.set(cacheKey, setting || {}, CacheTTL.XLONG);
   res.status(status.OK).json(new ApiResponse(status.OK, "Settings retrieved successfully", setting || {}));
   return;
 });
@@ -31,6 +42,8 @@ export const upsertSettings = asyncHandler(async (req, res) => {
     Object.assign(setting, payload);
     await setting.save();
   }
+
+  await invalidateSettingCaches();
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Settings saved successfully", setting));
   return;

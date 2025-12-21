@@ -34,8 +34,7 @@ const productSchema = new Schema<IProduct>(
     //   default: [],
     // },
     specifications: {
-      type: Map,
-      of: String,
+      type: Object,
       default: {},
     },
 
@@ -146,6 +145,35 @@ productSchema.pre("save", function (next) {
   // } else if (this.stock >= this.minStock && this.stockStatus !== StockStatus.InStock) {
   //   this.stockStatus = StockStatus.InStock;
   // }
+  next();
+});
+
+productSchema.pre("findOneAndUpdate", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const productId = query._id;
+    const Review = mongoose.model("Review");
+    const Cart = mongoose.model("Cart");
+    const Wishlist = mongoose.model("Wishlist");
+    
+    const product = await Product.findOne({ _id: productId, isDeleted: false });
+    if (product) {
+      await Promise.all([
+        Review.deleteMany({ product: productId }),
+        Cart.updateMany(
+          { "items.product": productId },
+          { $pull: { items: { product: productId } } }
+        ),
+        Wishlist.updateMany(
+          { items: productId },
+          { $pull: { items: productId } }
+        )
+      ]);
+    }
+  }
+  
   next();
 });
 

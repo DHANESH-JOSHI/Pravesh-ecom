@@ -1,18 +1,21 @@
 import { Wallet } from './wallet.model';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
-import { asyncHandler, generateCacheKey } from '@/utils';
+import { asyncHandler } from '@/utils';
+import { RedisKeys } from '@/utils/redisKeys';
+import { CacheTTL } from '@/utils/cacheTTL';
 import { addFundsValidation } from './wallet.validation';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
 import status from 'http-status';
 import { redis } from '@/config/redis';
+import { invalidateWalletCaches } from '@/utils/invalidateCache';
 const ApiError = getApiErrorClass("WALLET");
 const ApiResponse = getApiResponseClass("WALLET");
 
 export const getAllWallets = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, user } = req.query;
 
-  const cacheKey = generateCacheKey("wallets", req.query);
+  const cacheKey = RedisKeys.WALLETS_LIST(req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
 
   if (cached)
@@ -36,7 +39,8 @@ export const getAllWallets = asyncHandler(async (req, res) => {
             { name: { $regex: userRegex } },
             { email: { $regex: userRegex } },
             { phone: { $regex: userRegex } }
-          ]
+          ],
+          isDeleted: false
         },
         { _id: 1 }
       );
@@ -60,6 +64,7 @@ export const getAllWallets = asyncHandler(async (req, res) => {
       localField: "user",
       foreignField: "_id",
       pipeline: [
+        { $match: { isDeleted: false } },
         { $project: { _id: 1, name: 1, email: 1 } }
       ],
       as: "user"
@@ -87,7 +92,7 @@ export const getAllWallets = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res
     .status(status.OK)
@@ -96,7 +101,7 @@ export const getAllWallets = asyncHandler(async (req, res) => {
 
 export const getWalletBalance = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const cacheKey = `wallet:balance:${userId}`;
+  const cacheKey = RedisKeys.WALLET_BALANCE(String(userId));
   const cachedBalance = await redis.get(cacheKey);
   if (cachedBalance) {
     return res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', cachedBalance));
@@ -108,7 +113,7 @@ export const getWalletBalance = asyncHandler(async (req, res) => {
   }
 
   const result = { balance: wallet.balance };
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.MEDIUM);
 
   res.json(new ApiResponse(status.OK, 'Wallet balance retrieved', result));
   return;
@@ -121,7 +126,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid user ID');
   }
-  const user = await User.findById(userId);
+  const user = await User.findOne({ _id: userId, isDeleted: false });
   if (!user) {
     throw new ApiError(status.NOT_FOUND, 'User not found');
   }
@@ -139,9 +144,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 
   await wallet.save();
 
-  await redis.delete(`wallet:balance:${userId}`);
-  await redis.delete(`wallet:transactions:${userId}`);
-  await redis.deleteByPattern('wallets*');
+  await invalidateWalletCaches(String(userId));
 
   res.json(new ApiResponse(status.OK, 'Funds added to wallet successfully', {
     userId: wallet.user,
@@ -152,7 +155,7 @@ export const addFundsToWallet = asyncHandler(async (req, res) => {
 
 export const getTransactions = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const cacheKey = `wallet:transactions:${userId}`;
+  const cacheKey = RedisKeys.WALLET_TRANSACTIONS(String(userId));
   const cachedTransactions = await redis.get(cacheKey);
   if (cachedTransactions) {
     return res.json(new ApiResponse(status.OK, 'Transactions retrieved', cachedTransactions));
@@ -166,7 +169,7 @@ export const getTransactions = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Wallet not found');
   }
 
-  await redis.set(cacheKey, wallet.transactions, 600);
+  await redis.set(cacheKey, wallet.transactions, CacheTTL.MEDIUM);
   res.json(new ApiResponse(status.OK, 'Transactions retrieved', wallet.transactions));
   return;
 });

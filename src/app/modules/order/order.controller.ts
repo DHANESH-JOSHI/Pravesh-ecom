@@ -1,4 +1,5 @@
-import { asyncHandler, generateCacheKey } from '@/utils';
+import { asyncHandler } from "@/utils";
+import { CacheTTL } from "@/utils/cacheTTL";
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { Order } from './order.model';
 import { Cart } from '../cart/cart.model';
@@ -9,7 +10,9 @@ import mongoose, { Types } from 'mongoose';
 import { Address } from '../address/address.model';
 import status from 'http-status';
 import { Product } from '../product/product.model';
-import { redis } from '@/config/redis';
+import { redis } from "@/config/redis";
+import { RedisKeys } from "@/utils/redisKeys";
+import { invalidateOrderCaches, invalidateCartCaches, invalidateWalletCaches } from '@/utils/invalidateCache';
 import { User } from '../user/user.model';
 // import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
@@ -80,9 +83,11 @@ export const createOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await redis.deleteByPattern(`orders:user:${userId}*`);
-    await redis.deleteByPattern('orders*');
-    await redis.delete('dashboard:stats');
+    await invalidateOrderCaches({
+      userId: String(userId),
+      touchesProducts: true,
+    });
+    await invalidateCartCaches({ userId: String(userId) });
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
     return;
@@ -113,9 +118,9 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     image: customOrderImage,
   });
 
-  await redis.deleteByPattern(`orders:user:${userId}*`);
-  await redis.deleteByPattern('orders*');
-  await redis.delete('dashboard:stats');
+  await invalidateOrderCaches({
+    userId: String(userId),
+  });
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
   return;
@@ -157,10 +162,10 @@ export const updateOrder = asyncHandler(async (req, res) => {
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
 
-  await redis.delete(`order:${orderId}`);
-  await redis.deleteByPattern(`orders:user:${order.user}*`);
-  await redis.deleteByPattern('orders*');
-  await redis.delete('dashboard:stats');
+  await invalidateOrderCaches({
+    orderId,
+    userId: String(order.user),
+  });
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order updated successfully', order));
   return;
@@ -219,10 +224,11 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await redis.deleteByPattern(`orders:user:${userId}*`);
-    await redis.delete(`order:${orderId}`);
-    await redis.deleteByPattern('orders*');
-    await redis.delete('dashboard:stats');
+    await invalidateOrderCaches({
+      orderId,
+      userId: String(userId),
+    });
+    await invalidateWalletCaches(String(userId));
 
     res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
     return;
@@ -239,7 +245,7 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 export const getMyOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
-  const cacheKey = generateCacheKey(`orders:user:${userId}`, req.query);
+  const cacheKey = RedisKeys.ORDERS_BY_USER(String(userId), req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
   if (cached) {
     return res
@@ -317,7 +323,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
   }
 
   pipeline.push({ $match: { user: new mongoose.Types.ObjectId(userId as string) } });
- 
+
   if (statusQuery) {
     pipeline.push({ $match: { status: statusQuery } });
   }
@@ -403,7 +409,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
     totalPages: Math.ceil(total / Number(limit)),
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   return res
     .status(status.OK)
@@ -413,7 +419,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 
 export const getOrderById = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
-  const cacheKey = `order:${orderId}`;
+  const cacheKey = RedisKeys.ORDER_BY_ID(orderId);
   const cachedOrder = await redis.get(cacheKey);
 
   if (cachedOrder) {
@@ -428,6 +434,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
       {
         path: 'user',
         select: 'name email',
+        match: { isDeleted: false },
         populate: {
           path: 'wallet',
           select: 'balance'
@@ -439,11 +446,13 @@ export const getOrderById = asyncHandler(async (req, res) => {
         populate: [
           {
             path: 'category',
-            select: 'slug title path'
+            select: 'slug title path',
+            match: { isDeleted: false }
           },
           {
             path: 'brand',
-            select: 'name slug'
+            select: 'name slug',
+            match: { isDeleted: false }
           }
         ]
       },
@@ -457,14 +466,15 @@ export const getOrderById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
-  await redis.set(cacheKey, order, 600);
+  const orderObj = (order as any)?.toObject ? (order as any).toObject() : order;
+  await redis.set(cacheKey, orderObj, CacheTTL.SHORT);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Order retrieved successfully', order));
   return;
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey("orders", req.query);
+  const cacheKey = RedisKeys.ORDERS_LIST(req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
 
   if (cached)
@@ -485,20 +495,21 @@ export const getAllOrders = asyncHandler(async (req, res) => {
       filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
       const userRegex = new RegExp(user as string, 'i');
-      
+
       const users = await User.find(
         {
           $or: [
             { name: { $regex: userRegex } },
             { email: { $regex: userRegex } },
             { phone: { $regex: userRegex } }
-          ]
+          ],
+          isDeleted: false
         },
         { _id: 1 }
       );
-      
+
       const userIds = users.map((u) => u._id);
-      
+
       filter.user = userIds.length > 0 ? { $in: userIds } : [];
     }
 }
@@ -516,6 +527,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
       localField: "user",
       foreignField: "_id",
       pipeline: [
+        { $match: { isDeleted: false } },
         { $project: { _id: 1, name: 1, email: 1 } }
       ],
       as: "user"
@@ -542,7 +554,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res
     .status(status.OK)
@@ -635,8 +647,6 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         }
       );
     }
-
-    await redis.deleteByPattern('products*');
   }
   else if (oldStatus === OrderStatus.Delivered) {
     throw new ApiError(status.BAD_REQUEST, 'Order is already completed, cannot do anything anymore');
@@ -671,10 +681,22 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
-  await redis.delete('dashboard:stats');
-  await redis.deleteByPattern(`orders:user:${order.user}*`);
-  await redis.deleteByPattern("orders*");
-  await redis.delete(`order:${orderId}`);
+  const productsTouched = oldStatus === OrderStatus.OutForDelivery && newStatus === OrderStatus.Delivered;
+  
+  const walletTouched = 
+    (oldStatus === OrderStatus.Received && newStatus === OrderStatus.Confirmed) ||
+    (oldStatus === OrderStatus.Approved && newStatus === OrderStatus.Confirmed) ||
+    (oldStatus === OrderStatus.Cancelled && newStatus === OrderStatus.Refunded);
+
+  await invalidateOrderCaches({
+    orderId,
+    userId: String(order.user),
+    touchesProducts: productsTouched,
+  });
+  
+  if (walletTouched) {
+    await invalidateWalletCaches(String(order.user));
+  }
 
   return res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order status updated successfully', order)
@@ -682,14 +704,14 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 });
 
 export const cancelOrder = asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
+  const userId = req.user?._id;
   const { id: orderId } = req.params;
 
   const order = await Order.findById(orderId);
   if (!order) {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
-  if (order.user !== userId) {
+  if (String(order.user) !== String(userId)) {
     throw new ApiError(status.FORBIDDEN, 'You are not authorized to cancel this order');
   }
   if (![OrderStatus.Received, OrderStatus.Approved, OrderStatus.Confirmed].includes(order.status)) {
@@ -698,10 +720,10 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   order.status = OrderStatus.Cancelled;
   await order.save();
 
-  await redis.deleteByPattern(`orders:user:${userId}*`);
-  await redis.delete(`order:${orderId}`);
-  await redis.deleteByPattern('orders*');
-  await redis.delete('dashboard:stats');
+  await invalidateOrderCaches({
+    orderId,
+    userId: String(userId),
+  });
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order canceled successfully', order)

@@ -1,10 +1,13 @@
-import { asyncHandler, generateCacheKey, sendEmail } from "@/utils";
+import { asyncHandler, sendEmail } from "@/utils";
+import { RedisKeys } from '@/utils/redisKeys';
+import { CacheTTL } from "@/utils/cacheTTL";
 import { Message } from "./message.model";
 import { createMessageValidation } from "./message.validation";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { Setting } from "../setting/setting.model";
 import { redis } from "@/config/redis";
+import { invalidateMessageCaches } from '@/utils/invalidateCache';
 
 const ApiError = getApiErrorClass("CONTACT");
 const ApiResponse = getApiResponseClass("CONTACT");
@@ -21,13 +24,13 @@ export const createMessage = asyncHandler(async (req, res) => {
       `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`
     );
   }
-  await redis.deleteByPattern("messages*");
+  await invalidateMessageCaches();
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Message received", { id: contact._id }));
   return;
 });
 
 export const listMessages = asyncHandler(async (req, res) => {
-  const cacheKey = generateCacheKey("messages", req.query);
+  const cacheKey = RedisKeys.MESSAGES_LIST(req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
   if (cached) {
     return res
@@ -64,7 +67,7 @@ export const listMessages = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result, 3600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res.json(new ApiResponse(status.OK, "Messages retrieved", result));
   return;
@@ -72,14 +75,15 @@ export const listMessages = asyncHandler(async (req, res) => {
 
 export const getMessageById = asyncHandler(async (req, res) => {
   const id = req.params.id;
-  const cachekey = `message:${id}`;
+  const cachekey = RedisKeys.MESSAGE_BY_ID(id);
   const cached = await redis.get(cachekey);
   if (cached) {
     return res.json(new ApiResponse(status.OK, "Message retrieved", cached));
   }
   const contact = await Message.findOne({ _id: id, isDeleted: false });
   if (!contact) throw new ApiError(status.NOT_FOUND, "Message not found");
-  await redis.set(cachekey, contact, 3600);
+  const contactObj = (contact as any)?.toObject ? (contact as any).toObject() : contact;
+  await redis.set(cachekey, contactObj, CacheTTL.LONG);
   res.json(new ApiResponse(status.OK, "Message retrieved", contact));
   return;
 });
@@ -88,8 +92,7 @@ export const resolveMessage = asyncHandler(async (req, res) => {
   const id = req.params.id;
   const updated = await Message.findOneAndUpdate({ _id: id, isDeleted: false }, { status: "resolved" }, { new: true });
   if (!updated) throw new ApiError(status.NOT_FOUND, "Message not found");
-  await redis.delete(`message:${id}`);
-  await redis.deleteByPattern("messages*");
+  await invalidateMessageCaches(id);
   res.json(new ApiResponse(status.OK, "Message marked as resolved", updated));
   return;
 });
@@ -98,8 +101,7 @@ export const deleteMessage = asyncHandler(async (req, res) => {
   const id = req.params.id;
   const deleted = await Message.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { new: true });
   if (!deleted) throw new ApiError(status.NOT_FOUND, "Message not found");
-  await redis.delete(`message:${id}`);
-  await redis.deleteByPattern("messages*");
+  await invalidateMessageCaches(id);
   res.json(new ApiResponse(status.OK, "Message deleted", deleted));
   return;
 });

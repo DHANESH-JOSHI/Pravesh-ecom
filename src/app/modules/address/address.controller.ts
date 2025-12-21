@@ -1,4 +1,6 @@
-import { asyncHandler, generateCacheKey } from "@/utils";
+import { asyncHandler } from "@/utils";
+import { RedisKeys } from "@/utils/redisKeys";
+import { CacheTTL } from "@/utils/cacheTTL";
 import { redis } from "@/config/redis";
 import { AddressValidation } from "./address.validation";
 import { Address } from "./address.model";
@@ -6,6 +8,7 @@ import status from "http-status";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import mongoose from "mongoose";
 import { User } from "../user/user.model";
+import { invalidateAddressCaches } from '@/utils/invalidateCache';
 const ApiError = getApiErrorClass("ADDRESS");
 const ApiResponse = getApiResponseClass("ADDRESS");
 
@@ -22,9 +25,7 @@ export const createAddress = asyncHandler(async (req, res) => {
     throw new ApiError(status.INTERNAL_SERVER_ERROR, "Failed to create address");
   }
 
-  await redis.deleteByPattern(`addresses:user:${address.user}*`);
-  await redis.deleteByPattern('addresses:all*');
-  await redis.deleteByPattern(`users:${address.user}?populate=true`);
+  await invalidateAddressCaches({ userId: String(address.user) });
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Address created successfully", address));
   return;
@@ -33,7 +34,7 @@ export const createAddress = asyncHandler(async (req, res) => {
 export const getAddressById = asyncHandler(async (req, res) => {
   const { populate = 'false' } = req.query;
   const addressId = req.params.id;
-  const cacheKey = generateCacheKey(`address:${addressId}`, req.query)
+  const cacheKey = RedisKeys.ADDRESS_BY_ID(addressId, req.query as Record<string, any>);
   const cacheValue = await redis.get(cacheKey);
   if (cacheValue) {
     res.status(status.OK).json(new ApiResponse(status.OK, "Address retrieved successfully", cacheValue));
@@ -69,7 +70,8 @@ export const getAddressById = asyncHandler(async (req, res) => {
   if (!address) {
     throw new ApiError(status.NOT_FOUND, "Address not found or you are not authorized to access it");
   }
-  await redis.set(cacheKey, address, 600);
+  const addressObj = (address as any)?.toObject ? (address as any).toObject() : address;
+  await redis.set(cacheKey, addressObj, CacheTTL.LONG);
   res.status(status.OK).json(new ApiResponse(status.OK, "Address retrieved successfully", address));
   return;
 })
@@ -93,10 +95,10 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
     ...validatedData,
   }, { new: true });
 
-  await redis.deleteByPattern(`address:${addressId}*`);
-  await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.delete(`users:${userId}?populate=true`);
-  await redis.deleteByPattern('addresses:all*');
+  await invalidateAddressCaches({ addressId: String(addressId), userId: String(userId) });
+
+
+
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address updated successfully", updatedAddress));
   return;
@@ -119,10 +121,10 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
   existingAddress.isDeleted = true;
   await existingAddress.save();
 
-  await redis.deleteByPattern(`address:${addressId}*`);
-  await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.delete(`users:${userId}?populate=true`);
-  await redis.deleteByPattern('addresses:all*');
+  await invalidateAddressCaches({ addressId: String(addressId), userId: String(userId) });
+
+
+
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Address deleted successfully"));
 })
@@ -130,7 +132,7 @@ export const deleteMyAddress = asyncHandler(async (req, res) => {
 export const getMyAddresses = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { page = 1, limit = 10 } = req.query;
-  const cacheKey = generateCacheKey(`addresses:user:${userId}`, req.query);
+  const cacheKey = RedisKeys.ADDRESSES_BY_USER(String(userId), req.query as Record<string, any>);
   const cachedAddresses = await redis.get(cacheKey);
 
   if (cachedAddresses) {
@@ -154,7 +156,7 @@ export const getMyAddresses = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Addresses retrieved successfully", result));
 })
@@ -162,7 +164,7 @@ export const getMyAddresses = asyncHandler(async (req, res) => {
 export const setDefaultAddress = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { id } = req.params;
-  const address = await Address.findById(id);
+  const address = await Address.findOne({ _id: id, isDeleted: false });
   if (!address) {
     return res.status(status.NOT_FOUND).json(new ApiResponse(status.NOT_FOUND, "Address not found"));
   }
@@ -170,14 +172,14 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
     throw new ApiError(status.FORBIDDEN, "You are not authorized to set this address as default");
   }
   await Address.findOneAndUpdate(
-    { user: userId, isDefault: true },
+    { user: userId, isDefault: true, isDeleted: false },
     { $set: { isDefault: false } }
   );
   address.isDefault = true;
   await address.save();
-  await redis.deleteByPattern(`addresses:user:${userId}*`);
-  await redis.delete(`users:${userId}?populate=true`);
-  await redis.deleteByPattern(`address:${id}*`);
+  await invalidateAddressCaches({ userId: String(userId) });
+
+
   res.status(status.OK).json(new ApiResponse(status.OK, "Default address set successfully"));
   return;
 })
@@ -185,7 +187,7 @@ export const setDefaultAddress = asyncHandler(async (req, res) => {
 export const getAllAddresses = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, user, isDeleted } = req.query;
 
-  const cacheKey = generateCacheKey("addresses:all", req.query);
+  const cacheKey = RedisKeys.ADDRESSES_LIST(req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
 
   if (cached)
@@ -207,11 +209,12 @@ export const getAllAddresses = asyncHandler(async (req, res) => {
           { name: { $regex: userRegex } },
           { email: { $regex: userRegex } },
           { phone: { $regex: userRegex } },
-        ]
+        ],
+        isDeleted: false
       }, { _id: 1 });
 
       const userIds = users.map((u) => u._id);
-      
+
       filter.user = userIds.length > 0 ? { $in: userIds } : new mongoose.Types.ObjectId(0);
     }
 }
@@ -237,12 +240,12 @@ if (search) {
     const combinedMatch = {
       $and: [
         searchCriteria,
-        filter 
+        filter
       ]
     };
-    
+
     pipeline.push({ $match: combinedMatch });
-    
+
 } else {
     pipeline.push({ $match: filter });
 }
@@ -264,7 +267,7 @@ pipeline.push({ $limit: Number(limit) });
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res
     .status(status.OK)

@@ -7,8 +7,7 @@ const brandSchema = new mongoose.Schema<IBrand>(
   {
     name: {
       type: String,
-      required: true,
-      unique: true
+      required: true
     },
     slug: { type: String, required: true, unique: true, lowercase: true },
     image: {
@@ -47,5 +46,39 @@ brandSchema.pre("validate", async function (next) {
   next();
 });
 
+brandSchema.pre("findOneAndUpdate", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const brandId = query._id;
+    const Product = mongoose.model("Product");
+    const Category = mongoose.model("Category");
+    
+    const brand = await Brand.findOne({ _id: brandId, isDeleted: false });
+    if (brand) {
+      await Promise.all([
+        Product.updateMany(
+          { brand: brandId, isDeleted: false },
+          { $unset: { brand: "" } }
+        ),
+        Category.updateMany(
+          { brands: brandId, isDeleted: false },
+          { $pull: { brands: brandId } }
+        )
+      ]);
+    }
+  }
+  
+  next();
+});
+
 brandSchema.index({ createdAt: -1, isDeleted: 1 });
+brandSchema.index(
+  { name: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isDeleted: false }
+  }
+);
 export const Brand: mongoose.Model<IBrand> = mongoose.models.Brand || mongoose.model<IBrand>('Brand', brandSchema);

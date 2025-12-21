@@ -1,4 +1,6 @@
 import { asyncHandler } from '@/utils';
+import { RedisKeys } from '@/utils/redisKeys';
+import { CacheTTL } from '@/utils/cacheTTL';
 import { redis } from '@/config/redis';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import status from 'http-status';
@@ -6,13 +8,14 @@ import { Wishlist } from './wishlist.model';
 import { addOrRemoveProductValidation } from './wishlist.validation';
 import { Product } from '../product/product.model';
 import { Types } from 'mongoose';
+import { invalidateWishlistCaches } from '@/utils/invalidateCache';
 
 const ApiError = getApiErrorClass('WISHLIST');
 const ApiResponse = getApiResponseClass('WISHLIST');
 
 export const getWishlist = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const cacheKey = `wishlist:${userId}`;
+  const cacheKey = RedisKeys.WISHLIST_BY_USER(String(userId));
   const cachedWishlist = await redis.get(cacheKey);
 
   if (cachedWishlist) {
@@ -28,7 +31,8 @@ export const getWishlist = asyncHandler(async (req, res) => {
     wishlist = await Wishlist.create({ user: userId, items: [] });
   }
 
-  await redis.set(cacheKey, wishlist, 600);
+  const wishlistObj = (wishlist as any)?.toObject ? (wishlist as any).toObject() : wishlist;
+  await redis.set(cacheKey, wishlistObj, CacheTTL.MEDIUM);
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Wishlist retrieved successfully', wishlist));
   return;
@@ -54,7 +58,7 @@ export const addProductToWishlist = asyncHandler(async (req, res) => {
     }
   }
 
-  await redis.delete(`wishlist:${userId}`);
+  await invalidateWishlistCaches(String(userId));
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Product '${product.name}' added to wishlist`, wishlist));
   return;
@@ -81,7 +85,7 @@ export const removeProductFromWishlist = asyncHandler(async (req, res) => {
 
   await wishlist.save();
 
-  await redis.delete(`wishlist:${userId}`);
+  await invalidateWishlistCaches(String(userId));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Product removed from wishlist successfully', wishlist));
   return;

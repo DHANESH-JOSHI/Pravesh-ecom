@@ -1,7 +1,9 @@
 import { redis } from '@/config/redis';
 import { Product } from './product.model';
-import { asyncHandler, generateCacheKey } from '@/utils';
+import { asyncHandler } from "@/utils";
+import { RedisKeys } from "@/utils/redisKeys";
 import { cloudinary } from '@/config/cloudinary';
+import { invalidateProductCaches } from '@/utils/invalidateCache';
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { createProductValidation, productsQueryValidation } from './product.validation';
 import { Category } from '../category/category.model';
@@ -10,6 +12,7 @@ import { IProductQuery } from './product.interface';
 import status from 'http-status';
 import mongoose from 'mongoose';
 import { getLeafCategoryIds } from '../brand/brand.controller';
+import { CacheTTL } from '@/utils/cacheTTL';
 import { UserRole } from '../user/user.interface';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
@@ -17,13 +20,13 @@ const ApiResponse = getApiResponseClass("PRODUCT");
 export const createProduct = asyncHandler(async (req, res) => {
   const productData = createProductValidation.parse(req.body);
   if (productData.categoryId) {
-    const existingCategory = await Category.findById(productData.categoryId);
+    const existingCategory = await Category.findOne({ _id: productData.categoryId, isDeleted: false });
     if (!existingCategory) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid category ID');
     }
   }
   if (productData.brandId) {
-    const existingBrand = await Brand.findById(productData.brandId);
+    const existingBrand = await Brand.findOne({ _id: productData.brandId, isDeleted: false });
     if (!existingBrand) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid brand ID');
     }
@@ -49,11 +52,12 @@ export const createProduct = asyncHandler(async (req, res) => {
     brand: productData.brandId,
   });
 
-  await redis.deleteByPattern('products*');
-  await redis.delete(`category:${product.category}?populate=true`);
-  await redis.delete(`brand:${product.brand}?populate=true`);
-  await redis.delete('product_filters');
-  await redis.delete('dashboard:stats')
+  await invalidateProductCaches({
+    productId: String(product._id),
+    productSlug: product.slug,
+    categoryId: String(product.category),
+    brandId: product.brand ? String(product.brand) : undefined,
+  });
   res.status(status.CREATED).json(
     new ApiResponse(status.CREATED, 'Product created successfully', product)
   );
@@ -64,7 +68,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params as { slug: string };
   const { populate = 'false' } = req.query;
   const isAdmin = req.user?.role === UserRole.ADMIN;
-  const cacheKey = generateCacheKey(`product:${slug}`, { ...req.query, isAdmin });
+  const cacheKey = RedisKeys.PRODUCT_BY_SLUG(slug, { ...req.query, isAdmin });
   const cachedProduct = await redis.get(cacheKey);
 
   if (cachedProduct) {
@@ -80,7 +84,10 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
   let product;
   if (populate === 'true') {
     product = await Product.findOne({ slug, isDeleted: false })
-      .populate('category brand')
+      .populate([
+        { path: 'category', match: { isDeleted: false } },
+        { path: 'brand', match: { isDeleted: false } }
+      ])
   } else {
     product = await Product.findOne({ slug, isDeleted: false });
   }
@@ -89,13 +96,13 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  // Remove price if not admin
+  // Ensure plain object before caching; strip originalPrice for non-admin
+  product = (product as any).toObject ? (product as any).toObject() : product;
   if (!isAdmin) {
-    product = (product as any).toObject ? (product as any).toObject() : product;
     delete (product as any).originalPrice;
   }
 
-  await redis.set(cacheKey, product, 3600);
+  await redis.set(cacheKey, product, CacheTTL.LONG);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved', product)
@@ -106,7 +113,7 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
 export const getAllProducts = asyncHandler(async (req, res) => {
   const query = productsQueryValidation.parse(req.query) as IProductQuery;
   const isAdmin = req.user?.role === UserRole.ADMIN;
-  const cacheKey = generateCacheKey("products", { ...query, isAdmin });
+  const cacheKey = RedisKeys.PRODUCTS_LIST({ ...query, isAdmin });
   const cachedProducts = await redis.get(cacheKey);
 
   if (cachedProducts) {
@@ -193,6 +200,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
       localField: "category",
       foreignField: "_id",
       pipeline: [
+        { $match: { isDeleted: false } },
         {
           $project: {
             _id: 1,
@@ -215,6 +223,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
       localField: "brand",
       foreignField: "_id",
       pipeline: [
+        { $match: { isDeleted: false } },
         {
           $project: {
             _id: 1,
@@ -237,7 +246,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
   const totalPages = Math.ceil(total / Number(limit));
 
-  // Remove price if not admin
   const processedProducts = isAdmin
     ? products
     : products.map(({ originalPrice, ...rest }) => rest);
@@ -250,7 +258,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     totalPages,
   };
 
-  await redis.set(cacheKey, result, 3600);
+  await redis.set(cacheKey, result, CacheTTL.LONG);
 
   return res
     .status(status.OK)
@@ -262,7 +270,7 @@ export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { populate = 'false' } = req.query;
   const isAdmin = req.user?.role === UserRole.ADMIN;
-  const cacheKey = generateCacheKey(`product:${id}`, { ...req.query, isAdmin });
+  const cacheKey = RedisKeys.PRODUCT_BY_ID(id, { ...req.query, isAdmin });
   const cachedProduct = await redis.get(cacheKey);
 
   if (cachedProduct) {
@@ -276,26 +284,30 @@ export const getProductById = asyncHandler(async (req, res) => {
   }
   let product;
   if (populate == 'true') {
-    product = await Product.findById(id).populate('category', 'slug title path').populate('brand', 'slug name').populate({
-      path: 'reviews',
-      populate: {
-        path: 'user',
-        select: 'name img'
-      }
-    })
+    product = await Product.findOne({ _id: id, isDeleted: false })
+      .populate({ path: 'category', select: 'slug title path', match: { isDeleted: false } })
+      .populate({ path: 'brand', select: 'slug name', match: { isDeleted: false } })
+      .populate({
+        path: 'reviews',
+        populate: {
+          path: 'user',
+          select: 'name img'
+        }
+      })
   } else {
-    product = await Product.findById(id);
+    product = await Product.findOne({ _id: id, isDeleted: false });
   }
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
+  // Ensure plain object before caching; strip originalPrice for non-admin
+  product = (product as any).toObject ? (product as any).toObject() : product;
   if (!isAdmin) {
-    product = (product as any).toObject ? (product as any).toObject() : product;
     delete (product as any).originalPrice;
   }
 
-  await redis.set(cacheKey, product, 3600);
+  await redis.set(cacheKey, product, CacheTTL.LONG);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product retrieved successfully', product)
@@ -312,13 +324,13 @@ export const updateProduct = asyncHandler(async (req, res) => {
   }
 
   if (updateData.categoryId) {
-    const existingCategory = await Category.findById(updateData.categoryId);
+    const existingCategory = await Category.findOne({ _id: updateData.categoryId, isDeleted: false });
     if (!existingCategory) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid category ID');
     }
   }
   if (updateData.brandId) {
-    const existingBrand = await Brand.findById(updateData.brandId);
+    const existingBrand = await Brand.findOne({ _id: updateData.brandId, isDeleted: false });
     if (!existingBrand) {
       throw new ApiError(status.BAD_REQUEST, 'Invalid brand ID');
     }
@@ -370,14 +382,41 @@ export const updateProduct = asyncHandler(async (req, res) => {
       brand: updateData.brandId,
     },
     { new: true, runValidators: true }
-  ).populate('category brand');
+  ).populate([
+    { path: 'category', match: { isDeleted: false } },
+    { path: 'brand', match: { isDeleted: false } }
+  ]);
 
-  await redis.deleteByPattern('products*');
-  await redis.deleteByPattern(`product:${id}*`);
-  await redis.delete(`category:${existingProduct.category}?populate=true`);
-  await redis.delete(`brand:${existingProduct.brand}?populate=true`);
-  await redis.delete('product_filters');
-  await redis.delete('dashboard:stats')
+  if (!result) {
+    throw new ApiError(status.NOT_FOUND, 'Product not found');
+  }
+
+  const oldSlug = existingProduct.slug;
+  const newSlug = result.slug;
+  const oldCategoryId = String(existingProduct.category);
+  const newCategoryId = String(result.category);
+  const oldBrandId = existingProduct.brand ? String(existingProduct.brand) : undefined;
+  const newBrandId = result.brand ? String(result.brand) : undefined;
+
+  await invalidateProductCaches({
+    productId: String(id),
+    productSlug: oldSlug,
+    categoryId: oldCategoryId,
+    brandId: oldBrandId,
+  });
+
+  if (newCategoryId !== oldCategoryId || newBrandId !== oldBrandId) {
+    await invalidateProductCaches({
+      categoryId: newCategoryId,
+      brandId: newBrandId,
+    });
+  }
+
+  if (newSlug !== oldSlug) {
+    await invalidateProductCaches({
+      productSlug: newSlug,
+    });
+  }
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product updated successfully', result)
@@ -388,30 +427,30 @@ export const updateProduct = asyncHandler(async (req, res) => {
 export const deleteProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const product = await Product.findById(id);
+  const product = await Product.findOne({ _id: id, isDeleted: false });
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  const result = await Product.findByIdAndUpdate(
-    id,
+  const deletedProduct = await Product.findOneAndUpdate(
+    { _id: id, isDeleted: false },
     { isDeleted: true },
     { new: true }
   );
 
-  if (!result) {
+  if (!deletedProduct) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  await redis.deleteByPattern('products*');
-  await redis.deleteByPattern(`product:${id}*`);
-  await redis.delete(`category:${product.category}?populate=true`);
-  await redis.delete(`brand:${product.brand}?populate=true`);
-  await redis.delete('product_filters');
-  await redis.delete('dashboard:stats')
+  await invalidateProductCaches({
+    productId: String(id),
+    productSlug: product.slug,
+    categoryId: String(product.category),
+    brandId: product.brand ? String(product.brand) : undefined,
+  });
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Product deleted successfully', result)
+    new ApiResponse(status.OK, 'Product deleted successfully', deletedProduct)
   );
 });
 
@@ -421,8 +460,8 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
   const { limit = 10 } = req.query;
   const limitNumber = Math.min(Number(limit) || 10, 20);
   const isAdmin = req.user?.role === UserRole.ADMIN;
-  
-  const cacheKey = generateCacheKey(`product:${id}:related`, { limit: limitNumber, isAdmin });
+
+  const cacheKey = RedisKeys.PRODUCT_RELATED(String(id), { limit: limitNumber, isAdmin });
   const cachedRelated = await redis.get(cacheKey);
 
   if (cachedRelated) {
@@ -436,7 +475,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
   }
 
   // Find the current product
-  const currentProduct = await Product.findById(id).select('category brand tags');
+  const currentProduct = await Product.findOne({ _id: id, isDeleted: false }).select('category brand tags');
   if (!currentProduct) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
@@ -444,10 +483,10 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
   // Priority 1: Same category
   // Priority 2: Same brand (if exists)
   // Priority 3: Similar tags (if exists)
-  
+
   // Build match conditions with priority scoring
   const matchConditions: any[] = [];
-  
+
   // Category match (highest priority)
   if (currentProduct.category) {
     matchConditions.push({
@@ -478,7 +517,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
   // If no match conditions, return empty
   if (matchConditions.length === 0) {
     const result = { products: [], total: 0 };
-    await redis.set(cacheKey, result, 3600);
+    await redis.set(cacheKey, result, CacheTTL.LONG);
     return res.status(status.OK).json(
       new ApiResponse(status.OK, 'Related products retrieved successfully', result)
     );
@@ -489,7 +528,8 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
     {
       $match: {
         $or: matchConditions,
-      },
+        isDeleted: false
+      }
     },
     // Add priority score
     {
@@ -532,10 +572,11 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
     // Lookup category
     {
       $lookup: {
-        from: 'categories',
-        localField: 'category',
-        foreignField: '_id',
+        from: "categories",
+        localField: "category",
+        foreignField: "_id",
         pipeline: [
+          { $match: { isDeleted: false } },
           {
             $project: {
               _id: 1,
@@ -545,7 +586,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
             },
           },
         ],
-        as: 'category',
+        as: "category",
       },
     },
     {
@@ -554,10 +595,11 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
     // Lookup brand
     {
       $lookup: {
-        from: 'brands',
-        localField: 'brand',
-        foreignField: '_id',
+        from: "brands",
+        localField: "brand",
+        foreignField: "_id",
         pipeline: [
+          { $match: { isDeleted: false } },
           {
             $project: {
               _id: 1,
@@ -566,7 +608,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
             },
           },
         ],
-        as: 'brand',
+        as: "brand",
       },
     },
     {
@@ -583,7 +625,6 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
 
   const relatedProducts = await Product.aggregate(pipeline);
 
-  // Remove price if not admin
   const processedProducts = isAdmin
     ? relatedProducts
     : relatedProducts.map(({ originalPrice, ...rest }) => rest);
@@ -593,7 +634,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
     total: processedProducts.length,
   };
 
-  await redis.set(cacheKey, result, 3600);
+  await redis.set(cacheKey, result, CacheTTL.LONG);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Related products retrieved successfully', result)
@@ -603,7 +644,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
 
 
 export const getProductFilters = asyncHandler(async (req, res) => {
-  const cacheKey = 'product_filters';
+  const cacheKey = RedisKeys.PRODUCT_FILTERS();
   const cachedFilters = await redis.get(cacheKey);
 
   if (cachedFilters) {
@@ -640,7 +681,7 @@ export const getProductFilters = asyncHandler(async (req, res) => {
     priceRange: { minPrice: priceRange?.[0]?.minPrice || 0, maxPrice: priceRange?.[0]?.maxPrice || 0 },
   };
 
-  await redis.set(cacheKey, filters, 3600);
+  await redis.set(cacheKey, filters, CacheTTL.XLONG);
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)

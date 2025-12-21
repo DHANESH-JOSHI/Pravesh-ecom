@@ -1,4 +1,6 @@
-import { asyncHandler, generateCacheKey } from "@/utils";
+import { asyncHandler } from "@/utils";
+import { RedisKeys } from "@/utils/redisKeys";
+import { CacheTTL } from "@/utils/cacheTTL";
 import { reviewValidation } from "./review.validation";
 import mongoose from "mongoose";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
@@ -7,12 +9,26 @@ import { Product } from "../product/product.model";
 import { User } from "../user/user.model";
 import { Review } from "./review.model";
 import { redis } from "@/config/redis";
+import { invalidateReviewCaches, invalidateProductCaches } from "@/utils/invalidateCache";
 const ApiError = getApiErrorClass("REVIEW")
 const ApiResponse = getApiResponseClass("REVIEW")
 
 const updateProductRating = async (productId: string, session: mongoose.ClientSession) => {
   const stats = await Review.aggregate([
     { $match: { product: new mongoose.Types.ObjectId(productId) } },
+    {
+      $lookup: {
+        from: 'products',
+        localField: 'product',
+        foreignField: '_id',
+        pipeline: [
+          { $match: { isDeleted: false } },
+          { $project: { _id: 1 } }
+        ],
+        as: 'productCheck'
+      }
+    },
+    { $match: { productCheck: { $ne: [] } } },
     {
       $group: {
         _id: '$product',
@@ -35,25 +51,29 @@ const updateProductRating = async (productId: string, session: mongoose.ClientSe
     rating
   }, { session });
 
-  await redis.deleteByPattern(`product:${productId}*`);
+  await invalidateProductCaches({ productId: String(productId) });
   return;
 };
 
 export const getReviewById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const cacheKey = `review:${id}`;
+  const cacheKey = RedisKeys.REVIEW_BY_ID(id);
   const cachedReview = await redis.get(cacheKey);
 
   if (cachedReview) {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Review retrieved successfully', cachedReview));
   }
 
-  const review = await Review.findById(id).populate('user', 'name email').populate('product', 'name');
+  const review = await Review.findById(id)
+    .populate({ path: 'user', select: 'name email', match: { isDeleted: false } })
+    .populate({ path: 'product', select: 'name', match: { isDeleted: false } });
 
   if (!review) {
     throw new ApiError(status.NOT_FOUND, "Review not found");
   }
 
+  const reviewObj = (review as any)?.toObject ? (review as any).toObject() : review;
+  await redis.set(cacheKey, reviewObj, CacheTTL.SHORT);
   res.status(status.OK).json(new ApiResponse(status.OK, 'Review retrieved successfully', review));
   return;
 });
@@ -84,12 +104,10 @@ export const createReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await redis.deleteByPattern(`reviews:product:${productId}*`);
-    await redis.deleteByPattern(`reviews:user:${userId}*`);
-    await redis.delete(`product:${review.product}?populate=true`);
-    await redis.delete(`user:${userId}?populate=true`);
-    await redis.deleteByPattern('reviews:all*');
-    await redis.deleteByPattern(`reviews:user:${userId}*`);
+    await invalidateReviewCaches({
+      productId: String(review.product),
+      userId: String(userId),
+    });
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
     return;
@@ -104,7 +122,7 @@ export const createReview = asyncHandler(async (req, res) => {
 export const getProductReviews = asyncHandler(async (req, res) => {
   const { productId } = req.params;
   const { page = 1, limit = 10 } = req.query;
-  const cacheKey = generateCacheKey(`reviews:product:${productId}`, req.query);
+  const cacheKey = RedisKeys.REVIEWS_BY_PRODUCT(productId, req.query as Record<string, any>);
   const cachedReviews = await redis.get(cacheKey);
 
   if (cachedReviews) {
@@ -122,7 +140,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
   const skip = (Number(page) - 1) * Number(limit);
   const [reviews, total] = await Promise.all([
     Review.find({ product: productId })
-      .populate('user', 'name email img')
+      .populate({ path: 'user', select: 'name email img', match: { isDeleted: false } })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -138,7 +156,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Reviews retrieved successfully", result))
   return;
@@ -147,7 +165,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
 export const getAllReviews = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, rating, user, product, search } = req.query;
 
-  const cacheKey = generateCacheKey("reviews:all", req.query);
+  const cacheKey = RedisKeys.REVIEWS_LIST(req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
 
   if (cached)
@@ -163,20 +181,21 @@ export const getAllReviews = asyncHandler(async (req, res) => {
       filter.user = new mongoose.Types.ObjectId(user as string);
     } else {
       const userRegex = new RegExp(user as string, 'i');
-      
+
       const users = await User.find(
         {
           $or: [
             { name: { $regex: userRegex } },
             { email: { $regex: userRegex } },
             { phone: { $regex: userRegex } }
-          ]
+          ],
+          isDeleted: false
         },
         { _id: 1 }
       );
-      
+
       const userIds = users.map((u) => u._id);
-      
+
       filter.user = userIds.length > 0 ? { $in: userIds } : [];
     }
 }
@@ -186,9 +205,10 @@ export const getAllReviews = asyncHandler(async (req, res) => {
       filter.product = new mongoose.Types.ObjectId(product as string);
     } else {
       const productRegex = new RegExp(product as string, 'i');
-      
+
       const products = await Product.find(
         {
+          isDeleted: false,
           $or: [
             { name: { $regex: productRegex } },
             { tags: { $regex: productRegex } },
@@ -197,9 +217,9 @@ export const getAllReviews = asyncHandler(async (req, res) => {
         },
         { _id: 1 }
       );
-      
+
       const ids = products.map((p) => p._id);
-      
+
       filter.product = ids.length > 0 ? { $in: ids } : [];
     }
 }
@@ -244,7 +264,9 @@ export const getAllReviews = asyncHandler(async (req, res) => {
       from: "products",
       localField: "product",
       foreignField: "_id",
-      pipeline: [{ $project: { _id: 1, name: 1 } }],
+      pipeline: [
+        { $project: { _id: 1, name: 1 } }
+      ],
       as: "product"
     }
   });
@@ -264,7 +286,7 @@ export const getAllReviews = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res
     .status(status.OK)
@@ -274,7 +296,7 @@ export const getAllReviews = asyncHandler(async (req, res) => {
 export const getMyReviews = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { page = 1, limit = 10 } = req.query;
-  const cacheKey = generateCacheKey(`reviews:user:${userId}`, req.query);
+  const cacheKey = RedisKeys.REVIEWS_BY_USER(userId, req.query as Record<string, any>);
   const cachedReviews = await redis.get(cacheKey);
 
   if (cachedReviews) {
@@ -285,7 +307,7 @@ export const getMyReviews = asyncHandler(async (req, res) => {
 
   const [reviews, total] = await Promise.all([
     Review.find({ user: userId })
-      .populate('product', 'name thumbnail slug')
+      .populate({ path: 'product', select: 'name thumbnail slug', match: { isDeleted: false } })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -301,7 +323,7 @@ export const getMyReviews = asyncHandler(async (req, res) => {
     totalPages
   };
 
-  await redis.set(cacheKey, result, 600);
+  await redis.set(cacheKey, result, CacheTTL.SHORT);
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Your reviews retrieved successfully", result))
   return;
@@ -329,12 +351,11 @@ export const updateReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await redis.delete(`review:${reviewId}`);
-    await redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
-    await redis.delete(`product:${existingReview.product.toString()}?populate=true`);
-    await redis.delete(`user:${userId}?populate=true`);
-    await redis.deleteByPattern('reviews:all*');
-    await redis.deleteByPattern(`reviews:user:${userId}*`);
+    await invalidateReviewCaches({
+      reviewId: String(reviewId),
+      productId: String(existingReview.product),
+      userId: String(userId),
+    });
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
     return;
@@ -366,12 +387,11 @@ export const deleteReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    await redis.delete(`review:${reviewId}`);
-    await redis.deleteByPattern(`reviews:product:${existingReview.product.toString()}*`);
-    await redis.delete(`product:${existingReview.product.toString()}?populate=true`);
-    await redis.delete(`user:${userId}?populate=true`);
-    await redis.deleteByPattern('reviews:all*');
-    await redis.deleteByPattern(`reviews:user:${userId}*`);
+    await invalidateReviewCaches({
+      reviewId: String(reviewId),
+      productId: String(existingReview.product),
+      userId: String(userId),
+    });
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))
     return;
