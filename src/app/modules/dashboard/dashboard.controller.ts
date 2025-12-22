@@ -32,17 +32,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   const [
     totalUsers,
     totalOrders,
-    totalRevenue,
     totalProducts,
 
     newUsersToday,
     newUsersThisWeek,
     newUsersThisMonth,
-
-    todayRevenue,
-    thisWeekRevenue,
-    thisMonthRevenue,
-    averageOrderValue,
 
     awaitingConfirmationOrders,
     processingOrders,
@@ -57,9 +51,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     recentOrders,
 
     topProducts,
+    trendingProducts,
     topCategories,
 
-    monthlyRevenue,
+    monthlyOrders,
     orderStatusStats,
 
     // lowStockProducts,
@@ -77,30 +72,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   ] = await Promise.all([
     User.countDocuments({ isDeleted: false }),
     Order.countDocuments(),
-    Order.aggregate([
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-    ]).then(result => result[0]?.total || 0),
     Product.countDocuments({ isDeleted: false }),
 
     User.countDocuments({ createdAt: { $gte: today }, isDeleted: false }),
     User.countDocuments({ createdAt: { $gte: weekAgo }, isDeleted: false }),
     User.countDocuments({ createdAt: { $gte: monthAgo }, isDeleted: false }),
-
-    Order.aggregate([
-      { $match: { createdAt: { $gte: today } } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-    ]).then(result => result[0]?.total || 0),
-    Order.aggregate([
-      { $match: { createdAt: { $gte: weekAgo } } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-    ]).then(result => result[0]?.total || 0),
-    Order.aggregate([
-      { $match: { createdAt: { $gte: monthAgo } } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-    ]).then(result => result[0]?.total || 0),
-    Order.aggregate([
-      { $group: { _id: null, avg: { $avg: "$totalAmount" }, count: { $sum: 1 } } }
-    ]).then(result => result[0]?.count > 0 ? result[0].avg : 0),
 
     Order.countDocuments({ status: 'awaiting_confirmation' }),
     Order.countDocuments({ status: 'processing' }),
@@ -116,19 +92,35 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       .populate({ path: 'user', select: 'name email', match: { isDeleted: false } })
       .sort({ createdAt: -1 })
       .limit(10)
-      .select('user totalAmount status createdAt')
+      .select('user status createdAt')
       .lean(),
 
-    Product.find({ isDeleted: false, totalSold: { $gt: 0 } })
-      .sort({ totalSold: -1 })
+    Product.find({ isDeleted: false })
+      .sort({ totalSold: -1, salesCount: -1 })
       .limit(10)
-      .select('name totalSold originalPrice')
+      .select('name totalSold salesCount reviewCount rating')
       .lean()
       .then(products => products.map(p => ({
         _id: p._id.toString(),
         name: p.name,
         totalSold: p.totalSold || 0,
-        revenue: (p.totalSold || 0) * p.originalPrice
+        salesCount: p.salesCount || 0,
+        reviewCount: p.reviewCount || 0,
+        rating: p.rating || 0,
+      }))),
+
+    Product.find({ isDeleted: false })
+      .sort({ salesCount: -1, totalSold: -1 })
+      .limit(10)
+      .select('name salesCount totalSold reviewCount rating')
+      .lean()
+      .then(products => products.map(p => ({
+        _id: p._id.toString(),
+        name: p.name,
+        salesCount: p.salesCount || 0,
+        totalSold: p.totalSold || 0,
+        reviewCount: p.reviewCount || 0,
+        rating: p.rating || 0,
       }))),
 
     Product.aggregate([
@@ -153,10 +145,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
           _id: '$category._id',
           name: { $first: '$category.title' },
           totalSold: { $sum: '$totalSold' },
-          revenue: { $sum: { $multiply: ['$totalSold', '$originalPrice'] } }
         }
       },
-      { $sort: { revenue: -1 } },
+      { $sort: { totalSold: -1 } },
       { $limit: 10 }
     ]),
 
@@ -168,7 +159,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
             year: { $year: "$createdAt" },
             month: { $month: "$createdAt" }
           },
-          revenue: { $sum: "$totalAmount" },
           orders: { $sum: 1 }
         }
       },
@@ -188,7 +178,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
               }
             ]
           },
-          revenue: 1,
           orders: 1
         }
       }
@@ -330,7 +319,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       name: (order.user as any)?.name || 'Unknown',
       email: (order.user as any)?.email || 'Unknown'
     },
-    totalAmount: order.totalAmount,
     status: order.status,
     createdAt: order.createdAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
   }));
@@ -349,17 +337,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   const stats: IDashboardStats = {
     totalUsers,
     totalOrders,
-    totalRevenue,
     totalProducts,
 
     newUsersToday,
     newUsersThisWeek,
     newUsersThisMonth,
-
-    todayRevenue,
-    thisWeekRevenue,
-    thisMonthRevenue,
-    averageOrderValue,
 
     pendingOrders: awaitingConfirmationOrders,
     processingOrders,
@@ -374,9 +356,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     recentOrders: formattedRecentOrders,
 
     topProducts,
+    trendingProducts,
     topCategories,
 
-    monthlyRevenue,
+    monthlyOrders,
     orderStatusStats,
 
     // lowStockProducts: formattedLowStockProducts,

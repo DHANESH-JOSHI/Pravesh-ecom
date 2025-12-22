@@ -1,17 +1,11 @@
 export interface IDashboardStats {
   totalUsers: number;
   totalOrders: number;
-  totalRevenue: number;
   totalProducts: number;
 
   newUsersToday: number;
   newUsersThisWeek: number;
   newUsersThisMonth: number;
-
-  todayRevenue: number;
-  thisWeekRevenue: number;
-  thisMonthRevenue: number;
-  averageOrderValue: number;
 
   pendingOrders: number;
   processingOrders: number;
@@ -29,7 +23,6 @@ export interface IDashboardStats {
       name: string;
       email: string;
     };
-    totalAmount: number;
     status: string;
     createdAt: string;
   }>;
@@ -38,19 +31,28 @@ export interface IDashboardStats {
     _id: string;
     name: string;
     totalSold: number;
-    revenue: number;
+    salesCount: number;
+    reviewCount: number;
+    rating: number;
+  }>;
+
+  trendingProducts: Array<{
+    _id: string;
+    name: string;
+    salesCount: number;
+    totalSold: number;
+    reviewCount: number;
+    rating: number;
   }>;
 
   topCategories: Array<{
     _id: string;
     name: string;
     totalSold: number;
-    revenue: number;
   }>;
 
-  monthlyRevenue: Array<{
+  monthlyOrders: Array<{
     month: string;
-    revenue: number;
     orders: number;
   }>;
 
