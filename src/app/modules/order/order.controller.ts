@@ -3,7 +3,7 @@ import { CacheTTL } from "@/utils/cacheTTL";
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { Order } from './order.model';
 import { Cart } from '../cart/cart.model';
-import { Wallet } from '../wallet/wallet.model';
+// import { Wallet } from '../wallet/wallet.model'; // Commented out - wallet operations removed (price removed)
 import { OrderStatus } from './order.interface';
 import { checkoutFromCartValidation, adminUpdateOrderValidation } from './order.validation';
 import mongoose, { Types } from 'mongoose';
@@ -48,9 +48,8 @@ export const createOrder = asyncHandler(async (req, res) => {
       orderItems.push({
         product: product._id,
         quantity: item.quantity,
-        price: product.originalPrice
       });
-      totalAmount += product.originalPrice * item.quantity;
+      // totalAmount = 0; // Removed: price calculation removed
     }
 
     // const wallet = await Wallet.findOne({ user: userId }).session(session);
@@ -65,11 +64,12 @@ export const createOrder = asyncHandler(async (req, res) => {
     // });
     // await wallet.save({ session });
 
-    for (const item of cart.items) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: -item.quantity }
-      }, { session });
-    }
+    // Stock decrement removed - stock field no longer exists
+    // for (const item of cart.items) {
+    //   await Product.findByIdAndUpdate(item.product, {
+    //     $inc: { stock: -item.quantity }
+    //   }, { session });
+    // }
     const order = (await Order.create([{
       user: userId,
       items: orderItems,
@@ -133,8 +133,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
   if (!order) {
     throw new ApiError(status.NOT_FOUND, 'order not found');
   }
-  let totalAmount = order.totalAmount;
   if (items && items.length > 0) {
+    const orderItems = [];
     for (const item of items) {
       if (!mongoose.Types.ObjectId.isValid(item.product)) {
         throw new ApiError(status.BAD_REQUEST, `Invalid product ID: ${item.product}`);
@@ -142,14 +142,17 @@ export const updateOrder = asyncHandler(async (req, res) => {
       if (item.quantity <= 0) {
         throw new ApiError(status.BAD_REQUEST, 'Quantity must be a positive number');
       }
-      const product = await Product.findById(item.product).select('originalPrice');
+      const product = await Product.findById(item.product);
       if (!product) {
         throw new ApiError(status.NOT_FOUND, `Product not found: ${item.product}`);
       }
-      totalAmount += product.originalPrice * item.quantity;
+      orderItems.push({
+        product: item.product,
+        quantity: item.quantity,
+      });
     }
-    order.totalAmount = totalAmount;
-    // order.status = OrderStatus.Approved;
+    order.items = orderItems;
+    order.totalAmount = 0;
   }
   // if (orderStatus) {
   //   if ([OrderStatus.Approved, OrderStatus.Cancelled, OrderStatus.Confirmed].includes(orderStatus)) {
@@ -203,18 +206,19 @@ export const confirmOrder = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'You can only confirm approved orders');
     }
 
-    const wallet = await Wallet.findOne({ user: userId }).session(session);
-    if (!wallet || wallet.balance < order.totalAmount) {
-      throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
-    }
+    // Wallet operations commented out - totalAmount is now 0 (price removed)
+    // const wallet = await Wallet.findOne({ user: userId }).session(session);
+    // if (!wallet || wallet.balance < order.totalAmount) {
+    //   throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
+    // }
 
-    wallet.balance -= order.totalAmount;
-    wallet.transactions.push({
-      amount: -order.totalAmount,
-      description: `Payment for order #${order._id}`,
-      createdAt: new Date(),
-    });
-    await wallet.save({ session });
+    // wallet.balance -= order.totalAmount;
+    // wallet.transactions.push({
+    //   amount: -order.totalAmount,
+    //   description: `Payment for order #${order._id}`,
+    //   createdAt: new Date(),
+    // });
+    // await wallet.save({ session });
 
     order.status = OrderStatus.Confirmed;
     order.shippingAddress = shippingAddressId as Types.ObjectId;
@@ -441,7 +445,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
       },
       {
         path: 'items.product',
-        select: 'name originalPrice thumbnail',
+        select: 'name thumbnail',
         populate: [
           {
             path: 'category',
@@ -582,16 +586,17 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'You cannot approve or confirm an order with no items or without a shipping address');
     }
     if (newStatus === OrderStatus.Confirmed) {
-      const wallet = await Wallet.findOne({ user: order.user });
-      if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
+      // Wallet operations commented out - totalAmount is now 0 (price removed)
+      // const wallet = await Wallet.findOne({ user: order.user });
+      // if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
 
-      wallet.balance -= order.totalAmount;
-      wallet.transactions.push({
-        amount: -order.totalAmount,
-        description: `Payment for order #${order.id}`,
-        createdAt: new Date()
-      });
-      await wallet.save();
+      // wallet.balance -= order.totalAmount;
+      // wallet.transactions.push({
+      //   amount: -order.totalAmount,
+      //   description: `Payment for order #${order.id}`,
+      //   createdAt: new Date()
+      // });
+      // await wallet.save();
     }
     order.status = newStatus;
   }
@@ -601,16 +606,17 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
 
     if (newStatus === OrderStatus.Confirmed) {
-      const wallet = await Wallet.findOne({ user: order.user });
-      if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
+      // Wallet operations commented out - totalAmount is now 0 (price removed)
+      // const wallet = await Wallet.findOne({ user: order.user });
+      // if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
 
-      wallet.balance -= order.totalAmount;
-      wallet.transactions.push({
-        amount: -order.totalAmount,
-        description: `Payment for order #${order.id}`,
-        createdAt: new Date()
-      });
-      await wallet.save();
+      // wallet.balance -= order.totalAmount;
+      // wallet.transactions.push({
+      //   amount: -order.totalAmount,
+      //   description: `Payment for order #${order.id}`,
+      //   createdAt: new Date()
+      // });
+      // await wallet.save();
     }
 
     order.status = newStatus;
@@ -657,17 +663,18 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
     order.status = newStatus;
 
-    const wallet = await Wallet.findOne({ user: order.user });
-    if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
+    // Wallet refund operations commented out - totalAmount is now 0 (price removed)
+    // const wallet = await Wallet.findOne({ user: order.user });
+    // if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
 
-    wallet.balance += order.totalAmount;
-    wallet.transactions.push({
-      amount: order.totalAmount,
-      description: `Refund for order ${order.id}`,
-      createdAt: new Date()
-    });
+    // wallet.balance += order.totalAmount;
+    // wallet.transactions.push({
+    //   amount: order.totalAmount,
+    //   description: `Refund for order ${order.id}`,
+    //   createdAt: new Date()
+    // });
 
-    await wallet.save();
+    // await wallet.save();
   }
   else if (oldStatus === OrderStatus.Refunded) {
     throw new ApiError(status.BAD_REQUEST, 'Order is already refunded, cannot do anything anymore');

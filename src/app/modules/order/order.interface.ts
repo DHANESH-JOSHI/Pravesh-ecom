@@ -15,7 +15,6 @@ export enum OrderStatus {
 export interface IOrderItem {
   product: Types.ObjectId;
   quantity: number;
-  price: number;
 }
 
 export interface OrderHistory {
