@@ -70,14 +70,4 @@ export interface IDashboardStats {
   //   _id: string;
   //   name: string;
   // }>;
-
-  totalReviews: number;
-  averageRating: number;
-  totalWishlistItems: number;
-  totalCartItems: number;
-
-  totalBlogs: number;
-  publishedBlogs: number;
-
-  activeUsers: number;
 }

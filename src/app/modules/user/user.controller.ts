@@ -31,6 +31,7 @@ export const createUser = asyncHandler(async (req, res) => {
     session.endSession();
 
     await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+    await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
 
@@ -114,6 +115,7 @@ export const updateUser = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
   await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
   return;
@@ -267,6 +269,7 @@ export const recoverUser = asyncHandler(async (req, res) => {
   
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(id)));
   await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.json(new ApiResponse(status.OK, "User recovered successfully"));
   return;
@@ -284,6 +287,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(id)));
   await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.json(new ApiResponse(status.OK, "User deleted successfully"));
   return;

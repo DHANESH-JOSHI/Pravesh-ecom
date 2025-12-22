@@ -108,6 +108,7 @@ export const createReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
     await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(review.product)));
+    await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
     return;
@@ -356,6 +357,7 @@ export const updateReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
     await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
+    await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
     return;
@@ -392,6 +394,7 @@ export const deleteReview = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
     await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
+    await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))
     return;

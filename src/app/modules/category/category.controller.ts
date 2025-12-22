@@ -51,6 +51,15 @@ export const createCategory = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(category.slug));
   }
 
+  // Invalidate brand caches that might have this category (affects brand categoryCount)
+  const brandsWithCategory = await Brand.find({ categories: category._id, isDeleted: false }).select('_id');
+  for (const brand of brandsWithCategory) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
+  }
+  if (brandsWithCategory.length > 0) {
+    await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  }
+
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Category created", category));
 });
 
@@ -364,6 +373,15 @@ export const updateCategory = asyncHandler(async (req, res) => {
     await redis.delete(RedisKeys.CATEGORY_LEAF());
   }
 
+  // Invalidate brand caches that have this category (affects brand categoryCount)
+  const brandsWithCategory = await Brand.find({ categories: categoryId, isDeleted: false }).select('_id');
+  for (const brand of brandsWithCategory) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
+  }
+  if (brandsWithCategory.length > 0) {
+    await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  }
+
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
   );
@@ -391,6 +409,15 @@ export const deleteCategory = asyncHandler(async (req, res) => {
   await redis.delete(RedisKeys.CATEGORY_TREE());
   await redis.delete(RedisKeys.CATEGORY_LEAF());
   await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
+
+  // Invalidate brand caches that had this category (affects brand categoryCount)
+  const brandsWithCategory = await Brand.find({ categories: id, isDeleted: false }).select('_id');
+  for (const brand of brandsWithCategory) {
+    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
+  }
+  if (brandsWithCategory.length > 0) {
+    await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  }
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted", deleted));
 });

@@ -57,8 +57,21 @@ export const createBrand = asyncHandler(async (req, res) => {
   }
   await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
+  // Invalidate category caches that have this brand (affects category brandCount)
   for (const categoryId of expandedLeafIds) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
+  }
+  // Also check categories that have this brand in their brands array (from syncBrandCategories)
+  const categoriesWithBrand = await Category.find({ brands: brand._id, isDeleted: false }).select('_id');
+  for (const category of categoriesWithBrand) {
+    const categoryIdStr = String(category._id);
+    const alreadyInvalidated = expandedLeafIds.some(catId => String(catId) === categoryIdStr);
+    if (!alreadyInvalidated) {
+      await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(categoryIdStr));
+    }
+  }
+  if (expandedLeafIds.length > 0 || categoriesWithBrand.length > 0) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
 
   res
@@ -241,9 +254,20 @@ export const updateBrand = asyncHandler(async (req, res) => {
   
   await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
+  // Invalidate category caches that have this brand (affects category brandCount)
   const allAffectedCategoryIds = new Set([...oldCategoryIds, ...expandedLeafIds]);
   for (const categoryId of allAffectedCategoryIds) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
+  }
+  // Also check categories that have this brand in their brands array
+  const categoriesWithBrand = await Category.find({ brands: id, isDeleted: false }).select('_id');
+  for (const category of categoriesWithBrand) {
+    if (!allAffectedCategoryIds.has(String(category._id))) {
+      await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(category._id)));
+    }
+  }
+  if (allAffectedCategoryIds.size > 0 || categoriesWithBrand.length > 0) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
   
   if (name && name !== oldName) {
@@ -270,8 +294,21 @@ export const deleteBrand = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
   await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
+  // Invalidate category caches that had this brand (affects category brandCount)
   for (const categoryId of brand.categories) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
+  }
+  // Also check categories that have this brand in their brands array
+  const categoriesWithBrand = await Category.find({ brands: id, isDeleted: false }).select('_id');
+  for (const category of categoriesWithBrand) {
+    const categoryIdStr = String(category._id);
+    const alreadyInvalidated = brand.categories.some(catId => String(catId) === categoryIdStr);
+    if (!alreadyInvalidated) {
+      await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(categoryIdStr));
+    }
+  }
+  if (brand.categories.length > 0 || categoriesWithBrand.length > 0) {
+    await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
   
   await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());

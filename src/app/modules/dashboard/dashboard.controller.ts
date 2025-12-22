@@ -6,10 +6,6 @@ import status from "http-status";
 import { User } from "../user/user.model";
 import { Order } from "../order/order.model";
 import { Product } from "../product/product.model";
-import { Review } from "../review/review.model";
-import { Wishlist } from "../wishlist/wishlist.model";
-import { Cart } from "../cart/cart.model";
-import { Blog } from "../blog/blog.model";
 import { IDashboardStats } from "./dashboard.interface";
 import { CacheTTL } from "@/utils/cacheTTL";
 
@@ -59,16 +55,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // lowStockProducts,
     // outOfStockList,
-
-    totalReviews,
-    averageRating,
-    totalWishlistItems,
-    totalCartItems,
-
-    totalBlogs,
-    publishedBlogs,
-
-    activeUsers
   ] = await Promise.all([
     User.countDocuments({ isDeleted: false }),
     Order.countDocuments(),
@@ -211,106 +197,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     //   .select('name')
     //   .lean(),
 
-    Review.aggregate([
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'product',
-          foreignField: '_id',
-          pipeline: [
-            { $match: { isDeleted: false } },
-            { $project: { _id: 1 } }
-          ],
-          as: 'productCheck'
-        }
-      },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user',
-          foreignField: '_id',
-          pipeline: [
-            { $match: { isDeleted: false } },
-            { $project: { _id: 1 } }
-          ],
-          as: 'userCheck'
-        }
-      },
-      { $match: { productCheck: { $ne: [] }, userCheck: { $ne: [] } } },
-      { $count: 'total' }
-    ]).then(result => result[0]?.total || 0),
-    Review.aggregate([
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'product',
-          foreignField: '_id',
-          pipeline: [
-            { $match: { isDeleted: false } },
-            { $project: { _id: 1 } }
-          ],
-          as: 'productCheck'
-        }
-      },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user',
-          foreignField: '_id',
-          pipeline: [
-            { $match: { isDeleted: false } },
-            { $project: { _id: 1 } }
-          ],
-          as: 'userCheck'
-        }
-      },
-      { $match: { productCheck: { $ne: [] }, userCheck: { $ne: [] } } },
-      { $group: { _id: null, avg: { $avg: "$rating" } } }
-    ]).then(result => result[0]?.avg || 0),
-
-    Wishlist.aggregate([
-      { $unwind: "$items" },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'items',
-          foreignField: '_id',
-          pipeline: [
-            { $match: { isDeleted: false } },
-            { $project: { _id: 1 } }
-          ],
-          as: 'productCheck'
-        }
-      },
-      { $match: { productCheck: { $ne: [] } } },
-      { $group: { _id: null, total: { $sum: 1 } } }
-    ]).then(result => result[0]?.total || 0),
-
-    Cart.aggregate([
-      { $unwind: "$items" },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'items.product',
-          foreignField: '_id',
-          pipeline: [
-            { $match: { isDeleted: false } },
-            { $project: { _id: 1 } }
-          ],
-          as: 'productCheck'
-        }
-      },
-      { $match: { productCheck: { $ne: [] } } },
-      { $group: { _id: null, total: { $sum: "$items.quantity" } } }
-    ]).then(result => result[0]?.total || 0),
-
-    Blog.countDocuments({ isDeleted: false }),
-    Blog.countDocuments({ isPublished: true, isDeleted: false }),
-
-    User.countDocuments({
-      isDeleted: false,
-      updatedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-    }).catch(() => 0)
   ]);
 
   const formattedRecentOrders = recentOrders.map(order => ({
@@ -364,16 +250,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // lowStockProducts: formattedLowStockProducts,
     // outOfStockList: formattedOutOfStockList,
-
-    totalReviews,
-    averageRating,
-    totalWishlistItems,
-    totalCartItems,
-
-    totalBlogs,
-    publishedBlogs,
-
-    activeUsers
   };
 
   await redis.set(cacheKey, stats, CacheTTL.SHORT);

@@ -88,6 +88,8 @@ export const createOrder = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
     await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
     await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+    await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
     return;
@@ -120,6 +122,8 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
 
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
   return;
@@ -167,6 +171,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(order.user)));
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(order.user)));
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order updated successfully', order));
   return;
@@ -232,6 +238,8 @@ export const confirmOrder = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(userId)));
     await redis.delete(RedisKeys.WALLET_BALANCE(String(userId)));
     await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+    await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
     return;
@@ -641,7 +649,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
     order.status = newStatus;
 
+    const productIds: string[] = [];
     for (const item of order.items) {
+      productIds.push(String(item.product));
       await Product.findByIdAndUpdate(
         item.product,
         {
@@ -651,6 +661,33 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
           },
         }
       );
+    }
+    // Invalidate specific product caches (affects product salesCount and totalSold)
+    for (const productId of productIds) {
+      await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(productId));
+    }
+    // Also invalidate category and brand caches that have these products (affects counts)
+    const products = await Product.find({ _id: { $in: productIds }, isDeleted: false }).select('category brand');
+    const categoryIds = new Set<string>();
+    const brandIds = new Set<string>();
+    for (const product of products) {
+      if (product.category) categoryIds.add(String(product.category));
+      if (product.brand) brandIds.add(String(product.brand));
+    }
+    for (const categoryId of categoryIds) {
+      await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(categoryId));
+    }
+    for (const brandId of brandIds) {
+      await redis.deleteByPattern(RedisPatterns.BRAND_ANY(brandId));
+    }
+    if (productIds.length > 0) {
+      await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+    }
+    if (categoryIds.size > 0) {
+      await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
+    }
+    if (brandIds.size > 0) {
+      await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
     }
   }
   else if (oldStatus === OrderStatus.Delivered) {
@@ -690,11 +727,8 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(order.user)));
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
-  
-  const productsTouched = oldStatus === OrderStatus.OutForDelivery && newStatus === OrderStatus.Delivered;
-  if (productsTouched) {
-    await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
-  }
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(order.user)));
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
   
   const walletTouched = 
     (oldStatus === OrderStatus.Received && newStatus === OrderStatus.Confirmed) ||
@@ -731,6 +765,8 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+  await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order canceled successfully', order)
