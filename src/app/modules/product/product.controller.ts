@@ -103,11 +103,8 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  // Ensure plain object before caching; strip originalPrice for non-admin
+  // Ensure plain object before caching
   product = (product as any).toObject ? (product as any).toObject() : product;
-  if (!isAdmin) {
-    delete (product as any).originalPrice;
-  }
 
   await redis.set(cacheKey, product, CacheTTL.LONG);
 
@@ -136,8 +133,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     order = "desc",
     categoryId,
     brandId,
-    minPrice,
-    maxPrice,
     isFeatured,
     isNewArrival,
     search,
@@ -154,11 +149,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
   if (brandId) filter.brand = new mongoose.Types.ObjectId(brandId);
 
-  if (minPrice || maxPrice) {
-    filter.originalPrice = {};
-    if (minPrice) filter.originalPrice.$gte = Number(minPrice);
-    if (maxPrice) filter.originalPrice.$lte = Number(maxPrice);
-  }
 
   if (isFeatured !== undefined) filter.isFeatured = isFeatured;
   if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival;
@@ -170,7 +160,6 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     newArrivals: "createdAt",
     featured: "isFeatured",
     rating: "rating",
-    price: "originalPrice",
     createdAt: "createdAt",
   };
   const sortField = sortMap[sort] || "createdAt";
@@ -253,9 +242,7 @@ export const getAllProducts = asyncHandler(async (req, res) => {
 
   const totalPages = Math.ceil(total / Number(limit));
 
-  const processedProducts = isAdmin
-    ? products
-    : products.map(({ originalPrice, ...rest }) => rest);
+  const processedProducts = products;
 
   const result = {
     products: processedProducts,
@@ -308,11 +295,8 @@ export const getProductById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
   }
 
-  // Ensure plain object before caching; strip originalPrice for non-admin
+  // Ensure plain object before caching
   product = (product as any).toObject ? (product as any).toObject() : product;
-  if (!isAdmin) {
-    delete (product as any).originalPrice;
-  }
 
   await redis.set(cacheKey, product, CacheTTL.LONG);
 
@@ -648,9 +632,7 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
 
   const relatedProducts = await Product.aggregate(pipeline);
 
-  const processedProducts = isAdmin
-    ? relatedProducts
-    : relatedProducts.map(({ originalPrice, ...rest }) => rest);
+  const processedProducts = relatedProducts;
 
   const result = {
     products: processedProducts,
@@ -679,29 +661,14 @@ export const getProductFilters = asyncHandler(async (req, res) => {
   const brandIds = await Product.distinct('brand', { isDeleted: false });
   const categoryIds = await Product.distinct('category', { isDeleted: false });
 
-  const [brands, categories, priceRange] = await Promise.all([
+  const [brands, categories] = await Promise.all([
     Brand.find({ _id: { $in: brandIds.filter(Boolean) }, isDeleted: false }).select('name slug'),
     Category.find({ _id: { $in: categoryIds.filter(Boolean) }, isDeleted: false }).select('title slug'),
-    // Product.distinct('specifications.color', { isDeleted: false }),
-    // Product.distinct('specifications.size', { isDeleted: false }),
-    Product.aggregate([
-      { $match: { isDeleted: false } },
-      {
-        $group: {
-          _id: null,
-          minPrice: { $min: '$originalPrice' },
-          maxPrice: { $max: '$originalPrice' },
-        },
-      },
-    ]),
   ]);
 
   const filters = {
     brands,
     categories,
-    // colors: colors.flat().filter(Boolean),
-    // sizes: sizes.flat().filter(Boolean),
-    priceRange: { minPrice: priceRange?.[0]?.minPrice || 0, maxPrice: priceRange?.[0]?.maxPrice || 0 },
   };
 
   await redis.set(cacheKey, filters, CacheTTL.XLONG);

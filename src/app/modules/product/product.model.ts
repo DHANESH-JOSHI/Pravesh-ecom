@@ -15,10 +15,6 @@ const productSchema = new Schema<IProduct>(
     brand: { type: Schema.Types.ObjectId, ref: "Brand" },
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
 
-    originalPrice: { type: Number, required: true },
-    // discountValue: { type: Number, default: 0 },
-    // discountType: { type: String, enum: DiscountType, default: DiscountType.Percentage },
-    // finalPrice: { type: Number, default: 0 },
     // stock: { type: Number, required: true },
     // minStock: { type: Number, default: 0 },
     unit: {
@@ -73,9 +69,6 @@ productSchema.index({ sku: 1, isDeleted: 1 });
 productSchema.index({ isDeleted: 1, isFeatured: 1, createdAt: -1 });
 productSchema.index({ isDeleted: 1, isNewArrival: 1, createdAt: -1 });
 // productSchema.index({ isDeleted: 1, isDiscount: 1, discountValue: -1 });
-productSchema.index({ isDeleted: 1, category: 1, originalPrice: 1 });
-productSchema.index({ isDeleted: 1, brand: 1, originalPrice: 1 });
-productSchema.index({ originalPrice: 1 });
 productSchema.index({ createdAt: -1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ totalSold: -1 });

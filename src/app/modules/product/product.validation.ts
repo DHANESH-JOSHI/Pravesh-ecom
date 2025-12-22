@@ -15,10 +15,6 @@ const createProductValidation = z.object({
   brandId: objectIdValidation.optional(),
   categoryId: objectIdValidation,
 
-  originalPrice: z.coerce.number().min(0, 'Base price must be positive'),
-  // discountValue: z.coerce.number().min(0, 'Discount cannot be negative').default(0),
-  // discountType: z.enum(DiscountType).default(DiscountType.Percentage),
-  // finalPrice: z.coerce.number().min(0).optional(),
 
   // stock: z.coerce.number().min(0, 'Stock cannot be negative'),
   unit: z.string(),
@@ -59,8 +55,6 @@ const productsQueryValidation = z.object({
   order: z.enum(['asc', 'desc']).optional(),
   categoryId: objectIdValidation.optional(),
   brandId: objectIdValidation.optional(),
-  minPrice: z.coerce.number().min(0).optional(),
-  maxPrice: z.coerce.number().min(0).optional(),
   // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),

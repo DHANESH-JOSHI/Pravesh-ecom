@@ -35,10 +35,6 @@ export interface IProduct extends Document {
   category: Types.ObjectId;
   brand?: Types.ObjectId;
 
-  originalPrice: number;
-  // discountValue: number;
-  // discountType: DiscountType;
-  // finalPrice: number;
 
   // stock: number;
   // minStock: number;
@@ -69,8 +65,6 @@ export interface IProduct extends Document {
 export interface IProductFilter {
   categoryId?: Types.ObjectId;
   brandId?: Types.ObjectId;
-  minPrice?: number;
-  maxPrice?: number;
   // inStock?: boolean;
   // stockStatus?: StockStatus;
 
