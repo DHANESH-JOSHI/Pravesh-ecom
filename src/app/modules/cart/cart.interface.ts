@@ -22,7 +22,7 @@ export interface ICart extends Document {
   ): Promise<this>;
   removeItem(productId: Types.ObjectId): Promise<this>;
   clearCart(): Promise<this>;
-  getCartSummary(): Promise<{ totalItems: number; totalPrice: number }>;
+  getCartSummary(): Promise<{ totalItems: number }>;
 }
 
 export interface ICartFilter {
@@ -45,7 +45,6 @@ export interface IUpdateCartItemRequest {
 
 export interface ICartSummary {
   totalItems: number;
-  totalPrice: number;
   itemCount: number;
 }
 

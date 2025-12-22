@@ -37,7 +37,7 @@ export const getCartById = asyncHandler(async (req, res) => {
     },
     {
       path: 'items.product',
-      select: '_id name thumbnail originalPrice',
+      select: '_id name thumbnail',
       populate: [
         {
           path: 'category',
@@ -151,7 +151,7 @@ pipeline.push({ $match: filter });
       localField: "items.product",
       foreignField: "_id",
       pipeline: [
-        { $project: { _id: 1, originalPrice: 1 } }
+        { $project: { _id: 1 } }
       ],
       as: "productData"
     }
@@ -236,7 +236,7 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   await cart.addItem(productId, quantity);
 
-  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
+  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
 
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
@@ -283,7 +283,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
+  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
 
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
@@ -309,7 +309,7 @@ export const removeFromCart = asyncHandler(async (req, res) => {
 
   await cart.removeItem(new Types.ObjectId(productId));
 
-  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name price thumbnail', match: { isDeleted: false } });
+  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
 
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
@@ -338,7 +338,6 @@ export const clearCart = asyncHandler(async (req, res) => {
     user: userId,
     items: [],
     totalItems: 0,
-    totalPrice: 0,
     itemCount: 0,
   }));
   return;
@@ -365,11 +364,10 @@ export const getCartSummary = asyncHandler(async (req, res) => {
     res.status(status.OK).json(new ApiResponse(status.OK, 'Cart summary retrieved successfully', summary));
     return;
   }
-  const { totalItems, totalPrice } = await cart.getCartSummary();
+  const { totalItems } = await cart.getCartSummary();
 
   const summary = {
     totalItems,
-    totalPrice,
   };
   await redis.set(cacheKey, summary, CacheTTL.SHORT);
 
@@ -379,11 +377,10 @@ export const getCartSummary = asyncHandler(async (req, res) => {
 
 export const checkoutCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const cart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'originalPrice isDeleted status stock name', match: { isDeleted: false } });
+  const cart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'isDeleted status stock name', match: { isDeleted: false } });
   if (!cart || cart.items.length === 0) {
     throw new ApiError(status.BAD_REQUEST, 'Cart is empty');
   }
-  let totalPrice = 0;
   for (const item of cart.items) {
     const product = item.product as unknown as IProduct;
     if (product.isDeleted) {
@@ -392,13 +389,12 @@ export const checkoutCart = asyncHandler(async (req, res) => {
     // if (item.quantity > product.stock) {
     //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock for product ${product.name}`);
     // }
-    totalPrice += item.quantity * product.originalPrice
   }
 
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
   await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
 
-  res.status(status.OK).json(new ApiResponse(status.OK, 'Checkout successful', { totalPrice }));
+  res.status(status.OK).json(new ApiResponse(status.OK, 'Checkout successful', {}));
   return;
 })
