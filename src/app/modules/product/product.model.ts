@@ -13,10 +13,10 @@ const productSchema = new Schema<IProduct>(
     brand: { type: Schema.Types.ObjectId, ref: "Brand" },
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
     units: [{
-    unit: {
-      type: String,
-      required: true,
-    },
+      unit: {
+        type: String,
+        required: true,
+      },
     }],
     specifications: {
       type: Object,
@@ -73,24 +73,24 @@ productSchema.pre("save", function (next) {
   if (!this.units || this.units.length === 0) {
     return next(new Error('At least one unit is required'));
   }
-  
+
   // Ensure no duplicate units
   const unitNames = this.units.map(u => u.unit.toLowerCase().trim());
   const uniqueUnits = new Set(unitNames);
   if (uniqueUnits.size !== unitNames.length) {
     return next(new Error('Duplicate units are not allowed'));
   }
-  
+
   next();
 });
 
 productSchema.pre("findOneAndUpdate", async function (next) {
   const update = this.getUpdate() as any;
   const query = this.getQuery();
-  
+
   if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
     const productId = query._id;
-    
+
     const product = await Product.findOne({ _id: productId, isDeleted: false });
     if (product) {
       const session = this.getOptions().session || undefined;
@@ -101,14 +101,14 @@ productSchema.pre("findOneAndUpdate", async function (next) {
       }
     }
   }
-  
+
   // Ensure units array is valid
   const units = update?.units || update?.$set?.units;
   if (units && Array.isArray(units)) {
     if (units.length === 0) {
       return next(new Error('At least one unit is required'));
     }
-    
+
     // Ensure no duplicate units
     const unitNames = units.map((u: any) => (u.unit || '').toLowerCase().trim());
     const uniqueUnits = new Set(unitNames);
@@ -116,7 +116,7 @@ productSchema.pre("findOneAndUpdate", async function (next) {
       return next(new Error('Duplicate units are not allowed'));
     }
   }
-  
+
   if (update?.name || update?.$set?.name) {
     const newName = update?.name || update?.$set?.name;
     if (newName) {
@@ -129,17 +129,17 @@ productSchema.pre("findOneAndUpdate", async function (next) {
       }
     }
   }
-  
+
   next();
 });
 
 productSchema.pre("updateOne", async function (next) {
   const update = this.getUpdate() as any;
   const query = this.getQuery();
-  
+
   if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
     const productId = query._id;
-    
+
     const product = await Product.findOne({ _id: productId, isDeleted: false });
     if (product) {
       const session = this.getOptions().session || undefined;
@@ -150,14 +150,14 @@ productSchema.pre("updateOne", async function (next) {
       }
     }
   }
-  
+
   // Ensure units array is valid
   const units = update?.units || update?.$set?.units;
   if (units && Array.isArray(units)) {
     if (units.length === 0) {
       return next(new Error('At least one unit is required'));
     }
-    
+
     // Ensure no duplicate units
     const unitNames = units.map((u: any) => (u.unit || '').toLowerCase().trim());
     const uniqueUnits = new Set(unitNames);
@@ -165,7 +165,7 @@ productSchema.pre("updateOne", async function (next) {
       return next(new Error('Duplicate units are not allowed'));
     }
   }
-  
+
   if (update?.name || update?.$set?.name) {
     const newName = update?.name || update?.$set?.name;
     if (newName) {
@@ -178,18 +178,18 @@ productSchema.pre("updateOne", async function (next) {
       }
     }
   }
-  
+
   next();
 });
 
 productSchema.pre("updateMany", async function (next) {
   const update = this.getUpdate() as any;
   const query = this.getQuery();
-  
+
   if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
     const products = await Product.find({ ...query, isDeleted: false });
     const session = this.getOptions().session;
-    
+
     try {
       for (const product of products) {
         await cascadeProductDelete(product._id as mongoose.Types.ObjectId, { session: session || undefined });
@@ -198,7 +198,7 @@ productSchema.pre("updateMany", async function (next) {
       return next(error);
     }
   }
-  
+
   next();
 });
 
