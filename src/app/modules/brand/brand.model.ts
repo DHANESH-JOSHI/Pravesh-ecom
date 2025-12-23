@@ -2,6 +2,7 @@ import mongoose from "mongoose"
 import { IBrand } from './brand.interface'
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
 import { generateUniqueSlug } from "@/utils/slugify";
+import { cascadeBrandDelete } from '@/utils/cascadeDelete';
 
 const brandSchema = new mongoose.Schema<IBrand>(
   {
@@ -52,21 +53,56 @@ brandSchema.pre("findOneAndUpdate", async function (next) {
   
   if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
     const brandId = query._id;
-    const Product = mongoose.model("Product");
-    const Category = mongoose.model("Category");
     
     const brand = await Brand.findOne({ _id: brandId, isDeleted: false });
     if (brand) {
-      await Promise.all([
-        Product.updateMany(
-          { brand: brandId, isDeleted: false },
-          { $unset: { brand: "" } }
-        ),
-        Category.updateMany(
-          { brands: brandId, isDeleted: false },
-          { $pull: { brands: brandId } }
-        )
-      ]);
+      const session = this.getOptions().session || undefined;
+      try {
+        await cascadeBrandDelete(brandId as mongoose.Types.ObjectId, { session });
+      } catch (error: any) {
+        return next(error);
+      }
+    }
+  }
+  
+  next();
+});
+
+brandSchema.pre("updateOne", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const brandId = query._id;
+    
+    const brand = await Brand.findOne({ _id: brandId, isDeleted: false });
+    if (brand) {
+      const session = this.getOptions().session || undefined;
+      try {
+        await cascadeBrandDelete(brandId as mongoose.Types.ObjectId, { session });
+      } catch (error: any) {
+        return next(error);
+      }
+    }
+  }
+  
+  next();
+});
+
+brandSchema.pre("updateMany", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const brands = await Brand.find({ ...query, isDeleted: false });
+    const session = this.getOptions().session;
+    
+    try {
+      for (const brand of brands) {
+        await cascadeBrandDelete(brand._id as mongoose.Types.ObjectId, { session: session || undefined });
+      }
+    } catch (error: any) {
+      return next(error);
     }
   }
   

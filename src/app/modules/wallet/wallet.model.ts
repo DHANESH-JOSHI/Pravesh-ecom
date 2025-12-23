@@ -31,12 +31,19 @@ const WalletSchema = new Schema<IWallet>(
       type: Number,
       default: 0
     },
-    transactions: [TransactionSchema]
+    transactions: [TransactionSchema],
+    isDeleted: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,
   }
 );
 applyMongooseToJSON(WalletSchema);
+
+WalletSchema.index({ user: 1, isDeleted: 1 });
+WalletSchema.index({ createdAt: -1 });
 
 export const Wallet: mongoose.Model<IWallet> =  mongoose.models.Wallet || mongoose.model<IWallet>('Wallet', WalletSchema);

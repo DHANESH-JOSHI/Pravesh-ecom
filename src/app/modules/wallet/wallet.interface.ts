@@ -9,4 +9,5 @@ export interface IWallet extends Document {
   user: Types.ObjectId;
   balance: number;
   transactions: ITransaction[];
+  isDeleted?: boolean;
 }

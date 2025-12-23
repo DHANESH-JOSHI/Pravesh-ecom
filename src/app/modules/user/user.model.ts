@@ -2,6 +2,7 @@ import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 import { IUser, UserRole, UserStatus } from "./user.interface";
 import applyMongooseToJSON from "@/utils/mongooseToJSON";
+import { cascadeUserDelete } from '@/utils/cascadeDelete';
 
 const userSchema = new Schema<IUser>(
   {
@@ -90,22 +91,56 @@ userSchema.pre("findOneAndUpdate", async function (next) {
   
   if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
     const userId = query._id;
-    const Review = mongoose.model("Review");
-    const Address = mongoose.model("Address");
-    const Cart = mongoose.model("Cart");
-    const Wishlist = mongoose.model("Wishlist");
     
     const user = await User.findOne({ _id: userId, isDeleted: false });
     if (user) {
-      await Promise.all([
-        Review.deleteMany({ user: userId }),
-        Address.updateMany(
-          { user: userId, isDeleted: false },
-          { $set: { isDeleted: true } }
-        ),
-        Cart.deleteMany({ user: userId }),
-        Wishlist.deleteMany({ user: userId })
-      ]);
+      const session = this.getOptions().session || undefined;
+      try {
+        await cascadeUserDelete(userId as mongoose.Types.ObjectId, { session });
+      } catch (error: any) {
+        return next(error);
+      }
+    }
+  }
+  
+  next();
+});
+
+userSchema.pre("updateOne", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const userId = query._id;
+    
+    const user = await User.findOne({ _id: userId, isDeleted: false });
+    if (user) {
+      const session = this.getOptions().session || undefined;
+      try {
+        await cascadeUserDelete(userId as mongoose.Types.ObjectId, { session });
+      } catch (error: any) {
+        return next(error);
+      }
+    }
+  }
+  
+  next();
+});
+
+userSchema.pre("updateMany", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const users = await User.find({ ...query, isDeleted: false });
+    const session = this.getOptions().session;
+    
+    try {
+      for (const user of users) {
+        await cascadeUserDelete(user._id as mongoose.Types.ObjectId, { session: session || undefined });
+      }
+    } catch (error: any) {
+      return next(error);
     }
   }
   
@@ -116,20 +151,11 @@ userSchema.pre("save", async function (next) {
   if (this.isModified("isDeleted") && this.isDeleted === true && !this.isNew) {
     const wasDeleted = await User.findById(this._id).select('isDeleted');
     if (wasDeleted && !wasDeleted.isDeleted) {
-      const Review = mongoose.model("Review");
-      const Address = mongoose.model("Address");
-      const Cart = mongoose.model("Cart");
-      const Wishlist = mongoose.model("Wishlist");
-      
-      await Promise.all([
-        Review.deleteMany({ user: this._id }),
-        Address.updateMany(
-          { user: this._id, isDeleted: false },
-          { $set: { isDeleted: true } }
-        ),
-        Cart.deleteMany({ user: this._id }),
-        Wishlist.deleteMany({ user: this._id })
-      ]);
+      try {
+        await cascadeUserDelete(this._id as mongoose.Types.ObjectId);
+      } catch (error: any) {
+        return next(error);
+      }
     }
   }
   

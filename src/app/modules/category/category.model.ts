@@ -3,6 +3,7 @@ import { ICategory } from './category.interface';
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
 import { generateUniqueSlug } from '@/utils/slugify';
 import { getPixabayImageForCategory } from '@/utils/pixabay';
+import { cascadeCategoryDelete } from '@/utils/cascadeDelete';
 
 const categorySchema: Schema = new Schema<ICategory>(
   {
@@ -78,7 +79,6 @@ categorySchema.pre("validate", async function (next) {
 });
 
 categorySchema.pre("save", async function (next) {
-  // Build hierarchical path first
   if (this.parentCategory) {
     const parent = await mongoose.model("Category").findById(this.parentCategory);
     if (parent) {
@@ -109,25 +109,57 @@ categorySchema.pre("findOneAndUpdate", async function (next) {
   if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
     const categoryId = query._id;
     const Category = mongoose.model("Category");
-    const Product = mongoose.model("Product");
-    const Brand = mongoose.model("Brand");
     
     const category = await Category.findOne({ _id: categoryId, isDeleted: false });
     if (category) {
-      await Promise.all([
-        Category.updateMany(
-          { parentCategory: categoryId, isDeleted: false },
-          { $set: { isDeleted: true } }
-        ),
-        Product.updateMany(
-          { category: categoryId, isDeleted: false },
-          { $unset: { category: "" } }
-        ),
-        Brand.updateMany(
-          { categories: categoryId, isDeleted: false },
-          { $pull: { categories: categoryId } }
-        )
-      ]);
+      const session = this.getOptions().session || undefined;
+      try {
+        await cascadeCategoryDelete(categoryId as mongoose.Types.ObjectId, { session });
+      } catch (error: any) {
+        return next(error);
+      }
+    }
+  }
+  
+  next();
+});
+
+categorySchema.pre("updateOne", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const categoryId = query._id;
+    const Category = mongoose.model("Category");
+    
+    const category = await Category.findOne({ _id: categoryId, isDeleted: false });
+    if (category) {
+      const session = this.getOptions().session || undefined;
+      try {
+        await cascadeCategoryDelete(categoryId as mongoose.Types.ObjectId, { session });
+      } catch (error: any) {
+        return next(error);
+      }
+    }
+  }
+  
+  next();
+});
+
+categorySchema.pre("updateMany", async function (next) {
+  const update = this.getUpdate() as any;
+  const query = this.getQuery();
+  
+  if (update?.isDeleted === true || update?.$set?.isDeleted === true) {
+    const categories = await Category.find({ ...query, isDeleted: false });
+    const session = this.getOptions().session;
+    
+    try {
+      for (const category of categories) {
+        await cascadeCategoryDelete(category._id as mongoose.Types.ObjectId, { session: session || undefined });
+      }
+    } catch (error: any) {
+      return next(error);
     }
   }
   
