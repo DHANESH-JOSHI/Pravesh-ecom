@@ -16,6 +16,21 @@ const productSchema = new Schema<IProduct>(
       type: String,
       required: true,
     },
+    units: [{
+      unit: {
+        type: String,
+        required: true,
+      },
+      conversionRate: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
+      isBase: {
+        type: Boolean,
+        default: false,
+      },
+    }],
     specifications: {
       type: Object,
       default: {},

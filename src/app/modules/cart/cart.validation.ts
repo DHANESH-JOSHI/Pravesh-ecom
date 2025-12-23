@@ -10,10 +10,12 @@ const objectIdValidation = z
 const addToCartValidation = z.object({
   productId: objectIdValidation,
   quantity: z.coerce.number().int().positive('Quantity must be a positive integer'),
+  unit: z.string().optional(),
 });
 
 const updateCartItemValidation = z.object({
   quantity: z.coerce.number().int().min(0, 'Quantity must be a non-negative integer'),
+  unit: z.string().optional(),
 });
 
 export {

@@ -175,7 +175,8 @@ pipeline.push({ $match: filter });
                 0
               ]
             },
-            quantity: "$$item.quantity"
+            quantity: "$$item.quantity",
+            unit: "$$item.unit"
           }
         }
       }
@@ -205,7 +206,7 @@ pipeline.push({ $match: filter });
 
 export const addToCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { productId, quantity } = addToCartValidation.parse(req.body);
+  const { productId, quantity, unit } = addToCartValidation.parse(req.body);
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -218,6 +219,15 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
+  }
+
+  // Validate unit if provided
+  if (unit) {
+    const productUnits = product.units || [];
+    const validUnit = productUnits.find(u => u.unit === unit);
+    if (!validUnit && product.unit !== unit) {
+      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ') || product.unit}`);
+    }
   }
 
   // if (product.stockStatus === StockStatus.OutOfStock) {
@@ -234,9 +244,9 @@ export const addToCart = asyncHandler(async (req, res) => {
     cart = new Cart({ user: userId, items: [] });
   }
 
-  await cart.addItem(productId, quantity);
+  await cart.addItem(productId, quantity, unit);
 
-  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
+  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail unit units', match: { isDeleted: false } });
 
   // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
@@ -254,7 +264,7 @@ export const addToCart = asyncHandler(async (req, res) => {
 export const updateCartItem = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
-  const { quantity } = updateCartItemValidation.parse(req.body);
+  const { quantity, unit } = updateCartItemValidation.parse(req.body);
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -275,12 +285,25 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
+  // Validate unit if provided
+  if (unit) {
+    const productUnits = product.units || [];
+    const validUnit = productUnits.find(u => u.unit === unit);
+    if (!validUnit && product.unit !== unit) {
+      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ') || product.unit}`);
+    }
+  }
+
   // if (product.stock < quantity) {
   //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
   // }
 
+  // Find the cart item to get its current unit
+  const cartItem = cart.items.find(item => item.product.equals(new Types.ObjectId(productId)));
+  const currentUnit = cartItem?.unit;
+
   try {
-    await cart.updateItem(new Types.ObjectId(productId), quantity);
+    await cart.updateItem(new Types.ObjectId(productId), quantity, unit || currentUnit);
   } catch (error) {
     if (error instanceof Error && error.message === 'Item not found in cart') {
       throw new ApiError(status.NOT_FOUND, 'Item not found in cart');
@@ -288,7 +311,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
+  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail unit units', match: { isDeleted: false } });
 
   // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));

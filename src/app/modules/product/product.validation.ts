@@ -18,6 +18,16 @@ const createProductValidation = z.object({
 
   // stock: z.coerce.number().min(0, 'Stock cannot be negative'),
   unit: z.string(),
+  units: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch (e) { return val; }
+    }
+    return val;
+  }, z.array(z.object({
+    unit: z.string().min(1, 'Unit name is required'),
+    conversionRate: z.coerce.number().positive('Conversion rate must be positive'),
+    isBase: z.boolean().optional(),
+  })).optional()),
   // minStock: z.coerce.number().min(0).optional(),
 
   // features: z.preprocess((val) => {

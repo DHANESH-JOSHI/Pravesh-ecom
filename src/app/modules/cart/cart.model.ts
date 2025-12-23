@@ -13,6 +13,9 @@ const cartItemSchema = new Schema<ICartItem>(
       type: Number,
       required: true,
       min: 1,
+    },
+    unit: {
+      type: String,
     }
   }
 );
@@ -37,16 +40,19 @@ cartSchema.methods.addItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
+  unit?: string,
 ) {
+  // Check if item with same product and unit already exists
   const existingItemIndex = this.items.findIndex(
     (item) =>
-      item.product.equals(productId)
+      item.product.equals(productId) && 
+      (item.unit === unit || (!item.unit && !unit))
   );
 
   if (existingItemIndex > -1) {
     this.items[existingItemIndex].quantity += quantity;
   } else {
-    this.items.push({ product: productId, quantity });
+    this.items.push({ product: productId, quantity, unit });
   }
   return this.save();
 };
@@ -55,10 +61,12 @@ cartSchema.methods.updateItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
+  unit?: string,
 ) {
   const itemIndex = this.items.findIndex(
     (item) =>
-      item.product.equals(productId)
+      item.product.equals(productId) &&
+      (item.unit === unit || (!item.unit && !unit))
   );
 
   if (itemIndex === -1) {
@@ -69,6 +77,9 @@ cartSchema.methods.updateItem = async function (
     this.items.splice(itemIndex, 1);
   } else {
     this.items[itemIndex].quantity = quantity;
+    if (unit !== undefined) {
+      this.items[itemIndex].unit = unit;
+    }
   }
   return this.save();
 };

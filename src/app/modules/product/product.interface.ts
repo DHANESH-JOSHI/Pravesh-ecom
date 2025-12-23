@@ -25,6 +25,12 @@ export enum StockStatus {
 }
 
 
+export interface IProductUnit {
+  unit: string; // e.g., "kg", "g", "piece", "packet"
+  conversionRate: number; // conversion rate to base unit (e.g., 1 kg = 1000 g, so g has conversionRate 0.001)
+  isBase?: boolean; // whether this is the base unit for calculations
+}
+
 export interface IProduct extends Document {
   name: string;
   slug: string;
@@ -38,7 +44,8 @@ export interface IProduct extends Document {
 
   // stock: number;
   // minStock: number;
-  unit: string;
+  unit: string; // kept for backward compatibility, will be the base unit
+  units?: IProductUnit[]; // array of available units with conversion rates
   // stockStatus: StockStatus;
   specifications?: Record<string, any>;
   // features?: string[];

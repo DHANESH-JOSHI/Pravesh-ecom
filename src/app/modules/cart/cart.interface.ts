@@ -3,6 +3,7 @@ import { Document, Model, Types } from 'mongoose';
 export interface ICartItem {
   product: Types.ObjectId;
   quantity: number;
+  unit?: string; // selected unit for this cart item
 }
 
 export interface ICart extends Document {
@@ -15,10 +16,12 @@ export interface ICart extends Document {
   addItem(
     productId: Types.ObjectId,
     quantity: number,
+    unit?: string,
   ): Promise<this>;
   updateItem(
     productId: Types.ObjectId,
     quantity: number,
+    unit?: string,
   ): Promise<this>;
   removeItem(productId: Types.ObjectId): Promise<this>;
   clearCart(): Promise<this>;
@@ -37,10 +40,12 @@ export interface ICartFilter {
 export interface IAddToCartRequest {
   productId: string;
   quantity: number;
+  unit?: string;
 }
 
 export interface IUpdateCartItemRequest {
   quantity: number;
+  unit?: string;
 }
 
 export interface ICartSummary {

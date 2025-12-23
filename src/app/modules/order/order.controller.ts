@@ -48,6 +48,7 @@ export const createOrder = asyncHandler(async (req, res) => {
       orderItems.push({
         product: product._id,
         quantity: item.quantity,
+        unit: item.unit,
       });
       // totalAmount = 0; // Removed: price calculation removed
     }
