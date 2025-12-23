@@ -26,9 +26,8 @@ export enum StockStatus {
 
 
 export interface IProductUnit {
-  unit: string; // e.g., "kg", "g", "piece", "packet"
-  conversionRate: number; // conversion rate to base unit (e.g., 1 kg = 1000 g, so g has conversionRate 0.001)
-  isBase?: boolean; // whether this is the base unit for calculations
+  unit: string; // e.g., "kg", "packet", "piece", "box", "litre", "metre", "inch"
+  // No conversion rate needed - these are different unit types, not convertible scales
 }
 
 export interface IProduct extends Document {
@@ -44,8 +43,7 @@ export interface IProduct extends Document {
 
   // stock: number;
   // minStock: number;
-  unit: string; // Base unit (required). Automatically synced with base unit in units array if present.
-  units?: IProductUnit[]; // Array of available units with conversion rates. Base unit should have isBase=true and match the unit field.
+  units: IProductUnit[]; // Array of available unit types (kg, packet, piece, box, litre, etc.). At least one unit required. Users can select any unit when purchasing.
   // stockStatus: StockStatus;
   specifications?: Record<string, any>;
   // features?: string[];

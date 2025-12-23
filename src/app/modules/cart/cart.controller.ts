@@ -224,9 +224,12 @@ export const addToCart = asyncHandler(async (req, res) => {
   // Validate unit if provided
   if (unit) {
     const productUnits = product.units || [];
+    if (productUnits.length === 0) {
+      throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
+    }
     const validUnit = productUnits.find(u => u.unit === unit);
-    if (!validUnit && product.unit !== unit) {
-      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ') || product.unit}`);
+    if (!validUnit) {
+      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
     }
   }
 
@@ -246,7 +249,7 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   await cart.addItem(productId, quantity, unit);
 
-  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail unit units', match: { isDeleted: false } });
+  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail units', match: { isDeleted: false } });
 
   // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
@@ -288,9 +291,12 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   // Validate unit if provided
   if (unit) {
     const productUnits = product.units || [];
+    if (productUnits.length === 0) {
+      throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
+    }
     const validUnit = productUnits.find(u => u.unit === unit);
-    if (!validUnit && product.unit !== unit) {
-      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ') || product.unit}`);
+    if (!validUnit) {
+      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
     }
   }
 
@@ -311,7 +317,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail unit units', match: { isDeleted: false } });
+  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail units', match: { isDeleted: false } });
 
   // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));

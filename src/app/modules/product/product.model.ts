@@ -12,23 +12,10 @@ const productSchema = new Schema<IProduct>(
     sku: { type: String, unique: true, trim: true },
     brand: { type: Schema.Types.ObjectId, ref: "Brand" },
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
-    unit: {
-      type: String,
-      required: true,
-    },
     units: [{
       unit: {
         type: String,
         required: true,
-      },
-      conversionRate: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-      isBase: {
-        type: Boolean,
-        default: false,
       },
     }],
     specifications: {
@@ -82,19 +69,18 @@ productSchema.pre("validate", async function (next) {
   next();
 });
 productSchema.pre("save", function (next) {
-  // Ensure unit field matches the base unit in units array
-  if (this.units && this.units.length > 0) {
-    const baseUnit = this.units.find(u => u.isBase);
-    if (baseUnit) {
-      // Sync unit field with base unit from units array
-      this.unit = baseUnit.unit;
-    } else {
-      // If no base unit marked, use first unit and mark it as base
-      this.units[0].isBase = true;
-      this.unit = this.units[0].unit;
-    }
+  // Ensure at least one unit exists
+  if (!this.units || this.units.length === 0) {
+    return next(new Error('At least one unit is required'));
   }
-  // If units array is empty but unit exists, that's fine (backward compatibility)
+  
+  // Ensure no duplicate units
+  const unitNames = this.units.map(u => u.unit.toLowerCase().trim());
+  const uniqueUnits = new Set(unitNames);
+  if (uniqueUnits.size !== unitNames.length) {
+    return next(new Error('Duplicate units are not allowed'));
+  }
+  
   next();
 });
 
@@ -116,24 +102,18 @@ productSchema.pre("findOneAndUpdate", async function (next) {
     }
   }
   
-  // Sync unit field with base unit in units array
+  // Ensure units array is valid
   const units = update?.units || update?.$set?.units;
-  if (units && Array.isArray(units) && units.length > 0) {
-    const baseUnit = units.find((u: any) => u.isBase);
-    if (baseUnit) {
-      if (update.$set) {
-        update.$set.unit = baseUnit.unit;
-      } else {
-        update.unit = baseUnit.unit;
-      }
-    } else if (units.length > 0) {
-      // Mark first unit as base if none marked
-      units[0].isBase = true;
-      if (update.$set) {
-        update.$set.unit = units[0].unit;
-      } else {
-        update.unit = units[0].unit;
-      }
+  if (units && Array.isArray(units)) {
+    if (units.length === 0) {
+      return next(new Error('At least one unit is required'));
+    }
+    
+    // Ensure no duplicate units
+    const unitNames = units.map((u: any) => (u.unit || '').toLowerCase().trim());
+    const uniqueUnits = new Set(unitNames);
+    if (uniqueUnits.size !== unitNames.length) {
+      return next(new Error('Duplicate units are not allowed'));
     }
   }
   
@@ -171,24 +151,18 @@ productSchema.pre("updateOne", async function (next) {
     }
   }
   
-  // Sync unit field with base unit in units array
+  // Ensure units array is valid
   const units = update?.units || update?.$set?.units;
-  if (units && Array.isArray(units) && units.length > 0) {
-    const baseUnit = units.find((u: any) => u.isBase);
-    if (baseUnit) {
-      if (update.$set) {
-        update.$set.unit = baseUnit.unit;
-      } else {
-        update.unit = baseUnit.unit;
-      }
-    } else if (units.length > 0) {
-      // Mark first unit as base if none marked
-      units[0].isBase = true;
-      if (update.$set) {
-        update.$set.unit = units[0].unit;
-      } else {
-        update.unit = units[0].unit;
-      }
+  if (units && Array.isArray(units)) {
+    if (units.length === 0) {
+      return next(new Error('At least one unit is required'));
+    }
+    
+    // Ensure no duplicate units
+    const unitNames = units.map((u: any) => (u.unit || '').toLowerCase().trim());
+    const uniqueUnits = new Set(unitNames);
+    if (uniqueUnits.size !== unitNames.length) {
+      return next(new Error('Duplicate units are not allowed'));
     }
   }
   
