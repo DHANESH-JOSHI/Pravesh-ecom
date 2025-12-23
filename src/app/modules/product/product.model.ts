@@ -56,8 +56,10 @@ productSchema.index({ totalSold: -1 });
 productSchema.index({ salesCount: -1 });
 
 productSchema.pre("validate", async function (next) {
-  if (!this.slug && this.name) {
-    this.slug = await generateUniqueSlug(this.name as any);
+  if (this.isModified('name') || !this.slug) {
+    if (this.name) {
+      this.slug = await generateUniqueSlug(this.name as any, 'Product');
+    }
   }
   if (!this.sku && this.name) {
     this.sku = await generateUniqueSKU();
@@ -86,6 +88,19 @@ productSchema.pre("findOneAndUpdate", async function (next) {
     }
   }
   
+  if (update?.name || update?.$set?.name) {
+    const newName = update?.name || update?.$set?.name;
+    if (newName) {
+      const excludeId = query._id ? String(query._id) : undefined;
+      const newSlug = await generateUniqueSlug(newName, 'Product', excludeId);
+      if (update.$set) {
+        update.$set.slug = newSlug;
+      } else {
+        update.slug = newSlug;
+      }
+    }
+  }
+  
   next();
 });
 
@@ -103,6 +118,19 @@ productSchema.pre("updateOne", async function (next) {
         await cascadeProductDelete(productId as mongoose.Types.ObjectId, { session });
       } catch (error: any) {
         return next(error);
+      }
+    }
+  }
+  
+  if (update?.name || update?.$set?.name) {
+    const newName = update?.name || update?.$set?.name;
+    if (newName) {
+      const excludeId = query._id ? String(query._id) : undefined;
+      const newSlug = await generateUniqueSlug(newName, 'Product', excludeId);
+      if (update.$set) {
+        update.$set.slug = newSlug;
+      } else {
+        update.slug = newSlug;
       }
     }
   }

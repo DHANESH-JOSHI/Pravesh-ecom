@@ -72,8 +72,11 @@ categorySchema.index(
 );
 
 categorySchema.pre("validate", async function (next) {
-  if (!this.slug && this.title) {
-    this.slug = await generateUniqueSlug(this.title as any);
+  if (this.isModified('title') || !this.slug) {
+    if (this.title) {
+      const excludeId = this._id ? String(this._id) : undefined;
+      this.slug = await generateUniqueSlug(this.title as any, 'Category', excludeId);
+    }
   }
   next();
 });
@@ -121,6 +124,19 @@ categorySchema.pre("findOneAndUpdate", async function (next) {
     }
   }
   
+  if (update?.title || update?.$set?.title) {
+    const newTitle = update?.title || update?.$set?.title;
+    if (newTitle) {
+      const excludeId = query._id ? String(query._id) : undefined;
+      const newSlug = await generateUniqueSlug(newTitle, 'Category', excludeId);
+      if (update.$set) {
+        update.$set.slug = newSlug;
+      } else {
+        update.slug = newSlug;
+      }
+    }
+  }
+  
   next();
 });
 
@@ -139,6 +155,19 @@ categorySchema.pre("updateOne", async function (next) {
         await cascadeCategoryDelete(categoryId as mongoose.Types.ObjectId, { session });
       } catch (error: any) {
         return next(error);
+      }
+    }
+  }
+  
+  if (update?.title || update?.$set?.title) {
+    const newTitle = update?.title || update?.$set?.title;
+    if (newTitle) {
+      const excludeId = query._id ? String(query._id) : undefined;
+      const newSlug = await generateUniqueSlug(newTitle, 'Category', excludeId);
+      if (update.$set) {
+        update.$set.slug = newSlug;
+      } else {
+        update.slug = newSlug;
       }
     }
   }

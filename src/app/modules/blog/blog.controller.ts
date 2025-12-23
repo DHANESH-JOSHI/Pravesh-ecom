@@ -15,6 +15,12 @@ const ApiResponse = getApiResponseClass('BLOG');
 
 export const createBlog = asyncHandler(async (req, res) => {
   const blogData: any = createBlogValidation.parse(req.body);
+  
+  const existingBlog = await Blog.findOne({ title: blogData.title, isDeleted: false });
+  if (existingBlog) {
+    throw new ApiError(status.BAD_REQUEST, 'Blog with this title already exists');
+  }
+  
   if (req.file) blogData.featuredImage = req.file?.path;
   const blog = await Blog.create(blogData);
   await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
@@ -146,6 +152,17 @@ export const updateBlog = asyncHandler(async (req, res) => {
 
   if (!existingBlog) {
     throw new ApiError(status.NOT_FOUND, 'Blog not found or has been deleted');
+  }
+
+  if (postData.title && postData.title !== existingBlog.title) {
+    const duplicateBlog = await Blog.findOne({ 
+      title: postData.title, 
+      _id: { $ne: blogId }, 
+      isDeleted: false 
+    });
+    if (duplicateBlog) {
+      throw new ApiError(status.BAD_REQUEST, 'Blog with this title already exists');
+    }
   }
 
   if (req.file) {
