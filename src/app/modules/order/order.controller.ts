@@ -165,6 +165,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
       orderItems.push({
         product: item.product,
         quantity: item.quantity,
+        unit: item.unit,
       });
     }
     order.items = orderItems;

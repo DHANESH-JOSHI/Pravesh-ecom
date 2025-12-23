@@ -6,7 +6,7 @@ import { preventOrderDeletion } from '@/utils/cascadeDelete';
 const OrderItemSchema = new Schema<IOrderItem>({
   product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
   quantity: { type: Number, required: true, min: 1 },
-  unit: { type: String },
+  unit: { type: String, required: true },
 }, { _id: false });
 
 const OrderHistorySchema = new Schema({

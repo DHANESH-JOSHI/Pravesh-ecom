@@ -221,16 +221,14 @@ export const addToCart = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
-  // Validate unit if provided
-  if (unit) {
-    const productUnits = product.units || [];
-    if (productUnits.length === 0) {
-      throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
-    }
-    const validUnit = productUnits.find(u => u.unit === unit);
-    if (!validUnit) {
-      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
-    }
+  // Validate unit (required)
+  const productUnits = product.units || [];
+  if (productUnits.length === 0) {
+    throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
+  }
+  const validUnit = productUnits.find(u => u.unit === unit);
+  if (!validUnit) {
+    throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
   }
 
   // if (product.stockStatus === StockStatus.OutOfStock) {
@@ -288,28 +286,33 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
   }
 
-  // Validate unit if provided
-  if (unit) {
-    const productUnits = product.units || [];
-    if (productUnits.length === 0) {
-      throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
-    }
-    const validUnit = productUnits.find(u => u.unit === unit);
-    if (!validUnit) {
-      throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
-    }
+  // Validate unit (required)
+  const productUnits = product.units || [];
+  if (productUnits.length === 0) {
+    throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
+  }
+  const validUnit = productUnits.find(u => u.unit === unit);
+  if (!validUnit) {
+    throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
   }
 
   // if (product.stock < quantity) {
   //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
   // }
 
-  // Find the cart item to get its current unit
-  const cartItem = cart.items.find(item => item.product.equals(new Types.ObjectId(productId)));
-  const currentUnit = cartItem?.unit;
+  // Find the cart item with the specified unit
+  const cartItem = cart.items.find(item => 
+    item.product.equals(new Types.ObjectId(productId)) && item.unit === unit
+  );
 
   try {
-    await cart.updateItem(new Types.ObjectId(productId), quantity, unit || currentUnit);
+    // If item exists with this unit, update it
+    if (cartItem) {
+      await cart.updateItem(new Types.ObjectId(productId), quantity, unit);
+    } else {
+      // Item doesn't exist with this unit, add it as new item
+      await cart.addItem(new Types.ObjectId(productId), quantity, unit);
+    }
   } catch (error) {
     if (error instanceof Error && error.message === 'Item not found in cart') {
       throw new ApiError(status.NOT_FOUND, 'Item not found in cart');
@@ -335,6 +338,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
 export const removeFromCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
+  const { unit } = req.body; // Optional unit parameter - if not provided, removes all units of the product
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -346,9 +350,27 @@ export const removeFromCart = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Cart not found');
   }
 
-  await cart.removeItem(new Types.ObjectId(productId));
+  // If unit is provided, validate it exists for the product and remove specific unit
+  if (unit) {
+    const product = await Product.findOne({
+      _id: productId,
+      isDeleted: false,
+    });
+    if (product) {
+      const productUnits = product.units || [];
+      const validUnit = productUnits.find(u => u.unit === unit);
+      if (!validUnit) {
+        throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
+      }
+    }
+    await cart.removeItem(new Types.ObjectId(productId), unit);
+  } else {
+    // If no unit provided, remove all items with this productId
+    cart.items = cart.items.filter(item => !item.product.equals(new Types.ObjectId(productId)));
+    await cart.save();
+  }
 
-  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
+  const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail units', match: { isDeleted: false } });
 
   // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));

@@ -189,7 +189,7 @@ export const getBrandById = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved", cached));
 
   const { populate = "false" } = req.query;
-  const query = Brand.findOne({ _id: id, isDeleted: false });
+  const query = Brand.findOne({ _id: id }); // Allow viewing inactive brands
   const brand =
     populate === "true"
       ? await query.populate([
@@ -216,7 +216,7 @@ export const getBrandBySlug = asyncHandler(async (req, res) => {
   if (!slug || slug.trim() === "") {
     throw new ApiError(status.BAD_REQUEST, "Invalid brand slug");
   }
-  const query = Brand.findOne({ slug, isDeleted: false });
+  const query = Brand.findOne({ slug }); // Allow viewing inactive brands
   const brand =
     populate === "true"
       ? await query.populate([

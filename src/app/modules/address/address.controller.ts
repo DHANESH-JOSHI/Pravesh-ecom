@@ -48,8 +48,7 @@ export const getAddressById = asyncHandler(async (req, res) => {
   let address;
   if (populate == 'true') {
     address = await Address.findOne({
-      _id: addressId,
-      isDeleted: false,
+      _id: addressId, // Allow viewing inactive addresses
     }).populate([
       {
         path: 'user',
@@ -65,8 +64,7 @@ export const getAddressById = asyncHandler(async (req, res) => {
     ]);
   } else {
     address = await Address.findOne({
-      _id: addressId,
-      isDeleted: false,
+      _id: addressId, // Allow viewing inactive addresses
     }).populate('user', 'name email');
   }
   if (!address) {

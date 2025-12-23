@@ -16,6 +16,7 @@ const cartItemSchema = new Schema<ICartItem>(
     },
     unit: {
       type: String,
+      required: true,
     }
   }
 );
@@ -40,13 +41,12 @@ cartSchema.methods.addItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
-  unit?: string,
+  unit: string,
 ) {
   // Check if item with same product and unit already exists
   const existingItemIndex = this.items.findIndex(
     (item) =>
-      item.product.equals(productId) && 
-      (item.unit === unit || (!item.unit && !unit))
+      item.product.equals(productId) && item.unit === unit
   );
 
   if (existingItemIndex > -1) {
@@ -61,12 +61,11 @@ cartSchema.methods.updateItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
   quantity: number,
-  unit?: string,
+  unit: string,
 ) {
   const itemIndex = this.items.findIndex(
     (item) =>
-      item.product.equals(productId) &&
-      (item.unit === unit || (!item.unit && !unit))
+      item.product.equals(productId) && item.unit === unit
   );
 
   if (itemIndex === -1) {
@@ -77,9 +76,7 @@ cartSchema.methods.updateItem = async function (
     this.items.splice(itemIndex, 1);
   } else {
     this.items[itemIndex].quantity = quantity;
-    if (unit !== undefined) {
-      this.items[itemIndex].unit = unit;
-    }
+    this.items[itemIndex].unit = unit;
   }
   return this.save();
 };
@@ -87,10 +84,11 @@ cartSchema.methods.updateItem = async function (
 cartSchema.methods.removeItem = async function (
   this: ICart,
   productId: mongoose.Types.ObjectId,
+  unit: string,
 ) {
   this.items = this.items.filter(
     (item) =>
-      !(item.product.equals(productId))
+      !(item.product.equals(productId) && item.unit === unit)
   );
   return this.save();
 };

@@ -13,10 +13,10 @@ const productSchema = new Schema<IProduct>(
     brand: { type: Schema.Types.ObjectId, ref: "Brand" },
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
     units: [{
-      unit: {
-        type: String,
-        required: true,
-      },
+    unit: {
+      type: String,
+      required: true,
+    },
     }],
     specifications: {
       type: Object,

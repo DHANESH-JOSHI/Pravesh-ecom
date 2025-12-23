@@ -15,7 +15,7 @@ export enum OrderStatus {
 export interface IOrderItem {
   product: Types.ObjectId;
   quantity: number;
-  unit?: string;
+  unit: string; // required - unit selected when order was placed
 }
 
 export interface OrderHistory {
