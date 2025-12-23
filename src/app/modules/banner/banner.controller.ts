@@ -96,7 +96,7 @@ export const getBannerById = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Banner retrieved successfully', cachedBanner));
   }
 
-  const banner = await Banner.findOne({ _id: bannerId, isDeleted: false });
+  const banner = await Banner.findOne({ _id: bannerId });
   if (!banner) {
     throw new ApiError(status.NOT_FOUND, 'Banner not found');
   }

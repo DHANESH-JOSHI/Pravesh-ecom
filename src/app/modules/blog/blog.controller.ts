@@ -34,7 +34,7 @@ export const getBlogById = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', cachedBlog));
   }
 
-  const post = await Blog.findOne({ _id: id, isDeleted: false }).lean();
+  const post = await Blog.findOne({ _id: id }).lean();
 
   if (!post) {
     throw new ApiError(status.NOT_FOUND, 'Blog not found');
@@ -57,7 +57,7 @@ export const getBlogBySlug = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Blog retrieved successfully', cachedBlog));
   }
 
-  const post = await Blog.findOne({ slug, isDeleted: false }).lean();
+  const post = await Blog.findOne({ slug }).lean();
 
   if (!post) {
     throw new ApiError(status.NOT_FOUND, 'Blog not found');

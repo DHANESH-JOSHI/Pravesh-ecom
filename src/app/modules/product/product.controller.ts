@@ -95,13 +95,13 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
 
   let product;
   if (populate === 'true') {
-    product = await Product.findOne({ slug, isDeleted: false })
+    product = await Product.findOne({ slug })
       .populate([
         { path: 'category', match: { isDeleted: false } },
         { path: 'brand', match: { isDeleted: false } }
       ])
   } else {
-    product = await Product.findOne({ slug, isDeleted: false });
+    product = await Product.findOne({ slug });
   }
 
   if (!product) {
@@ -283,7 +283,7 @@ export const getProductById = asyncHandler(async (req, res) => {
   }
   let product;
   if (populate == 'true') {
-    product = await Product.findOne({ _id: id, isDeleted: false })
+    product = await Product.findOne({ _id: id })
       .populate({ path: 'category', select: 'slug title path', match: { isDeleted: false } })
       .populate({ path: 'brand', select: 'slug name', match: { isDeleted: false } })
       .populate({
@@ -294,7 +294,7 @@ export const getProductById = asyncHandler(async (req, res) => {
         }
       })
   } else {
-    product = await Product.findOne({ _id: id, isDeleted: false });
+    product = await Product.findOne({ _id: id });
   }
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');

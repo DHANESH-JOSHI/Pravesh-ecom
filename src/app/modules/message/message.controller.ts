@@ -80,7 +80,7 @@ export const getMessageById = asyncHandler(async (req, res) => {
   if (cached) {
     return res.json(new ApiResponse(status.OK, "Message retrieved", cached));
   }
-  const contact = await Message.findOne({ _id: id, isDeleted: false });
+  const contact = await Message.findOne({ _id: id });
   if (!contact) throw new ApiError(status.NOT_FOUND, "Message not found");
   const contactObj = (contact as any)?.toObject ? (contact as any).toObject() : contact;
   await redis.set(cachekey, contactObj, CacheTTL.LONG);

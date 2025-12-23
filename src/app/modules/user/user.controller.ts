@@ -195,7 +195,7 @@ export const getUserById = asyncHandler(async (req, res) => {
   }
   let user;
   if (populate == 'true') {
-    user = await User.findOne({ _id: userId, isDeleted: false }, { password: 0 }).populate([
+    user = await User.findOne({ _id: userId }, { password: 0 }).populate([
       {
         path: 'reviews',
         options: { limit: 5, sort: { createdAt: -1 } },
@@ -219,7 +219,7 @@ export const getUserById = asyncHandler(async (req, res) => {
       },
     ]);
   } else {
-    user = await User.findOne({ _id: userId, isDeleted: false }, { password: 0, otp: 0, otpExpires: 0 });
+    user = await User.findOne({ _id: userId }, { password: 0, otp: 0, otpExpires: 0 });
   }
 
   if (!user) {

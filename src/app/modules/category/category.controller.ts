@@ -247,7 +247,7 @@ export const getCategoryById = asyncHandler(async (req, res) => {
   const cached = await redis.get(cacheKey);
   if (cached) return res.status(status.OK).json(new ApiResponse(status.OK, "Category retrieved", cached));
   const { populate = "false" } = req.query;
-  const query = Category.findOne({ _id: id, isDeleted: false })
+  const query = Category.findOne({ _id: id })
 
   const category = populate === "true"
     ? await query.populate([
@@ -271,7 +271,7 @@ export const getCategoryBySlug = asyncHandler(async (req, res) => {
   const cached = await redis.get(cacheKey);
   if (cached) return res.status(status.OK).json(new ApiResponse(status.OK, "Category retrieved", cached));
   const { populate = "false" } = req.query;
-  const query = Category.findOne({ slug, isDeleted: false })
+  const query = Category.findOne({ slug })
   const category = populate === "true"
     ? await query.populate([
         { path: "parentCategory", match: { isDeleted: false } },
