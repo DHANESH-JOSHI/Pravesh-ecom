@@ -82,6 +82,19 @@ productSchema.pre("validate", async function (next) {
   next();
 });
 productSchema.pre("save", function (next) {
+  // Ensure unit field matches the base unit in units array
+  if (this.units && this.units.length > 0) {
+    const baseUnit = this.units.find(u => u.isBase);
+    if (baseUnit) {
+      // Sync unit field with base unit from units array
+      this.unit = baseUnit.unit;
+    } else {
+      // If no base unit marked, use first unit and mark it as base
+      this.units[0].isBase = true;
+      this.unit = this.units[0].unit;
+    }
+  }
+  // If units array is empty but unit exists, that's fine (backward compatibility)
   next();
 });
 
@@ -99,6 +112,27 @@ productSchema.pre("findOneAndUpdate", async function (next) {
         await cascadeProductDelete(productId as mongoose.Types.ObjectId, { session });
       } catch (error: any) {
         return next(error);
+      }
+    }
+  }
+  
+  // Sync unit field with base unit in units array
+  const units = update?.units || update?.$set?.units;
+  if (units && Array.isArray(units) && units.length > 0) {
+    const baseUnit = units.find((u: any) => u.isBase);
+    if (baseUnit) {
+      if (update.$set) {
+        update.$set.unit = baseUnit.unit;
+      } else {
+        update.unit = baseUnit.unit;
+      }
+    } else if (units.length > 0) {
+      // Mark first unit as base if none marked
+      units[0].isBase = true;
+      if (update.$set) {
+        update.$set.unit = units[0].unit;
+      } else {
+        update.unit = units[0].unit;
       }
     }
   }
@@ -133,6 +167,27 @@ productSchema.pre("updateOne", async function (next) {
         await cascadeProductDelete(productId as mongoose.Types.ObjectId, { session });
       } catch (error: any) {
         return next(error);
+      }
+    }
+  }
+  
+  // Sync unit field with base unit in units array
+  const units = update?.units || update?.$set?.units;
+  if (units && Array.isArray(units) && units.length > 0) {
+    const baseUnit = units.find((u: any) => u.isBase);
+    if (baseUnit) {
+      if (update.$set) {
+        update.$set.unit = baseUnit.unit;
+      } else {
+        update.unit = baseUnit.unit;
+      }
+    } else if (units.length > 0) {
+      // Mark first unit as base if none marked
+      units[0].isBase = true;
+      if (update.$set) {
+        update.$set.unit = units[0].unit;
+      } else {
+        update.unit = units[0].unit;
       }
     }
   }

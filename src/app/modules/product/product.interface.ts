@@ -44,8 +44,8 @@ export interface IProduct extends Document {
 
   // stock: number;
   // minStock: number;
-  unit: string; // kept for backward compatibility, will be the base unit
-  units?: IProductUnit[]; // array of available units with conversion rates
+  unit: string; // Base unit (required). Automatically synced with base unit in units array if present.
+  units?: IProductUnit[]; // Array of available units with conversion rates. Base unit should have isBase=true and match the unit field.
   // stockStatus: StockStatus;
   specifications?: Record<string, any>;
   // features?: string[];
