@@ -238,9 +238,13 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
 
+  // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
+  // Invalidate this user's cart cache (cart item added)
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+  // Invalidate this user's cart summary (cart summary changed)
   await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+  // Invalidate user cache (user might have cart count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Item added to cart successfully', populatedCart));
@@ -286,9 +290,13 @@ export const updateCartItem = asyncHandler(async (req, res) => {
 
   const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
 
+  // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
+  // Invalidate this user's cart cache (cart item added)
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+  // Invalidate this user's cart summary (cart summary changed)
   await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+  // Invalidate user cache (user might have cart count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart item updated successfully', updatedCart));
@@ -313,9 +321,13 @@ export const removeFromCart = asyncHandler(async (req, res) => {
 
   const updatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail', match: { isDeleted: false } });
 
+  // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
+  // Invalidate this user's cart cache (cart item added)
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+  // Invalidate this user's cart summary (cart summary changed)
   await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+  // Invalidate user cache (user might have cart count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Item removed from cart successfully', updatedCart));
@@ -333,9 +345,13 @@ export const clearCart = asyncHandler(async (req, res) => {
 
   await cart.clearCart();
 
+  // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
+  // Invalidate this user's cart cache (cart item added)
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+  // Invalidate this user's cart summary (cart summary changed)
   await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+  // Invalidate user cache (user might have cart count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Cart cleared successfully', {
@@ -395,9 +411,13 @@ export const checkoutCart = asyncHandler(async (req, res) => {
     // }
   }
 
+  // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
+  // Invalidate this user's cart cache (cart item added)
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+  // Invalidate this user's cart summary (cart summary changed)
   await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+  // Invalidate user cache (user might have cart count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Checkout successful', {}));

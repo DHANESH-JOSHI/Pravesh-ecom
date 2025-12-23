@@ -119,6 +119,7 @@ export type RedisKeyBuilders = typeof RedisKeys;
 export const RedisPatterns = {
   // Products
   PRODUCTS_ALL: () => "products*",
+  PRODUCTS_INDIVIDUAL: () => "product:*",
   PRODUCT_ANY: (idOrSlug: StringOrUnknown) => `product:${idOrSlug}*`,
 
   // Reviews
@@ -129,18 +130,22 @@ export const RedisPatterns = {
 
   // Categories
   CATEGORIES_ALL: () => "categories*",
+  CATEGORIES_INDIVIDUAL: () => "category:*",
   CATEGORY_ANY: (id: StringOrUnknown) => `category:${id}*`,
 
   // Brands
   BRANDS_ALL: () => "brands*",
+  BRANDS_INDIVIDUAL: () => "brand:*",
   BRAND_ANY: (id: StringOrUnknown) => `brand:${id}*`,
 
   // Banners
   BANNERS_ALL: () => "banners*",
+  BANNERS_INDIVIDUAL: () => "banner:*",
   BANNER_ANY: (id: StringOrUnknown) => `banner:${id}*`,
 
   // Blogs
   BLOGS_ALL: () => "blogs*",
+  BLOGS_INDIVIDUAL: () => "blog:*",
   BLOG_ANY: (id: StringOrUnknown) => `blog:${id}*`,
 
   // Messages
@@ -154,16 +159,19 @@ export const RedisPatterns = {
 
   // Users
   USERS_ALL: () => "users*",
+  USERS_INDIVIDUAL: () => "user:*",
   USER_ANY: (id: StringOrUnknown) => `user:${id}*`,
 
   // Carts
   CARTS_ALL: () => "carts*",
+  CARTS_INDIVIDUAL: () => "cart:*",
   CART_ANY: (cartId: StringOrUnknown) => `cart:id:${cartId}`,
   CART_BY_USER_ANY: (userId: StringOrUnknown) => `cart:user:${userId}*`,
   CART_SUMMARY_ANY: (userId: StringOrUnknown) => `cart:summary:${userId}`,
 
   // Orders
   ORDERS_ALL: () => "orders*",
+  ORDERS_INDIVIDUAL: () => "order:*",
   ORDERS_BY_USER: (userId: StringOrUnknown) => `orders:user:${userId}*`,
   ORDER_ANY: (orderId: StringOrUnknown) => `order:${orderId}`,
 

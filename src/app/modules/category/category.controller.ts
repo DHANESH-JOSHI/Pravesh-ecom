@@ -39,26 +39,39 @@ export const createCategory = asyncHandler(async (req, res) => {
       parentCategory: parentCategoryId || null,
     });
   }
+  // Invalidate all category lists (new category added to lists)
   await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
+  // Invalidate category tree (new category added, tree structure changed)
   await redis.delete(RedisKeys.CATEGORY_TREE());
+  // Invalidate leaf categories list (new category might be a leaf)
   await redis.delete(RedisKeys.CATEGORY_LEAF());
   
+  // If category has a parent, invalidate parent cache (parent's childCount increased)
   if (parentCategoryId) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(parentCategoryId)));
   }
   
+  // Invalidate this category's cache by slug (new category created)
   if (category && category.slug) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(category.slug));
   }
 
-  // Invalidate brand caches that might have this category (affects brand categoryCount)
-  const brandsWithCategory = await Brand.find({ categories: category._id, isDeleted: false }).select('_id');
-  for (const brand of brandsWithCategory) {
-    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
-  }
-  if (brandsWithCategory.length > 0) {
-    await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
-  }
+  // Invalidate brand caches (brands display categoryCount, new category might affect counts)
+  await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  // Invalidate all product lists (products display category info: title, slug, path)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  // Invalidate all individual product caches (products display category info: title, slug, path)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_INDIVIDUAL());
+  // Invalidate product filters (new category might affect filter options)
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  // Invalidate all order lists (orders display category info: title, slug, path in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate all individual order caches (orders display category info in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_INDIVIDUAL());
+  // Invalidate all cart lists (carts display category info: title in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+  // Invalidate all individual cart caches (carts display category info in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_INDIVIDUAL());
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Category created", category));
 });
@@ -351,36 +364,55 @@ export const updateCategory = asyncHandler(async (req, res) => {
     { new: true }
   );
 
+  // Invalidate this category's cache by ID (category data changed)
   await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(category._id)));
+  // Invalidate category cache by old slug (slug might have changed)
   await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(oldSlug));
   
+  // If slug changed, invalidate new slug cache
   if (updatedCategory && updatedCategory.slug !== oldSlug) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(updatedCategory.slug));
   }
   
+  // If category had a parent, invalidate old parent cache (old parent's childCount decreased)
   if (oldParentCategoryId) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(oldParentCategoryId));
   }
   
+  // If parent changed, invalidate new parent cache (new parent's childCount increased)
   if (oldParentCategoryId !== newParentCategoryId && newParentCategoryId) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(newParentCategoryId));
   }
   
+  // Invalidate all category lists (category data changed in lists)
   await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   
+  // If parent changed, invalidate tree structure and child category caches
   if (oldParentCategoryId !== newParentCategoryId) {
+    // Invalidate category tree (parent changed, tree structure changed)
     await redis.delete(RedisKeys.CATEGORY_TREE());
+    // Invalidate leaf categories list (category might have become/stopped being a leaf)
     await redis.delete(RedisKeys.CATEGORY_LEAF());
+    // Invalidate all child category individual caches (child categories display parentCategory info)
+    await redis.deleteByPattern(RedisPatterns.CATEGORIES_INDIVIDUAL());
   }
 
-  // Invalidate brand caches that have this category (affects brand categoryCount)
-  const brandsWithCategory = await Brand.find({ categories: categoryId, isDeleted: false }).select('_id');
-  for (const brand of brandsWithCategory) {
-    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
-  }
-  if (brandsWithCategory.length > 0) {
-    await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
-  }
+  // Invalidate brand caches (brands display categoryCount, category data changed)
+  await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  // Invalidate all product lists (products display category info: title, slug, path)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  // Invalidate all individual product caches (products display category info: title, slug, path)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_INDIVIDUAL());
+  // Invalidate product filters (category data changed, might affect filter options)
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  // Invalidate all order lists (orders display category info: title, slug, path in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate all individual order caches (orders display category info in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_INDIVIDUAL());
+  // Invalidate all cart lists (carts display category info: title in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+  // Invalidate all individual cart caches (carts display category info in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_INDIVIDUAL());
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, "Category updated successfully", updatedCategory)
@@ -399,25 +431,31 @@ export const deleteCategory = asyncHandler(async (req, res) => {
   );
   if (!deleted) throw new ApiError(status.NOT_FOUND, "Category not found");
 
+  // Invalidate this category's cache by ID (category deleted)
   await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(id)));
+  // Invalidate category cache by slug (category deleted)
   await redis.deleteByPattern(RedisPatterns.CATEGORY_BY_SLUG_ANY(deleted.slug));
   
+  // If category had a parent, invalidate parent cache (parent's childCount decreased)
   if (deleted.parentCategory) {
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(deleted.parentCategory)));
   }
   
+  // Invalidate category tree (category deleted, tree structure changed)
   await redis.delete(RedisKeys.CATEGORY_TREE());
+  // Invalidate leaf categories list (category deleted, leaf list changed)
   await redis.delete(RedisKeys.CATEGORY_LEAF());
+  // Invalidate all category lists (category removed from lists)
   await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
 
-  // Invalidate brand caches that had this category (affects brand categoryCount)
-  const brandsWithCategory = await Brand.find({ categories: id, isDeleted: false }).select('_id');
-  for (const brand of brandsWithCategory) {
-    await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
-  }
-  if (brandsWithCategory.length > 0) {
-    await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
-  }
+  // Invalidate brand caches (brands display categoryCount, category deleted affects counts)
+  await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+  // Invalidate all product lists (products display category info, category is now deleted)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  // Invalidate all individual product caches (products display category info: title, slug, path)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_INDIVIDUAL());
+  // Invalidate product filters (category deleted, might affect filter options)
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Category deleted", deleted));
 });

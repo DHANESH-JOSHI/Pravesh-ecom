@@ -23,6 +23,7 @@ export const createBlog = asyncHandler(async (req, res) => {
   
   if (req.file) blogData.featuredImage = req.file?.path;
   const blog = await Blog.create(blogData);
+  // Invalidate all blog lists (new blog added to lists)
   await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Blog post created successfully', blog));
   return;
@@ -187,10 +188,14 @@ export const updateBlog = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Blog not found');
   }
 
+  // Invalidate this blog's cache by ID (blog data changed)
   await redis.deleteByPattern(RedisPatterns.BLOG_ANY(String(existingBlog._id)));
+  // Invalidate blog cache by old slug (slug might have changed)
   await redis.deleteByPattern(RedisPatterns.BLOG_BY_SLUG_ANY(oldSlug));
+  // Invalidate all blog lists (blog data changed in lists)
   await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
   
+  // If slug changed, invalidate new slug cache
   if (oldSlug !== updatedBlog.slug) {
     await redis.deleteByPattern(RedisPatterns.BLOG_BY_SLUG_ANY(updatedBlog.slug));
   }
@@ -217,8 +222,11 @@ export const deleteBlog = asyncHandler(async (req, res) => {
     { new: true }
   );
 
+  // Invalidate this blog's cache by ID (blog deleted)
   await redis.deleteByPattern(RedisPatterns.BLOG_ANY(String(existingBlog._id)));
+  // Invalidate blog cache by slug (blog deleted)
   await redis.deleteByPattern(RedisPatterns.BLOG_BY_SLUG_ANY(existingBlog.slug));
+  // Invalidate all blog lists (blog removed from lists)
   await redis.deleteByPattern(RedisPatterns.BLOGS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Blog deleted successfully`, deletedBlog));

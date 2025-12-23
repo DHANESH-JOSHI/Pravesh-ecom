@@ -104,11 +104,20 @@ export const createReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    // Invalidate reviews for this product (new review added, affects product reviews list)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_PRODUCT(String(review.product)));
+    // Invalidate reviews by this user (new review added, affects user reviews list)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+    // Invalidate all review lists (new review added to lists)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+    // Invalidate product cache (product rating and reviewCount changed)
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(review.product)));
+    // Invalidate all product lists (product lists display rating and reviewCount)
+    await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+    // Invalidate user cache (user might have review count displayed)
     await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+    // Invalidate dashboard stats (review count changed, might affect stats)
+    await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, "Review created successfully", review))
     return;
@@ -352,11 +361,17 @@ export const updateReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    // Invalidate this review's cache (review data changed)
     await redis.delete(RedisKeys.REVIEW_BY_ID(String(reviewId)));
+    // Invalidate reviews for this product (review updated, affects product reviews list and rating)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_PRODUCT(String(existingReview.product)));
+    // Invalidate reviews by this user (review updated, affects user reviews list)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+    // Invalidate all review lists (review data changed in lists)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+    // Invalidate product cache (product rating and reviewCount might have changed)
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
+    // Invalidate user cache (user might have review count displayed)
     await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review updated successfully", existingReview))
@@ -389,11 +404,17 @@ export const deleteReview = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    // Invalidate this review's cache (review data changed)
     await redis.delete(RedisKeys.REVIEW_BY_ID(String(reviewId)));
+    // Invalidate reviews for this product (review updated, affects product reviews list and rating)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_PRODUCT(String(existingReview.product)));
+    // Invalidate reviews by this user (review updated, affects user reviews list)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+    // Invalidate all review lists (review data changed in lists)
     await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+    // Invalidate product cache (product rating and reviewCount might have changed)
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(String(existingReview.product)));
+    // Invalidate user cache (user might have review count displayed)
     await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
 
     res.status(status.OK).json(new ApiResponse(status.OK, "Review deleted successfully", existingReview))

@@ -51,14 +51,18 @@ export const createBrand = asyncHandler(async (req, res) => {
 
   await syncBrandCategories(brand._id as any, expandedLeafIds);
   
+  // Invalidate this brand's cache by ID (new brand created)
   await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(brand._id)));
+  // Invalidate brand cache by slug (new brand created)
   if (brand.slug) {
     await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
   }
+  // Invalidate all brand lists (new brand added to lists)
   await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
-  // Invalidate category caches that have this brand (affects category brandCount)
+  // Invalidate category caches that have this brand (category brandCount increased)
   for (const categoryId of expandedLeafIds) {
+    // Invalidate specific category cache (brandCount increased)
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
   }
   // Also check categories that have this brand in their brands array (from syncBrandCategories)
@@ -67,12 +71,28 @@ export const createBrand = asyncHandler(async (req, res) => {
     const categoryIdStr = String(category._id);
     const alreadyInvalidated = expandedLeafIds.some(catId => String(catId) === categoryIdStr);
     if (!alreadyInvalidated) {
+      // Invalidate category cache (brandCount increased)
       await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(categoryIdStr));
     }
   }
   if (expandedLeafIds.length > 0 || categoriesWithBrand.length > 0) {
+    // Invalidate all category lists (brandCount changed in lists)
     await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
+  // Invalidate all product lists (products display brand info: name, slug)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  // Invalidate all individual product caches (products display brand info: name, slug)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_INDIVIDUAL());
+  // Invalidate product filters (new brand might affect filter options)
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  // Invalidate all order lists (orders display brand info: name, slug in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate all individual order caches (orders display brand info in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_INDIVIDUAL());
+  // Invalidate all cart lists (carts display brand info: name in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+  // Invalidate all individual cart caches (carts display brand info in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_INDIVIDUAL());
 
   res
     .status(status.CREATED)
@@ -169,7 +189,7 @@ export const getBrandById = asyncHandler(async (req, res) => {
     return res.status(status.OK).json(new ApiResponse(status.OK, "Brand retrieved", cached));
 
   const { populate = "false" } = req.query;
-  const query = Brand.findOne({ _id: id });
+  const query = Brand.findOne({ _id: id, isDeleted: false });
   const brand =
     populate === "true"
       ? await query.populate([
@@ -196,7 +216,7 @@ export const getBrandBySlug = asyncHandler(async (req, res) => {
   if (!slug || slug.trim() === "") {
     throw new ApiError(status.BAD_REQUEST, "Invalid brand slug");
   }
-  const query = Brand.findOne({ slug });
+  const query = Brand.findOne({ slug, isDeleted: false });
   const brand =
     populate === "true"
       ? await query.populate([
@@ -245,34 +265,55 @@ export const updateBrand = asyncHandler(async (req, res) => {
 
   await syncBrandCategories(brand._id as any, expandedLeafIds);
   
+  // Invalidate this brand's cache by ID (brand data changed)
   await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(id)));
+  // Invalidate brand cache by old slug (slug might have changed)
   await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(oldSlug));
   
+  // If slug changed, invalidate new slug cache
   if (brand.slug !== oldSlug) {
     await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
   }
   
+  // Invalidate all brand lists (brand data changed in lists)
   await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
-  // Invalidate category caches that have this brand (affects category brandCount)
+  // Invalidate category caches that have this brand (category brandCount might have changed)
   const allAffectedCategoryIds = new Set([...oldCategoryIds, ...expandedLeafIds]);
   for (const categoryId of allAffectedCategoryIds) {
+    // Invalidate specific category cache (brandCount changed)
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
   }
   // Also check categories that have this brand in their brands array
   const categoriesWithBrand = await Category.find({ brands: id, isDeleted: false }).select('_id');
   for (const category of categoriesWithBrand) {
     if (!allAffectedCategoryIds.has(String(category._id))) {
+      // Invalidate category cache (brandCount might have changed)
       await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(category._id)));
     }
   }
   if (allAffectedCategoryIds.size > 0 || categoriesWithBrand.length > 0) {
+    // Invalidate all category lists (brandCount changed in lists)
     await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
   
+  // If brand name changed, invalidate product caches (products display brand name)
   if (name && name !== oldName) {
+    // Invalidate all product lists (products display brand name)
     await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+    // Invalidate all individual product caches (products display brand name, slug)
+    await redis.deleteByPattern(RedisPatterns.PRODUCTS_INDIVIDUAL());
+    // Invalidate product filters (brand name changed, might affect filter options)
+    await redis.delete(RedisKeys.PRODUCT_FILTERS());
   }
+  // Invalidate all order lists (orders display brand info: name, slug in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate all individual order caches (orders display brand info in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_INDIVIDUAL());
+  // Invalidate all cart lists (carts display brand info: name in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+  // Invalidate all individual cart caches (carts display brand info in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_INDIVIDUAL());
   res
     .status(status.OK)
     .json(new ApiResponse(status.OK, "Brand updated successfully", brand));
@@ -290,12 +331,16 @@ export const deleteBrand = asyncHandler(async (req, res) => {
   );
   if (!brand) throw new ApiError(status.NOT_FOUND, "Brand not found");
 
+  // Invalidate this brand's cache by ID (brand deleted)
   await redis.deleteByPattern(RedisPatterns.BRAND_ANY(String(id)));
+  // Invalidate brand cache by slug (brand deleted)
   await redis.deleteByPattern(RedisPatterns.BRAND_BY_SLUG_ANY(brand.slug));
+  // Invalidate all brand lists (brand removed from lists)
   await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
   
-  // Invalidate category caches that had this brand (affects category brandCount)
+  // Invalidate category caches that had this brand (category brandCount decreased)
   for (const categoryId of brand.categories) {
+    // Invalidate specific category cache (brandCount decreased)
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(String(categoryId)));
   }
   // Also check categories that have this brand in their brands array
@@ -304,14 +349,29 @@ export const deleteBrand = asyncHandler(async (req, res) => {
     const categoryIdStr = String(category._id);
     const alreadyInvalidated = brand.categories.some(catId => String(catId) === categoryIdStr);
     if (!alreadyInvalidated) {
+      // Invalidate category cache (brandCount decreased)
       await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(categoryIdStr));
     }
   }
   if (brand.categories.length > 0 || categoriesWithBrand.length > 0) {
+    // Invalidate all category lists (brandCount changed in lists)
     await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
   
+  // Invalidate all product lists (products display brand info, brand is now deleted)
   await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+  // Invalidate all individual product caches (products display brand info: name, slug)
+  await redis.deleteByPattern(RedisPatterns.PRODUCTS_INDIVIDUAL());
+  // Invalidate product filters (brand deleted, might affect filter options)
+  await redis.delete(RedisKeys.PRODUCT_FILTERS());
+  // Invalidate all order lists (orders display brand info: name, slug in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate all individual order caches (orders display brand info in product items)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_INDIVIDUAL());
+  // Invalidate all cart lists (carts display brand info: name in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+  // Invalidate all individual cart caches (carts display brand info in product items)
+  await redis.deleteByPattern(RedisPatterns.CARTS_INDIVIDUAL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, "Brand deleted successfully", brand));
 });

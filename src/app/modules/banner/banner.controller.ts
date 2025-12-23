@@ -131,7 +131,9 @@ export const updateBanner = asyncHandler(async (req, res) => {
 
   const updatedBanner = await Banner.findByIdAndUpdate(bannerId, bannerData, { new: true });
 
+  // Invalidate this banner's cache (banner data changed)
   await redis.deleteByPattern(RedisPatterns.BANNER_ANY(String(bannerId)));
+  // Invalidate all banner lists (banner data changed in lists)
   await redis.deleteByPattern(RedisPatterns.BANNERS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner updated successfully`, updatedBanner));
@@ -154,7 +156,9 @@ export const deleteBanner = asyncHandler(async (req, res) => {
     { new: true }
   );
 
+  // Invalidate this banner's cache (banner data changed)
   await redis.deleteByPattern(RedisPatterns.BANNER_ANY(String(bannerId)));
+  // Invalidate all banner lists (banner data changed in lists)
   await redis.deleteByPattern(RedisPatterns.BANNERS_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, `Banner has been deleted successfully`, existingBanner));

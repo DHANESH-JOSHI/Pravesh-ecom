@@ -30,7 +30,9 @@ export const createUser = asyncHandler(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Invalidate all user lists (new user added to lists)
     await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+    // Invalidate dashboard stats (user count changed)
     await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     const { password: _, otp: __, otpExpires: ___, ...userObject } = user.toJSON();
@@ -113,9 +115,30 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
+  // Invalidate this user's cache (user data changed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+  // Invalidate all user lists (user data changed in lists)
   await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+  // Invalidate dashboard stats (user data might affect stats)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
+  // Invalidate reviews by this user (reviews display user name, email, img)
+  await redis.deleteByPattern(RedisPatterns.REVIEWS_BY_USER(String(userId)));
+  // Invalidate all review lists (review lists might show user info)
+  await redis.deleteByPattern(RedisPatterns.REVIEWS_ALL());
+  // Invalidate orders by this user (orders display user info)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+  // Invalidate all order lists (order lists might show user info)
+  await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate this user's cart (cart belongs to user)
+  await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+  // Invalidate this user's cart summary (cart summary belongs to user)
+  await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+  // Invalidate all cart lists (carts display user info: name, email)
+  await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+  // Invalidate all individual cart caches (carts display user info: name, email)
+  await redis.deleteByPattern(RedisPatterns.CARTS_INDIVIDUAL());
+  // Invalidate addresses by this user (addresses belong to user)
+  await redis.deleteByPattern(RedisPatterns.ADDRESSES_BY_USER(String(userId)));
 
   res.json(new ApiResponse(status.OK, "User updated successfully", updatedUser));
   return;
@@ -267,8 +290,11 @@ export const recoverUser = asyncHandler(async (req, res) => {
   user.isDeleted = false;
   await user.save();
   
+  // Invalidate this user's cache (user recovered, isDeleted changed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(id)));
+  // Invalidate all user lists (user recovered, affects user lists)
   await redis.deleteByPattern(RedisPatterns.USERS_ALL());
+  // Invalidate dashboard stats (user count changed)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.json(new ApiResponse(status.OK, "User recovered successfully"));

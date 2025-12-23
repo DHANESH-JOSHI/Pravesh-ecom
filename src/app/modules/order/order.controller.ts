@@ -83,12 +83,19 @@ export const createOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    // Invalidate orders by this user (new order added, affects user orders list)
     await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+    // Invalidate all order lists (new order added to lists)
     await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+    // Invalidate this user's cart (cart was cleared after order creation)
     await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY(String(userId)));
+    // Invalidate this user's cart summary (cart was cleared)
     await redis.delete(RedisKeys.CART_SUMMARY_BY_USER(String(userId)));
+    // Invalidate all product lists (order creation might affect product salesCount/totalSold)
     await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+    // Invalidate user cache (user might have order count displayed)
     await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+    // Invalidate dashboard stats (order count and stats changed)
     await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Order placed successfully', order));
@@ -120,9 +127,13 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
     image: customOrderImage,
   });
 
+  // Invalidate orders by this user (custom order created, affects user orders list)
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+  // Invalidate all order lists (custom order added to lists)
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate user cache (user might have order count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+  // Invalidate dashboard stats (order count changed)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.status(status.CREATED).json(new ApiResponse(status.CREATED, 'Custom order request submitted successfully. An admin will review it shortly.', order));
@@ -168,10 +179,15 @@ export const updateOrder = asyncHandler(async (req, res) => {
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
 
+  // Invalidate this order's cache (order feedback updated)
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+  // Invalidate orders by this user (order feedback updated, affects user orders list)
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(order.user)));
+  // Invalidate all order lists (order feedback updated in lists)
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate user cache (user might have order count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(order.user)));
+  // Invalidate dashboard stats (order data might affect stats)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order updated successfully', order));
@@ -232,13 +248,21 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
+    // Invalidate this order's cache (order cancelled)
     await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+    // Invalidate orders by this user (order cancelled, affects user orders list)
     await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+    // Invalidate all order lists (order cancelled, removed from lists)
     await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+    // Invalidate user's wallet cache (wallet refunded, balance changed)
     await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(userId)));
+    // Invalidate wallet balance (balance changed due to refund)
     await redis.delete(RedisKeys.WALLET_BALANCE(String(userId)));
+    // Invalidate wallet transactions (new refund transaction added)
     await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(userId)));
+    // Invalidate user cache (user might have order count or wallet balance displayed)
     await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+    // Invalidate dashboard stats (order status stats changed)
     await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
     res.status(status.OK).json(new ApiResponse(status.OK, 'Custom order confirmed and paid successfully', order));
@@ -662,11 +686,11 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         }
       );
     }
-    // Invalidate specific product caches (affects product salesCount and totalSold)
+    // Invalidate specific product caches (product salesCount and totalSold changed)
     for (const productId of productIds) {
       await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(productId));
     }
-    // Also invalidate category and brand caches that have these products (affects counts)
+    // Also invalidate category and brand caches that have these products (productCount might change)
     const products = await Product.find({ _id: { $in: productIds }, isDeleted: false }).select('category brand');
     const categoryIds = new Set<string>();
     const brandIds = new Set<string>();
@@ -674,19 +698,24 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
       if (product.category) categoryIds.add(String(product.category));
       if (product.brand) brandIds.add(String(product.brand));
     }
+    // Invalidate category caches (category productCount might have changed)
     for (const categoryId of categoryIds) {
       await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(categoryId));
     }
+    // Invalidate brand caches (brand productCount might have changed)
     for (const brandId of brandIds) {
       await redis.deleteByPattern(RedisPatterns.BRAND_ANY(brandId));
     }
     if (productIds.length > 0) {
+      // Invalidate all product lists (product salesCount/totalSold changed in lists)
       await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
     }
     if (categoryIds.size > 0) {
+      // Invalidate all category lists (productCount might have changed in lists)
       await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
     }
     if (brandIds.size > 0) {
+      // Invalidate all brand lists (productCount might have changed in lists)
       await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
     }
   }
@@ -724,19 +753,28 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
+  // Invalidate this order's cache (order status changed)
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+  // Invalidate orders by this user (order status changed, affects user orders list)
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(order.user)));
+  // Invalidate all order lists (order status changed in lists)
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate user cache (user might have order count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(order.user)));
+  // Invalidate dashboard stats (order status stats changed)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
   
+  // If wallet was affected by status change, invalidate wallet caches
   const walletTouched = 
     (oldStatus === OrderStatus.Received && newStatus === OrderStatus.Confirmed) ||
     (oldStatus === OrderStatus.Approved && newStatus === OrderStatus.Confirmed) ||
     (oldStatus === OrderStatus.Cancelled && newStatus === OrderStatus.Refunded);
   if (walletTouched) {
+    // Invalidate user's wallet cache (wallet balance changed)
     await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(order.user)));
+    // Invalidate wallet balance (balance changed)
     await redis.delete(RedisKeys.WALLET_BALANCE(String(order.user)));
+    // Invalidate wallet transactions (new transaction added)
     await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(order.user)));
   }
 
@@ -762,10 +800,15 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   order.status = OrderStatus.Cancelled;
   await order.save();
 
+  // Invalidate this order's cache (order cancelled)
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
+  // Invalidate orders by this user (order cancelled, affects user orders list)
   await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
+  // Invalidate all order lists (order cancelled, removed from lists)
   await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
+  // Invalidate user cache (user might have order count displayed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
+  // Invalidate dashboard stats (order status stats changed)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
 
   res.status(status.OK).json(
