@@ -17,6 +17,7 @@ export const adminUpdateOrderValidation = z.object({
     product: objectIdValidation,
     quantity: z.number().min(1, 'Quantity must be a positive number'),
     unit: z.string().min(1, 'Unit is required'),
+    variantSelections: z.record(z.string(), z.string()).optional(),
   })).optional(),
   status: z.enum(OrderStatus).optional(),
   feedback: z.string().max(1000, 'Feedback too long').optional(),

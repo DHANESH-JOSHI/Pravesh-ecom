@@ -34,6 +34,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     newUsersThisWeek,
     newUsersThisMonth,
 
+    dailyOrdersCount,
+
     awaitingConfirmationOrders,
     processingOrders,
     shippedOrders,
@@ -63,6 +65,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     User.countDocuments({ createdAt: { $gte: today }, isDeleted: false }),
     User.countDocuments({ createdAt: { $gte: weekAgo }, isDeleted: false }),
     User.countDocuments({ createdAt: { $gte: monthAgo }, isDeleted: false }),
+
+    Order.countDocuments({ createdAt: { $gte: today } }),
 
     Order.countDocuments({ status: 'awaiting_confirmation' }),
     Order.countDocuments({ status: 'processing' }),
@@ -228,6 +232,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     newUsersToday,
     newUsersThisWeek,
     newUsersThisMonth,
+
+    dailyOrdersCount,
+    dailyUsersCount: newUsersToday,
 
     pendingOrders: awaitingConfirmationOrders,
     processingOrders,

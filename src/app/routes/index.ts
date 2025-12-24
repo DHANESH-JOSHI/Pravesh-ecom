@@ -15,6 +15,7 @@ import { blogRouter } from "@/modules/blog/blog.routes";
 import { dashboardRouter } from "@/modules/dashboard/dashboard.routes";
 import { settingRouter } from "@/modules/setting/setting.routes";
 import { messageRouter } from "@/modules/message/message.routes";
+import { unitRouter } from "@/modules/unit/unit.routes";
 const router = Router();
 
 type Route = {
@@ -86,6 +87,10 @@ const moduleRoutes: Route[] = [
   {
     path: '/dashboard',
     route: dashboardRouter
+  },
+  {
+    path: '/units',
+    route: unitRouter
   }
 ];
 

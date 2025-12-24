@@ -206,7 +206,7 @@ pipeline.push({ $match: filter });
 
 export const addToCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { productId, quantity, unit } = addToCartValidation.parse(req.body);
+  const { productId, quantity, unit, variantSelections } = addToCartValidation.parse(req.body);
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -215,7 +215,7 @@ export const addToCart = asyncHandler(async (req, res) => {
   const product = await Product.findOne({
     _id: productId,
     isDeleted: false,
-  });
+  }).populate('units', 'name');
 
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
@@ -226,18 +226,31 @@ export const addToCart = asyncHandler(async (req, res) => {
   if (productUnits.length === 0) {
     throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
   }
-  const validUnit = productUnits.find(u => u.unit === unit);
+  // Check if the provided unit string matches any unit name
+  const validUnit = productUnits.find((u: any) => {
+    const unitName = typeof u === 'object' && u !== null ? u.name : String(u);
+    return unitName === unit;
+  });
   if (!validUnit) {
-    throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
+    const unitNames = productUnits.map((u: any) => {
+      return typeof u === 'object' && u !== null ? u.name : String(u);
+    });
+    throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${unitNames.join(', ')}`);
   }
 
-  // if (product.stockStatus === StockStatus.OutOfStock) {
-  //   throw new ApiError(status.BAD_REQUEST, 'Product is out of stock');
-  // }
-
-  // if (product.stock < quantity) {
-  //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
-  // }
+  // Validate variant selections if provided
+  if (variantSelections && Object.keys(variantSelections).length > 0) {
+    const productVariants = product.variants || {};
+    for (const [variantKey, selectedValue] of Object.entries(variantSelections)) {
+      if (!productVariants[variantKey]) {
+        throw new ApiError(status.BAD_REQUEST, `Variant "${variantKey}" is not available for this product`);
+      }
+      const availableValues = productVariants[variantKey];
+      if (!Array.isArray(availableValues) || !availableValues.includes(selectedValue)) {
+        throw new ApiError(status.BAD_REQUEST, `Invalid value "${selectedValue}" for variant "${variantKey}". Available: ${availableValues.join(', ')}`);
+      }
+    }
+  }
 
   let cart = await Cart.findOne({ user: userId });
 
@@ -245,9 +258,14 @@ export const addToCart = asyncHandler(async (req, res) => {
     cart = new Cart({ user: userId, items: [] });
   }
 
-  await cart.addItem(productId, quantity, unit);
+  await cart.addItem(productId, quantity, unit, variantSelections);
 
-  const populatedCart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', select: 'name thumbnail units', match: { isDeleted: false } });
+  const populatedCart = await Cart.findOne({ user: userId }).populate({ 
+    path: 'items.product', 
+    select: 'name thumbnail units', 
+    match: { isDeleted: false },
+    populate: { path: 'units', select: 'name', match: { isDeleted: false } }
+  });
 
   // Invalidate this cart's cache (cart item added, cart data changed)
   await redis.delete(RedisKeys.CART_BY_ID(String(cart._id)));
@@ -265,7 +283,7 @@ export const addToCart = asyncHandler(async (req, res) => {
 export const updateCartItem = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
-  const { quantity, unit } = updateCartItemValidation.parse(req.body);
+  const { quantity, unit, variantSelections } = updateCartItemValidation.parse(req.body);
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -280,7 +298,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   const product = await Product.findOne({
     _id: productId,
     isDeleted: false,
-  });
+  }).populate('units', 'name');
 
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found or unavailable');
@@ -291,27 +309,56 @@ export const updateCartItem = asyncHandler(async (req, res) => {
   if (productUnits.length === 0) {
     throw new ApiError(status.BAD_REQUEST, 'Product has no units defined');
   }
-  const validUnit = productUnits.find(u => u.unit === unit);
+  // Check if the provided unit string matches any unit name
+  const validUnit = productUnits.find((u: any) => {
+    const unitName = typeof u === 'object' && u !== null ? u.name : String(u);
+    return unitName === unit;
+  });
   if (!validUnit) {
-    throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
+    const unitNames = productUnits.map((u: any) => {
+      return typeof u === 'object' && u !== null ? u.name : String(u);
+    });
+    throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${unitNames.join(', ')}`);
   }
 
-  // if (product.stock < quantity) {
-  //   throw new ApiError(status.BAD_REQUEST, `Only ${product.stock} items available in stock`);
-  // }
+  // Validate variant selections if provided
+  if (variantSelections && Object.keys(variantSelections).length > 0) {
+    const productVariants = product.variants || {};
+    for (const [variantKey, selectedValue] of Object.entries(variantSelections)) {
+      if (!productVariants[variantKey]) {
+        throw new ApiError(status.BAD_REQUEST, `Variant "${variantKey}" is not available for this product`);
+      }
+      const availableValues = productVariants[variantKey];
+      if (!Array.isArray(availableValues) || !availableValues.includes(selectedValue)) {
+        throw new ApiError(status.BAD_REQUEST, `Invalid value "${selectedValue}" for variant "${variantKey}". Available: ${availableValues.join(', ')}`);
+      }
+    }
+  }
 
-  // Find the cart item with the specified unit
+  // Helper function to compare variant selections
+  const areVariantsEqual = (v1: Record<string, string> | undefined, v2: Record<string, string> | undefined): boolean => {
+    if (!v1 && !v2) return true;
+    if (!v1 || !v2) return false;
+    const keys1 = Object.keys(v1).sort();
+    const keys2 = Object.keys(v2).sort();
+    if (keys1.length !== keys2.length) return false;
+    return keys1.every(key => v1[key] === v2[key]);
+  };
+
+  // Find the cart item with the specified unit and variant selections
   const cartItem = cart.items.find(item => 
-    item.product.equals(new Types.ObjectId(productId)) && item.unit === unit
+    item.product.equals(new Types.ObjectId(productId)) && 
+    item.unit === unit &&
+    areVariantsEqual(item.variantSelections, variantSelections)
   );
 
   try {
-    // If item exists with this unit, update it
+    // If item exists with this unit and variants, update it
     if (cartItem) {
-      await cart.updateItem(new Types.ObjectId(productId), quantity, unit);
+      await cart.updateItem(new Types.ObjectId(productId), quantity, unit, variantSelections);
     } else {
-      // Item doesn't exist with this unit, add it as new item
-      await cart.addItem(new Types.ObjectId(productId), quantity, unit);
+      // Item doesn't exist with this combination, add it as new item
+      await cart.addItem(new Types.ObjectId(productId), quantity, unit, variantSelections);
     }
   } catch (error) {
     if (error instanceof Error && error.message === 'Item not found in cart') {
@@ -338,7 +385,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
 export const removeFromCart = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { productId } = req.params;
-  const { unit } = req.body; // Optional unit parameter - if not provided, removes all units of the product
+  const { unit, variantSelections } = req.body; // Optional unit and variantSelections - if not provided, removes all items of the product
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     throw new ApiError(status.BAD_REQUEST, 'Invalid product ID');
@@ -350,20 +397,27 @@ export const removeFromCart = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Cart not found');
   }
 
-  // If unit is provided, validate it exists for the product and remove specific unit
+  // If unit is provided, validate it exists for the product and remove specific unit+variants combination
   if (unit) {
     const product = await Product.findOne({
       _id: productId,
       isDeleted: false,
-    });
+    }).populate('units', 'name');
     if (product) {
       const productUnits = product.units || [];
-      const validUnit = productUnits.find(u => u.unit === unit);
+      // Check if the provided unit string matches any unit name
+      const validUnit = productUnits.find((u: any) => {
+        const unitName = typeof u === 'object' && u !== null ? u.name : String(u);
+        return unitName === unit;
+      });
       if (!validUnit) {
-        throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${productUnits.map(u => u.unit).join(', ')}`);
+        const unitNames = productUnits.map((u: any) => {
+          return typeof u === 'object' && u !== null ? u.name : String(u);
+        });
+        throw new ApiError(status.BAD_REQUEST, `Invalid unit. Available units: ${unitNames.join(', ')}`);
       }
     }
-    await cart.removeItem(new Types.ObjectId(productId), unit);
+    await cart.removeItem(new Types.ObjectId(productId), unit, variantSelections);
   } else {
     // If no unit provided, remove all items with this productId
     cart.items = cart.items.filter(item => !item.product.equals(new Types.ObjectId(productId)));

@@ -7,6 +7,9 @@ export interface IDashboardStats {
   newUsersThisWeek: number;
   newUsersThisMonth: number;
 
+  dailyOrdersCount: number;
+  dailyUsersCount: number;
+
   pendingOrders: number;
   processingOrders: number;
   shippedOrders: number;

@@ -16,6 +16,7 @@ export interface IOrderItem {
   product: Types.ObjectId;
   quantity: number;
   unit: string; // required - unit selected when order was placed
+  variantSelections?: Record<string, string>; // Selected variants when order was placed
 }
 
 export interface OrderHistory {
@@ -26,7 +27,6 @@ export interface OrderHistory {
 export interface IOrder extends Document {
   user: Types.ObjectId;
   items: IOrderItem[];
-  totalAmount: number;
   shippingAddress: Types.ObjectId;
   history: OrderHistory[];
   status: OrderStatus;

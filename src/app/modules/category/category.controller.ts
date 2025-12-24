@@ -109,7 +109,27 @@ export const getAllCategories = asyncHandler(async (req, res) => {
 
   if (brandId) {
     const brand = await Brand.findOne({ _id: brandId, isDeleted: false }).select("categories");
-    filter._id = { $in: brand?.categories || [] };
+    if (!brand) {
+      // If brand doesn't exist, return empty result
+      const result = { categories: [], total: 0, page: Number(page), totalPages: 0 };
+      await redis.set(cacheKey, result, CacheTTL.SHORT);
+      return res
+        .status(status.OK)
+        .json(new ApiResponse(status.OK, "Categories retrieved", result));
+    }
+    // Ensure categories are ObjectIds (they should already be, but ensure type safety)
+    const categoryObjectIds = (brand.categories || []).map((catId: any) => 
+      catId instanceof mongoose.Types.ObjectId ? catId : new mongoose.Types.ObjectId(catId)
+    );
+    if (categoryObjectIds.length === 0) {
+      // If brand has no categories, return empty result
+      const result = { categories: [], total: 0, page: Number(page), totalPages: 0 };
+      await redis.set(cacheKey, result, CacheTTL.SHORT);
+      return res
+        .status(status.OK)
+        .json(new ApiResponse(status.OK, "Categories retrieved", result));
+    }
+    filter._id = { $in: categoryObjectIds };
   }
 
   const sortOrder = order === "desc" ? -1 : 1;
@@ -519,10 +539,17 @@ async function countBrands(categoryId: mongoose.Types.ObjectId) {
   return result[0]?.brandCount || 0;
 }
 async function countProducts(categoryId: string) {
-  const allIds = await getLeafCategoryIds(categoryId)
-
+  if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+    return 0;
+  }
+  const allIds = await getLeafCategoryIds(categoryId);
+  if (allIds.length === 0) {
+    return 0;
+  }
+  // Convert string IDs to ObjectIds for MongoDB query
+  const categoryObjectIds = allIds.map((id: string) => new mongoose.Types.ObjectId(id));
   return Product.countDocuments({
     isDeleted: false,
-    category: { $in: allIds }
+    category: { $in: categoryObjectIds }
   });
 }

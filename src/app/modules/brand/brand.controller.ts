@@ -116,17 +116,25 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     order = "desc",
     isDeleted = "false",
   } = req.query;
-
   const filter: any = { isDeleted: isDeleted === "true" };
   if (categoryId) {
     const allCategoryIds = await getLeafCategoryIds(categoryId as string);
-    filter.categories = { $in: allCategoryIds };
+    if (allCategoryIds.length === 0) {
+      const result = { brands: [], total: 0, page: Number(page), totalPages: 0 };
+      await redis.set(cacheKey, result, CacheTTL.SHORT);
+      return res
+        .status(status.OK)
+        .json(new ApiResponse(status.OK, "Brands retrieved successfully", result));
+    }
+    const categoryObjectIds = allCategoryIds.map((id: string) => new mongoose.Types.ObjectId(id));
+    filter.categories = { $in: categoryObjectIds };
   }
 
   const sortOrder = order === "asc" ? 1 : -1;
   const skip = (Number(page) - 1) * Number(limit);
 
   const pipeline: any[] = [];
+  let countFilter = { ...filter };
 
   if (search) {
     const searchRegex = new RegExp(search as string, 'i');
@@ -146,16 +154,17 @@ export const getAllBrands = asyncHandler(async (req, res) => {
     };
 
     pipeline.push({ $match: combinedMatch });
-
-} else {
+    // Use the same filter for countDocuments when search is provided
+    countFilter = combinedMatch;
+  } else {
     pipeline.push({ $match: filter });
-}
+  }
   pipeline.push({ $sort: { [sort as string]: sortOrder } });
   pipeline.push({ $skip: skip });
   pipeline.push({ $limit: Number(limit) });
 
   const brands = await Brand.aggregate(pipeline);
-  const total = await Brand.countDocuments(filter);
+  const total = await Brand.countDocuments(countFilter);
 
   const augmented = await Promise.all(
     brands.map(async (b) => {
@@ -403,6 +412,11 @@ const expandToLeafCategories = async (categoryIds: string[]) => {
 
 
 export const getLeafCategoryIds = async (categoryId: string) => {
+  // Validate categoryId is a valid ObjectId
+  if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+    return [];
+  }
+
   const categoryObjectId = new mongoose.Types.ObjectId(categoryId);
 
   const result = await Category.aggregate([
@@ -441,6 +455,12 @@ export const getLeafCategoryIds = async (categoryId: string) => {
       },
     },
   ]);
+  
+  // If no result or category doesn't exist, return empty array
+  if (!result || result.length === 0) {
+    return [];
+  }
+
   const leafIds =
     result[0]?.leafIds?.length > 0
       ? result[0].leafIds.map((id: any) => id.toString())

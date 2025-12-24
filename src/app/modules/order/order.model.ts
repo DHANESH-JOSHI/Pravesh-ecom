@@ -7,6 +7,7 @@ const OrderItemSchema = new Schema<IOrderItem>({
   product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
   quantity: { type: Number, required: true, min: 1 },
   unit: { type: String, required: true },
+  variantSelections: { type: Object, default: {} },
 }, { _id: false });
 
 const OrderHistorySchema = new Schema({
@@ -25,7 +26,6 @@ const OrderSchema = new Schema<IOrder>(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     items: [OrderItemSchema],
-    totalAmount: { type: Number, required: true, min: 0 },
     shippingAddress: {
       type: Schema.Types.ObjectId,
       ref: 'Address',

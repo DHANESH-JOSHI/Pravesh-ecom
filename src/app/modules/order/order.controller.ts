@@ -31,7 +31,6 @@ export const createOrder = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'Your cart is empty');
     }
     const orderItems = []
-    let totalAmount = 0;
     for (const item of cart.items) {
       const product = await Product.findById(item.product).session(session);
       if (!product || product.isDeleted) {
@@ -49,8 +48,8 @@ export const createOrder = asyncHandler(async (req, res) => {
         product: product._id,
         quantity: item.quantity,
         unit: item.unit,
+        variantSelections: item.variantSelections || {},
       });
-      // totalAmount = 0; // Removed: price calculation removed
     }
 
     // const wallet = await Wallet.findOne({ user: userId }).session(session);
@@ -74,7 +73,6 @@ export const createOrder = asyncHandler(async (req, res) => {
     const order = (await Order.create([{
       user: userId,
       items: orderItems,
-      totalAmount,
       shippingAddress: shippingAddressId,
       status: OrderStatus.Received,
     }], { session }))[0];
@@ -122,7 +120,6 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
   const order = await Order.create({
     user: userId,
     items: [],
-    totalAmount: 0,
     status: OrderStatus.Received,
     isCustomOrder: true,
     image: customOrderImage,
@@ -166,10 +163,10 @@ export const updateOrder = asyncHandler(async (req, res) => {
         product: item.product,
         quantity: item.quantity,
         unit: item.unit,
+        variantSelections: (item as any).variantSelections || {},
       });
     }
     order.items = orderItems;
-    order.totalAmount = 0;
   }
   // if (orderStatus) {
   //   if ([OrderStatus.Approved, OrderStatus.Cancelled, OrderStatus.Confirmed].includes(orderStatus)) {

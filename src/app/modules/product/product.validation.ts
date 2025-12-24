@@ -22,9 +22,9 @@ const createProductValidation = z.object({
       try { return JSON.parse(val); } catch (e) { return val; }
     }
     return val;
-  }, z.array(z.object({
-    unit: z.string().min(1, 'Unit name is required'),
-  })).min(1, 'At least one unit is required')),
+  }, z.array(z.string().refine((val) => Types.ObjectId.isValid(val), {
+    message: 'Invalid unit ID',
+  }).transform((val) => new Types.ObjectId(val))).min(1, 'At least one unit is required')),
   // minStock: z.coerce.number().min(0).optional(),
 
   // features: z.preprocess((val) => {
@@ -38,7 +38,13 @@ const createProductValidation = z.object({
       try { return JSON.parse(val); } catch (e) { return val; }
     }
     return val;
-  }, z.record(z.string(), z.any()).refine(val => typeof val === 'object' && val !== null, {
+  }, z.record(
+    z.string(), 
+    z.union([
+      z.string(),
+      z.array(z.string())
+    ])
+  ).refine(val => typeof val === 'object' && val !== null, {
     message: "Specifications must be a valid JSON object string.",
   }).optional()),
 
@@ -48,6 +54,17 @@ const createProductValidation = z.object({
     }
     return val;
   }, z.array(z.string()).optional()),
+  variants: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch (e) { return val; }
+    }
+    return val;
+  }, z.record(
+    z.string(),
+    z.array(z.string()).min(1, 'Each variant must have at least one option')
+  ).refine(val => typeof val === 'object' && val !== null, {
+    message: "Variants must be a valid JSON object string.",
+  }).optional()),
   // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),

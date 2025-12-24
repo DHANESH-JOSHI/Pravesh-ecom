@@ -4,6 +4,7 @@ export interface ICartItem {
   product: Types.ObjectId;
   quantity: number;
   unit: string; // selected unit for this cart item (required)
+  variantSelections?: Record<string, string>; // selected variants (e.g., { size: "M", color: "Red" })
 }
 
 export interface ICart extends Document {
@@ -17,13 +18,15 @@ export interface ICart extends Document {
     productId: Types.ObjectId,
     quantity: number,
     unit: string,
+    variantSelections?: Record<string, string>,
   ): Promise<this>;
   updateItem(
     productId: Types.ObjectId,
     quantity: number,
     unit: string,
+    variantSelections?: Record<string, string>,
   ): Promise<this>;
-  removeItem(productId: Types.ObjectId, unit: string): Promise<this>;
+  removeItem(productId: Types.ObjectId, unit: string, variantSelections?: Record<string, string>): Promise<this>;
   clearCart(): Promise<this>;
   getCartSummary(): Promise<{ totalItems: number }>;
 }

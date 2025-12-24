@@ -25,11 +25,6 @@ export enum StockStatus {
 }
 
 
-export interface IProductUnit {
-  unit: string; // e.g., "kg", "packet", "piece", "box", "litre", "metre", "inch"
-  // No conversion rate needed - these are different unit types, not convertible scales
-}
-
 export interface IProduct extends Document {
   name: string;
   slug: string;
@@ -43,9 +38,10 @@ export interface IProduct extends Document {
 
   // stock: number;
   // minStock: number;
-  units: IProductUnit[]; // Array of available unit types (kg, packet, piece, box, litre, etc.). At least one unit required. Users can select any unit when purchasing.
+  units: Types.ObjectId[]; // Array of unit IDs. At least one unit required. Users can select any unit when purchasing.
   // stockStatus: StockStatus;
-  specifications?: Record<string, any>;
+  variants?: Record<string, string[]>; // User-selectable variants (e.g., { size: ["S", "M", "L"], color: ["Red", "Blue"] })
+  specifications?: Record<string, string | string[]>; // Technical specifications (e.g., { strength: "50kg", diameter: "10cm" })
   // features?: string[];
   // images: string[];
   thumbnail?: string;

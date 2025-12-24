@@ -112,6 +112,12 @@ export const RedisKeys = {
   // Wishlist
   WISHLIST_BY_USER: (userId: StringOrUnknown, query: Record<string, any> = {}) =>
     generateCacheKey(`wishlist:user:${userId}`, query),
+
+  // Unit
+  UNIT_BY_ID: (id: StringOrUnknown, query: Record<string, any> = {}) =>
+    generateCacheKey(`unit:${id}`, query),
+  UNITS_LIST: (query: Record<string, any> = {}) =>
+    generateCacheKey("units", query),
 } as const;
 
 export type RedisKeyBuilders = typeof RedisKeys;
@@ -199,6 +205,10 @@ export const RedisPatterns = {
   
   // Wishlist by user
   WISHLIST_BY_USER_ANY: (userId: StringOrUnknown) => `wishlist:user:${userId}*`,
+  
+  // Units
+  UNITS_ALL: () => "units*",
+  UNIT_ANY: (id: StringOrUnknown) => `unit:${id}*`,
 } as const;
 
 export type RedisPatternBuilders = typeof RedisPatterns;

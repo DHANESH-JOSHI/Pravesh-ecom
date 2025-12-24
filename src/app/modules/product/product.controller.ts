@@ -112,10 +112,12 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
     product = await Product.findOne({ slug })
       .populate([
         { path: 'category', match: { isDeleted: false } },
-        { path: 'brand', match: { isDeleted: false } }
+        { path: 'brand', match: { isDeleted: false } },
+        { path: 'units', match: { isDeleted: false }, select: 'name' }
       ])
   } else {
-    product = await Product.findOne({ slug });
+    product = await Product.findOne({ slug })
+      .populate({ path: 'units', match: { isDeleted: false }, select: 'name' });
   }
 
   if (!product) {
@@ -162,11 +164,22 @@ export const getAllProducts = asyncHandler(async (req, res) => {
   const filter: any = { isDeleted: isDeleted ?? false };
 
   if (categoryId) {
-    const allIds = await getLeafCategoryIds(categoryId as any);
-    filter.category = { $in: allIds.map((id: any) => new mongoose.Types.ObjectId(id)) };
+    const categoryIdString = categoryId.toString();
+    const allIds = await getLeafCategoryIds(categoryIdString);
+    if (allIds.length === 0) {
+      const result = { products: [], total: 0, page: Number(page), totalPages: 0 };
+      await redis.set(cacheKey, result, CacheTTL.SHORT);
+      return res
+        .status(status.OK)
+        .json(new ApiResponse(status.OK, "Products retrieved successfully", result));
+    }
+    const categoryObjectIds = allIds.map((id: string) => new mongoose.Types.ObjectId(id));
+    filter.category = { $in: categoryObjectIds };
   }
 
-  if (brandId) filter.brand = new mongoose.Types.ObjectId(brandId);
+  if (brandId) {
+    filter.brand = brandId;
+  }
 
 
   if (isFeatured !== undefined) filter.isFeatured = isFeatured;
@@ -254,6 +267,25 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     $unwind: { path: "$brand", preserveNullAndEmptyArrays: true },
   });
 
+  // Lookup units
+  pipeline.push({
+    $lookup: {
+      from: "units",
+      localField: "units",
+      foreignField: "_id",
+      pipeline: [
+        { $match: { isDeleted: false } },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+          },
+        },
+      ],
+      as: "units",
+    },
+  });
+
   const [products, total] = await Promise.all([
     Product.aggregate(pipeline),
     Product.countDocuments(filter),
@@ -300,6 +332,7 @@ export const getProductById = asyncHandler(async (req, res) => {
     product = await Product.findOne({ _id: id })
       .populate({ path: 'category', select: 'slug title path', match: { isDeleted: false } })
       .populate({ path: 'brand', select: 'slug name', match: { isDeleted: false } })
+      .populate({ path: 'units', match: { isDeleted: false }, select: 'name' })
       .populate({
         path: 'reviews',
         populate: {
@@ -308,7 +341,8 @@ export const getProductById = asyncHandler(async (req, res) => {
         }
       })
   } else {
-    product = await Product.findOne({ _id: id });
+    product = await Product.findOne({ _id: id })
+      .populate({ path: 'units', match: { isDeleted: false }, select: 'name' });
   }
   if (!product) {
     throw new ApiError(status.NOT_FOUND, 'Product not found');
@@ -394,7 +428,8 @@ export const updateProduct = asyncHandler(async (req, res) => {
     { new: true, runValidators: true }
   ).populate([
     { path: 'category', match: { isDeleted: false } },
-    { path: 'brand', match: { isDeleted: false } }
+    { path: 'brand', match: { isDeleted: false } },
+    { path: 'units', match: { isDeleted: false }, select: 'name' }
   ]);
 
   if (!result) {
@@ -682,6 +717,24 @@ export const getRelatedProducts = asyncHandler(async (req, res) => {
     },
     {
       $unwind: { path: '$brand', preserveNullAndEmptyArrays: true },
+    },
+    // Lookup units
+    {
+      $lookup: {
+        from: "units",
+        localField: "units",
+        foreignField: "_id",
+        pipeline: [
+          { $match: { isDeleted: false } },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+            },
+          },
+        ],
+        as: "units",
+      },
     },
   ];
 
