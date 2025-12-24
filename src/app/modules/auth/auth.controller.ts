@@ -141,7 +141,8 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  if (user.role !== UserRole.ADMIN) {
+  // Allow admin or staff roles to login as admin
+  if (![UserRole.ADMIN, UserRole.STAFF].includes(user.role as UserRole)) {
     throw new ApiError(status.BAD_REQUEST, "You do not have permission to perform this action");
   }
 
@@ -201,7 +202,8 @@ export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
 
-  if (user.role !== UserRole.ADMIN) {
+  // Allow admin or staff roles to login as admin
+  if (![UserRole.ADMIN, UserRole.STAFF].includes(user.role as UserRole)) {
     throw new ApiError(status.FORBIDDEN, "You do not have permission to perform this action");
   }
 

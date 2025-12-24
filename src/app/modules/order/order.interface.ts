@@ -22,6 +22,7 @@ export interface IOrderItem {
 export interface OrderHistory {
   status: OrderStatus;
   timestamp: Date;
+  updatedBy?: string; // Admin ID who updated the status
 }
 
 export interface IOrder extends Document {

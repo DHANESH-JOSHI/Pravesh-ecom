@@ -20,6 +20,11 @@ const OrderHistorySchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  updatedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: false,
+  },
 });
 
 const OrderSchema = new Schema<IOrder>(

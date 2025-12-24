@@ -143,6 +143,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
   const { items, feedback } = adminUpdateOrderValidation.parse(req.body);
   const adminId = req.user?._id;
+  const userRole = req.user?.role;
 
   const order = await Order.findById(orderId);
   if (!order) {
@@ -175,8 +176,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
       });
     }
     
-    // Log items change
-    if (adminId) {
+    // Log items change only for staff users (not super admin)
+    if (adminId && userRole === 'staff') {
       await logOrderChange({
         orderId: String(order._id),
         adminId: String(adminId),
@@ -192,8 +193,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
   }
   
   if (feedback !== undefined && feedback !== oldFeedback) {
-    // Log feedback change
-    if (adminId) {
+    // Log feedback change only for staff users (not super admin)
+    if (adminId && userRole === 'staff') {
       await logOrderChange({
         orderId: String(order._id),
         adminId: String(adminId),
@@ -535,8 +536,8 @@ export const getOrderById = asyncHandler(async (req, res) => {
   const cachedOrder = await redis.get(cacheKey);
 
   if (cachedOrder) {
-    // Log view for admin/staff users
-    if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+    // Log view only for staff users (not super admin)
+    if (adminId && userRole === 'staff') {
       await logOrderChange({
         orderId: String(orderId),
         adminId: String(adminId),
@@ -588,8 +589,8 @@ export const getOrderById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
-  // Log view for admin/staff users
-  if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+  // Log view only for staff users (not super admin)
+  if (adminId && userRole === 'staff') {
     await logOrderChange({
       orderId: String(orderId),
       adminId: String(adminId),
@@ -614,8 +615,8 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   const cached = await redis.get(cacheKey);
 
   if (cached) {
-    // Log view for admin/staff users
-    if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+    // Log view only for staff users (not super admin)
+    if (adminId && userRole === 'staff') {
       await logOrderChange({
         adminId: String(adminId),
         action: 'view_list',
@@ -695,8 +696,8 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   const total = await Order.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
 
-  // Log view for admin/staff users
-  if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+  // Log view only for staff users (not super admin)
+  if (adminId && userRole === 'staff') {
     await logOrderChange({
       adminId: String(adminId),
       action: 'view_list',
@@ -885,8 +886,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
-  // Log status change
-  if (loggedAdminId) {
+  // Log status change only for staff users (not super admin)
+  const loggedUserRole = req.user?.role;
+  if (loggedAdminId && loggedUserRole === 'staff') {
     await logOrderChange({
       orderId: String(order._id),
       adminId: String(loggedAdminId),

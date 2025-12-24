@@ -23,11 +23,12 @@ router.post('/confirm/:id', auth('user'), authenticatedActionLimiter, confirmOrd
 
 router.get('/me', auth('user'), authenticatedActionLimiter, getMyOrders);
 
-router.get('/', auth('admin'), authenticatedActionLimiter, getAllOrders);
+// Admin routes (admin or staff can access)
+router.get('/', auth('admin', 'staff'), authenticatedActionLimiter, getAllOrders);
 
-router.patch('/:id', auth('admin'), authenticatedActionLimiter, updateOrder);
+router.patch('/:id', auth('admin', 'staff'), authenticatedActionLimiter, updateOrder);
 
-router.patch('/:id/status', auth('admin'), authenticatedActionLimiter, updateOrderStatus);
+router.patch('/:id/status', auth('admin', 'staff'), authenticatedActionLimiter, updateOrderStatus);
 
 router.patch('/:id/cancel', auth('user'), authenticatedActionLimiter, cancelOrder);
 

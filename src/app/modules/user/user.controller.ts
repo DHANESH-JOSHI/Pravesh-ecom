@@ -298,7 +298,7 @@ export const updatePassword = asyncHandler(async (req, res) => {
   user.password = newPassword;
   await user.save();
 
-  res.json(new ApiResponse(status.OK, "Password reset successfully"));
+  res.json(new ApiResponse(status.OK, "Password updated successfully"));
   return;
 });
 

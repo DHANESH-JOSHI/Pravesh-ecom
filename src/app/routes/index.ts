@@ -16,6 +16,8 @@ import { dashboardRouter } from "@/modules/dashboard/dashboard.routes";
 import { settingRouter } from "@/modules/setting/setting.routes";
 import { messageRouter } from "@/modules/message/message.routes";
 import { unitRouter } from "@/modules/unit/unit.routes";
+import { adminRouter } from "@/modules/admin/admin.routes";
+import { orderLogRouter } from "@/modules/order-log/order-log.routes";
 const router = Router();
 
 type Route = {
@@ -91,6 +93,14 @@ const moduleRoutes: Route[] = [
   {
     path: '/units',
     route: unitRouter
+  },
+  {
+    path: '/admin',
+    route: adminRouter
+  },
+  {
+    path: '/order-logs',
+    route: orderLogRouter
   }
 ];
 
