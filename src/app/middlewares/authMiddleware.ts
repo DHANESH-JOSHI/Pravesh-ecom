@@ -15,12 +15,8 @@ export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const cookieNames = getCookieNamesFromRequest(req);
-      // Try to get token from client-specific cookie first, then fallback to old cookie names and Authorization header
-      const token = req.cookies?.[cookieNames.accessToken] || 
-                    req.cookies?.accessToken || 
-                    req.cookies?.frontend_accessToken || 
-                    req.cookies?.dashboard_accessToken ||
-                    req.headers?.authorization?.replace('Bearer ', '');
+      const token = req.cookies?.[cookieNames.accessToken] ||
+        req.headers?.authorization?.replace('Bearer ', '');
       if (!token) {
         return next(new ApiError(status.UNAUTHORIZED, "Authentication required. No token provided", "AUTH_MIDDLEWARE"));
       }
@@ -59,12 +55,8 @@ export const optionalAuth = () => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const cookieNames = getCookieNamesFromRequest(req);
-      // Try to get token from client-specific cookie first, then fallback to old cookie names and Authorization header
-      const token = req.cookies?.[cookieNames.accessToken] || 
-                    req.cookies?.accessToken || 
-                    req.cookies?.frontend_accessToken || 
-                    req.cookies?.dashboard_accessToken ||
-                    req.headers?.authorization?.replace('Bearer ', '');
+      const token = req.cookies?.[cookieNames.accessToken] ||
+        req.headers?.authorization?.replace('Bearer ', '');
       if (!token) {
         return next();
       }

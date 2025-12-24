@@ -276,15 +276,22 @@ export const loginUsingOtp = asyncHandler(async (req, res) => {
 
 export const logout = asyncHandler(async (req, res) => {
   const cookieNames = getCookieNamesFromRequest(req);
+  const isProd = process.env.NODE_ENV === 'production';
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ('none' as const) : ('lax' as const),
+    path: '/',
+  };
+
+  // Clear old cookie names (for backward compatibility) and current client-specific cookies
+  // Users can only be logged in on one client at a time (user=frontend, admin=dashboard)
   res
-    .clearCookie('accessToken')
-    .clearCookie('refreshToken')
-    .clearCookie('frontend_accessToken')
-    .clearCookie('frontend_refreshToken')
-    .clearCookie('dashboard_accessToken')
-    .clearCookie('dashboard_refreshToken')
-    .clearCookie(cookieNames.accessToken)
-    .clearCookie(cookieNames.refreshToken)
+    .clearCookie('accessToken', cookieOptions)
+    .clearCookie('refreshToken', cookieOptions)
+    .clearCookie(cookieNames.accessToken, cookieOptions)
+    .clearCookie(cookieNames.refreshToken, cookieOptions)
     .json(new ApiResponse(status.OK, "Logged out successfully"));
   return;
 });
