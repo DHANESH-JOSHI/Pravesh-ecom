@@ -43,7 +43,8 @@ const updateProductRating = async (productId: string, session: mongoose.ClientSe
 
   if (stats.length > 0) {
     reviewCount = stats[0].reviewCount;
-    rating = stats[0].rating;
+    // Round rating to 1 decimal place for consistency
+    rating = Math.round((stats[0].rating || 0) * 10) / 10;
   }
 
   await Product.findByIdAndUpdate(productId, {

@@ -146,6 +146,11 @@ export const updateOrder = asyncHandler(async (req, res) => {
   if (!order) {
     throw new ApiError(status.NOT_FOUND, 'order not found');
   }
+
+  // If order is already delivered and items are being updated, adjust salesCount and totalSold
+  const wasDelivered = order.status === OrderStatus.Delivered;
+  const oldItems = wasDelivered ? [...order.items] : [];
+
   if (items && items.length > 0) {
     const orderItems = [];
     for (const item of items) {
@@ -177,6 +182,49 @@ export const updateOrder = asyncHandler(async (req, res) => {
   // }
   if (feedback !== undefined) order.feedback = feedback;
   await order.save();
+
+  // If order was delivered and items changed, adjust salesCount and totalSold
+  if (wasDelivered && items && items.length > 0) {
+    const productIds = new Set<string>();
+    
+    // Decrement old items
+    for (const oldItem of oldItems) {
+      const productId = String(oldItem.product);
+      productIds.add(productId);
+      await Product.findByIdAndUpdate(
+        oldItem.product,
+        {
+          $inc: {
+            salesCount: -1,
+            totalSold: -oldItem.quantity,
+          },
+        }
+      );
+    }
+
+    // Increment new items
+    for (const newItem of order.items) {
+      const productId = String(newItem.product);
+      productIds.add(productId);
+      await Product.findByIdAndUpdate(
+        newItem.product,
+        {
+          $inc: {
+            salesCount: 1,
+            totalSold: newItem.quantity,
+          },
+        }
+      );
+    }
+
+    // Invalidate product caches
+    for (const productId of productIds) {
+      await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(productId));
+    }
+    if (productIds.size > 0) {
+      await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+    }
+  }
 
   // Invalidate this order's cache (order feedback updated)
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
