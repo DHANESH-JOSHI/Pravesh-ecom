@@ -33,10 +33,10 @@ router.post("/:id/recover", auth('admin'), authenticatedActionLimiter, recoverUs
 
 router.delete("/:id", auth('admin'), authenticatedActionLimiter, deleteUser);
 
-router.patch("/password", auth('user'), authenticatedActionLimiter, updatePassword);
+router.patch("/password", auth('user', 'admin', 'staff'), authenticatedActionLimiter, updatePassword);
 
-router.patch("/", auth('user'), authenticatedActionLimiter, upload.single('image'), updateUser);
+router.patch("/", auth('user', 'admin', 'staff'), authenticatedActionLimiter, upload.single('image'), updateUser);
 
-router.post('/password/reset', auth('user'), authenticatedActionLimiter, resetPassword);
+router.post('/password/reset', auth('user', 'admin', 'staff'), authenticatedActionLimiter, resetPassword);
 
 export const userRouter = router;

@@ -7,7 +7,7 @@ import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
 import { redis } from "@/config/redis";
 import mongoose from "mongoose";
-import { UserStatus } from "./user.interface";
+import { UserRole, UserStatus } from "./user.interface";
 import { registerValidation } from "../auth/auth.validation";
 import { cloudinary } from "@/config/cloudinary";
 import { RedisPatterns } from "@/utils/redisKeys";
@@ -15,7 +15,7 @@ const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
 export const createUser = asyncHandler(async (req, res) => {
-  const { name, password, phone, email } = registerValidation.parse(req.body);
+  const { name, password, phone, email, role } = registerValidation.parse(req.body);
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -23,7 +23,14 @@ export const createUser = asyncHandler(async (req, res) => {
     if (user) {
       throw new ApiError(status.BAD_REQUEST, "User already exists with this phone or email.");
     }
-    user = new User({ name, password, phone, email, status: UserStatus.ACTIVE });
+    user = new User({
+      name,
+      password,
+      phone,
+      email,
+      role: role || UserRole.USER,
+      status: UserStatus.ACTIVE
+    });
 
     await user.save({ session });
 
@@ -75,12 +82,23 @@ export const getMe = asyncHandler(async (req, res) => {
 
 export const updateUser = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
+  
+  if (!userId) {
+    throw new ApiError(status.UNAUTHORIZED, "User not authenticated");
+  }
+
+  // Handle empty email string - convert undefined/null to empty string for validation
+  if (req.body.email === undefined || req.body.email === null) {
+    req.body.email = '';
+  }
+  
   const validatedData = updateUserValidation.parse(req.body);
   const user = await User.findOne({ _id: userId, isDeleted: false });
 
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
+  
   if (validatedData.email && validatedData.email.length > 0) {
     const existingUser = await User.findOne({
       email: validatedData.email,
@@ -97,11 +115,20 @@ export const updateUser = asyncHandler(async (req, res) => {
     delete validatedData.email;
   }
 
-  if(req.file){
+  if (req.file) {
+    // CloudinaryStorage stores the URL in req.file.path (same as other controllers)
     validatedData.img = req.file.path;
-    if(user.img){
-      const publicId = user.img.split("/").pop()?.split(".")[0];
-      if (publicId) await cloudinary.uploader.destroy(`pravesh-users/${publicId}`);
+    // Delete old image if it exists
+    if (user.img) {
+      try {
+        const publicId = user.img.split("/").pop()?.split(".")[0];
+        if (publicId) {
+          await cloudinary.uploader.destroy(`pravesh-users/${publicId}`);
+        }
+      } catch (error) {
+        // Log but don't fail if old image deletion fails
+        console.error("Error deleting old image:", error);
+      }
     }
   }
 
@@ -175,9 +202,9 @@ export const getAllUsers = asyncHandler(async (req, res) => {
     };
 
     pipeline.push({ $match: searchCriteria });
-}
+  }
 
-  pipeline.push({ $match: filter });
+  pipeline.push({ $match: { role: { $ne: UserRole.ADMIN }, ...filter } });
   pipeline.push({ $sort: { createdAt: -1 } });
   pipeline.push({ $skip: skip });
   pipeline.push({ $limit: Number(limit) });
@@ -289,7 +316,7 @@ export const recoverUser = asyncHandler(async (req, res) => {
 
   user.isDeleted = false;
   await user.save();
-  
+
   // Invalidate this user's cache (user recovered, isDeleted changed)
   await redis.deleteByPattern(RedisPatterns.USER_ANY(String(id)));
   // Invalidate all user lists (user recovered, affects user lists)
@@ -370,7 +397,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   if (!user || user.isDeleted) {
     throw new ApiError(status.NOT_FOUND, "User not found");
   }
-  if(!user.compareOtp(otp)) {
+  if (!user.compareOtp(otp)) {
     throw new ApiError(status.BAD_REQUEST, "Invalid or expired OTP");
   }
   user.password = newPassword;
