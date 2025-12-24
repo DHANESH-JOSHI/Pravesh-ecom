@@ -76,6 +76,11 @@ export const createOrder = asyncHandler(async (req, res) => {
       items: orderItems,
       shippingAddress: shippingAddressId,
       status: OrderStatus.Received,
+      history: [{
+        status: OrderStatus.Received,
+        timestamp: new Date(),
+        updatedBy: undefined, // System created
+      }],
     }], { session }))[0];
 
     cart.items = [];
@@ -564,6 +569,10 @@ export const getOrderById = asyncHandler(async (req, res) => {
         }
       },
       {
+        path: 'history.updatedBy',
+        select: 'name email role'
+      },
+      {
         path: 'items.product',
         select: 'name thumbnail',
         populate: [
@@ -881,7 +890,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   order.history.push({
     status: newStatus,
     timestamp: new Date(),
-    updatedBy: loggedAdminId ? String(loggedAdminId) : undefined
+    updatedBy: loggedAdminId ? (loggedAdminId as Types.ObjectId) : undefined
   });
 
   await order.save();
