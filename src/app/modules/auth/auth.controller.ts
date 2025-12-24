@@ -127,9 +127,9 @@ export const loginUser = asyncHandler(async (req, res) => {
   const cookieNames = getCookieNamesFromRequest(req);
   res.
     cookie(cookieNames.accessToken, accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' }).
     cookie(cookieNames.refreshToken, refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' })
     .json(new ApiResponse(status.OK, "User logged in successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
@@ -158,9 +158,9 @@ export const loginAsAdmin = asyncHandler(async (req, res) => {
   const cookieNames = getCookieNamesFromRequest(req);
   res.
     cookie(cookieNames.accessToken, accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' }).
     cookie(cookieNames.refreshToken, refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' })
     .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject }));
   return;
 });
@@ -228,9 +228,9 @@ export const loginAsAdminUsingOtp = asyncHandler(async (req, res) => {
   const cookieNames = getCookieNamesFromRequest(req);
   res.
     cookie(cookieNames.accessToken, accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' }).
     cookie(cookieNames.refreshToken, refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 2, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' })
     .json(new ApiResponse(status.OK, "Admin logged in successfully", { ...userObject }));
   return;
 })
@@ -267,9 +267,9 @@ export const loginUsingOtp = asyncHandler(async (req, res) => {
   const cookieNames = getCookieNamesFromRequest(req);
   res.
     cookie(cookieNames.accessToken, accessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
+      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' }).
     cookie(cookieNames.refreshToken, refreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: isProd, sameSite: isProd ? 'none' : 'lax' })
+      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' })
     .json(new ApiResponse(status.OK, "User logged in successfully", { user: userObject, accessToken, refreshToken }));
   return;
 });
@@ -285,8 +285,6 @@ export const logout = asyncHandler(async (req, res) => {
     path: '/',
   };
 
-  // Clear old cookie names (for backward compatibility) and current client-specific cookies
-  // Users can only be logged in on one client at a time (user=frontend, admin=dashboard)
   res
     .clearCookie('accessToken', cookieOptions)
     .clearCookie('refreshToken', cookieOptions)
@@ -299,9 +297,6 @@ export const logout = asyncHandler(async (req, res) => {
 export const refreshTokens = asyncHandler(async (req, res) => {
   const cookieNames = getCookieNamesFromRequest(req);
   const refreshToken = req.cookies[cookieNames.refreshToken] ||
-    req.cookies.refreshToken ||
-    req.cookies.frontend_refreshToken ||
-    req.cookies.dashboard_refreshToken ||
     req.headers.authorization?.replace('Bearer ', '');
   if (!refreshToken) {
     throw new ApiError(status.BAD_REQUEST, "Refresh token not provided");
@@ -318,11 +313,23 @@ export const refreshTokens = asyncHandler(async (req, res) => {
 
   const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens(user);
   const isProd = process.env.NODE_ENV === 'production';
-  res.
-    cookie(cookieNames.accessToken, newAccessToken,
-      { httpOnly: true, maxAge: 1000 * 15 * 60, secure: isProd, sameSite: isProd ? 'none' : 'lax' }).
-    cookie(cookieNames.refreshToken, newRefreshToken,
-      { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * (user.role === 'admin' ? 2 : 7), secure: isProd, sameSite: isProd ? 'none' : 'lax' })
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ('none' as const) : ('lax' as const),
+    path: '/',
+  };
+
+  res
+    .clearCookie('accessToken', cookieOptions)
+    .clearCookie('refreshToken', cookieOptions)
+    .clearCookie(cookieNames.accessToken, cookieOptions)
+    .clearCookie(cookieNames.refreshToken, cookieOptions)
+    .cookie(cookieNames.accessToken, newAccessToken,
+      { ...cookieOptions, maxAge: 1000 * 15 * 60 })
+    .cookie(cookieNames.refreshToken, newRefreshToken,
+      { ...cookieOptions, maxAge: 1000 * 60 * 60 * 24 * (user.role === 'admin' ? 2 : 7) })
     .json(new ApiResponse(status.OK, "Tokens refreshed successfully", { accessToken: newAccessToken, refreshToken: newRefreshToken }));
   return;
 });
