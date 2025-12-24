@@ -14,6 +14,7 @@ import { redis } from "@/config/redis";
 import { RedisKeys } from "@/utils/redisKeys";
 import { RedisPatterns } from '@/utils/redisKeys';
 import { User } from '../user/user.model';
+import { logOrderChange } from '../order-log/order-log.service';
 // import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
@@ -141,6 +142,7 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
 export const updateOrder = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
   const { items, feedback } = adminUpdateOrderValidation.parse(req.body);
+  const adminId = req.user?._id;
 
   const order = await Order.findById(orderId);
   if (!order) {
@@ -150,6 +152,7 @@ export const updateOrder = asyncHandler(async (req, res) => {
   // If order is already delivered and items are being updated, adjust salesCount and totalSold
   const wasDelivered = order.status === OrderStatus.Delivered;
   const oldItems = wasDelivered ? [...order.items] : [];
+  const oldFeedback = order.feedback;
 
   if (items && items.length > 0) {
     const orderItems = [];
@@ -171,16 +174,40 @@ export const updateOrder = asyncHandler(async (req, res) => {
         variantSelections: (item as any).variantSelections || {},
       });
     }
+    
+    // Log items change
+    if (adminId) {
+      await logOrderChange({
+        orderId: String(order._id),
+        adminId: String(adminId),
+        action: 'items_updated',
+        field: 'items',
+        oldValue: oldItems,
+        newValue: orderItems,
+        description: `Order items updated. Old: ${oldItems.length} items, New: ${orderItems.length} items`,
+      });
+    }
+    
     order.items = orderItems;
   }
-  // if (orderStatus) {
-  //   if ([OrderStatus.Approved, OrderStatus.Cancelled, OrderStatus.Confirmed].includes(orderStatus)) {
-  //     order.status = orderStatus;
-  //   } else {
-  //     throw new ApiError(status.BAD_REQUEST, 'You can only update the status to Approved, Cancelled, or Confirmed as of now');
-  //   }
-  // }
-  if (feedback !== undefined) order.feedback = feedback;
+  
+  if (feedback !== undefined && feedback !== oldFeedback) {
+    // Log feedback change
+    if (adminId) {
+      await logOrderChange({
+        orderId: String(order._id),
+        adminId: String(adminId),
+        action: 'feedback_updated',
+        field: 'feedback',
+        oldValue: oldFeedback,
+        newValue: feedback,
+        description: `Order feedback updated`,
+      });
+    }
+    
+    order.feedback = feedback;
+  }
+  
   await order.save();
 
   // If order was delivered and items changed, adjust salesCount and totalSold
@@ -501,10 +528,23 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 
 export const getOrderById = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
+  const adminId = req.user?._id as string | Types.ObjectId | undefined;
+  const userRole = req.user?.role as string | undefined;
+  
   const cacheKey = RedisKeys.ORDER_BY_ID(orderId);
   const cachedOrder = await redis.get(cacheKey);
 
   if (cachedOrder) {
+    // Log view for admin/staff users
+    if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+      await logOrderChange({
+        orderId: String(orderId),
+        adminId: String(adminId),
+        action: 'view',
+        description: `Order viewed by ${userRole}`,
+        metadata: { cached: true }
+      });
+    }
     return res.status(status.OK).json(new ApiResponse(status.OK, 'Order retrieved successfully', cachedOrder));
   }
 
@@ -548,6 +588,17 @@ export const getOrderById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
+  // Log view for admin/staff users
+  if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+    await logOrderChange({
+      orderId: String(orderId),
+      adminId: String(adminId),
+      action: 'view',
+      description: `Order viewed by ${userRole}`,
+      metadata: { cached: false }
+    });
+  }
+
   const orderObj = (order as any)?.toObject ? (order as any).toObject() : order;
   await redis.set(cacheKey, orderObj, CacheTTL.SHORT);
 
@@ -556,13 +607,29 @@ export const getOrderById = asyncHandler(async (req, res) => {
 });
 
 export const getAllOrders = asyncHandler(async (req, res) => {
+  const adminId = req.user?._id as string | Types.ObjectId | undefined;
+  const userRole = req.user?.role as string | undefined;
+  
   const cacheKey = RedisKeys.ORDERS_LIST(req.query as Record<string, any>);
   const cached = await redis.get(cacheKey);
 
-  if (cached)
+  if (cached) {
+    // Log view for admin/staff users
+    if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+      await logOrderChange({
+        adminId: String(adminId),
+        action: 'view_list',
+        description: `Orders list viewed by ${userRole}`,
+        metadata: { 
+          cached: true,
+          query: req.query 
+        }
+      });
+    }
     return res
       .status(status.OK)
       .json(new ApiResponse(status.OK, "All orders retrieved successfully", cached));
+  }
 
   const { page = 1, limit = 10, status: orderStatus, user, isCustomOrder } = req.query;
 
@@ -627,6 +694,22 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   const orders = await Order.aggregate(pipeline);
   const total = await Order.countDocuments(filter);
   const totalPages = Math.ceil(total / Number(limit));
+
+  // Log view for admin/staff users
+  if (adminId && (userRole === 'admin' || userRole === 'staff')) {
+    await logOrderChange({
+      adminId: String(adminId),
+      action: 'view_list',
+      description: `Orders list viewed by ${userRole}`,
+      metadata: { 
+        cached: false,
+        query: req.query,
+        total,
+        page: Number(page),
+        limit: Number(limit)
+      }
+    });
+  }
 
   const result = {
     orders,
@@ -793,12 +876,31 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new ApiError(status.BAD_REQUEST, 'Order is already refunded, cannot do anything anymore');
   }
 
+  const loggedAdminId = req.user?._id;
   order.history.push({
     status: newStatus,
-    timestamp: new Date()
+    timestamp: new Date(),
+    updatedBy: loggedAdminId ? String(loggedAdminId) : undefined
   });
 
   await order.save();
+
+  // Log status change
+  if (loggedAdminId) {
+    await logOrderChange({
+      orderId: String(order._id),
+      adminId: String(loggedAdminId),
+      action: 'status_update',
+      field: 'status',
+      oldValue: oldStatus,
+      newValue: newStatus,
+      description: `Order status changed from ${oldStatus} to ${newStatus}`,
+      metadata: {
+        orderId: String(order._id),
+        userId: String(order.user),
+      },
+    });
+  }
 
   // Invalidate this order's cache (order status changed)
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));

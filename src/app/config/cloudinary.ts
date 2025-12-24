@@ -84,9 +84,10 @@ const customStorage = {
     file.stream.on('end', async () => {
       try {
         const buffer = Buffer.concat(chunks);
-        const dataUri = `data:${file.mimetype};base64,${buffer.toString('base64')}`;
         
         const { upload_preset, ...signedUploadOptions } = uploadOptions;
+        
+        const dataUri = `data:${file.mimetype};base64,${buffer.toString('base64')}`;
         
         const result = await new Promise<any>((resolve, reject) => {
           cloudinary.uploader.upload(
