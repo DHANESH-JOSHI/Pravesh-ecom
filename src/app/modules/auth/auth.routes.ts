@@ -1,23 +1,21 @@
 import express from "express";
 import { loginUser, logout, refreshTokens, registerUser, requestForOtp, loginUsingOtp, loginAsAdmin, loginAsAdminUsingOtp } from "../auth/auth.controller";
-import { authLimiter, smsLimiter } from "@/middlewares";
+import { authLimiter, smsLimiter, tokenLimiter, apiLimiter } from "@/middlewares";
 
 const router = express.Router();
 
-router.post("/register", authLimiter, registerUser);
+// Authentication endpoints - strict limits to prevent brute force
+router.post("/register", apiLimiter, authLimiter, registerUser);
+router.post("/login", apiLimiter, authLimiter, loginUser);
+router.post("/admin-login", apiLimiter, authLimiter, loginAsAdmin);
+router.post("/otp-login", apiLimiter, authLimiter, loginUsingOtp);
+router.post("/admin-otp-login", apiLimiter, authLimiter, loginAsAdminUsingOtp);
 
-router.post("/login", authLimiter, loginUser);
+// OTP request - SMS limiter (expensive)
+router.post("/otp/request", apiLimiter, smsLimiter, requestForOtp);
 
-router.post("/admin-login", authLimiter, loginAsAdmin)
-
-router.post("/otp/request", smsLimiter, requestForOtp);
-
-router.post("/otp-login", authLimiter, loginUsingOtp);
-
-router.post("/admin-otp-login", authLimiter, loginAsAdminUsingOtp)
-
-router.post("/refresh-tokens", authLimiter, refreshTokens);
-
-router.post("/logout", authLimiter, logout);
+// Token/session endpoints - more lenient limits
+router.post("/refresh-tokens", apiLimiter, tokenLimiter, refreshTokens);
+router.post("/logout", apiLimiter, tokenLimiter, logout);
 
 export const authRouter = router;

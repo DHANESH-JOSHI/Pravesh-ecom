@@ -9,21 +9,21 @@ import {
   getCategoryTree,
   getLeafCategories,
 } from './category.controller';
-import { auth, authenticatedActionLimiter } from '@/middlewares';
+import { auth, authenticatedActionLimiter, apiLimiter } from '@/middlewares';
 
 const router = express.Router();
 
 router.post('/', auth('admin'), authenticatedActionLimiter, createCategory);
 
-router.get('/tree', getCategoryTree)
+router.get('/tree', apiLimiter, getCategoryTree)
 
-router.get('/leaf', getLeafCategories);
+router.get('/leaf', apiLimiter, getLeafCategories);
 
-router.get('/', getAllCategories);
+router.get('/', apiLimiter, getAllCategories);
 
-router.get('/slug/:slug', getCategoryBySlug);
+router.get('/slug/:slug', apiLimiter, getCategoryBySlug);
 
-router.get('/:id', getCategoryById);
+router.get('/:id', apiLimiter, getCategoryById);
 
 router.patch('/:id', auth('admin'), authenticatedActionLimiter, updateCategory);
 

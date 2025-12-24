@@ -6,11 +6,11 @@ import {
   resolveMessage,
   deleteMessage,
 } from "./message.controller";
-import { auth, authenticatedActionLimiter } from "@/middlewares";
+import { auth, authenticatedActionLimiter, apiLimiter } from "@/middlewares";
 
 const router = express.Router();
 
-router.post("/", createMessage);
+router.post("/", apiLimiter, createMessage);
 
 router.get("/", auth('admin'), authenticatedActionLimiter, listMessages);
 router.get("/:id", auth('admin'), authenticatedActionLimiter, getMessageById);

@@ -9,22 +9,21 @@ import {
   getProductBySlug,
   getRelatedProducts,
 } from './product.controller';
-import { auth, optionalAuth } from '@/middlewares';
-import { authenticatedActionLimiter } from '@/middlewares';
+import { auth, optionalAuth, authenticatedActionLimiter, apiLimiter } from '@/middlewares';
 import { upload } from '@/config/cloudinary';
 const router = express.Router();
 
 router.post('/', auth('admin'), authenticatedActionLimiter, upload.single("thumbnail"), createProduct);
 
-router.get('/', optionalAuth(), getAllProducts);
+router.get('/', apiLimiter, optionalAuth(), getAllProducts);
 
-router.get('/filters', getProductFilters);
+router.get('/filters', apiLimiter, getProductFilters);
 
-router.get('/slug/:slug', optionalAuth(), getProductBySlug);
+router.get('/slug/:slug', apiLimiter, optionalAuth(), getProductBySlug);
 
-router.get('/:id/related', optionalAuth(), getRelatedProducts);
+router.get('/:id/related', apiLimiter, optionalAuth(), getRelatedProducts);
 
-router.get('/:id', optionalAuth(), getProductById);
+router.get('/:id', apiLimiter, optionalAuth(), getProductById);
 
 router.patch('/:id', auth('admin'), authenticatedActionLimiter, upload.single("thumbnail"), updateProduct);
 
