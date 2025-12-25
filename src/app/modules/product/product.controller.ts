@@ -14,6 +14,8 @@ import mongoose from 'mongoose';
 import { getLeafCategoryIds } from '../brand/brand.controller';
 import { CacheTTL } from '@/utils/cacheTTL';
 import { UserRole } from '../user/user.interface';
+import Papa from 'papaparse';
+import { Unit } from '../unit/unit.model';
 const ApiError = getApiErrorClass("PRODUCT");
 const ApiResponse = getApiResponseClass("PRODUCT");
 
@@ -790,6 +792,275 @@ export const getProductFilters = asyncHandler(async (req, res) => {
 
   res.status(status.OK).json(
     new ApiResponse(status.OK, 'Product filters retrieved successfully', filters)
+  );
+  return;
+});
+
+export const bulkImportProducts = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(status.BAD_REQUEST, 'CSV file is required');
+  }
+
+  const fileBuffer = req.file.buffer || Buffer.from('');
+  const csvContent = fileBuffer.toString('utf-8');
+
+  // Parse CSV
+  const parseResult = Papa.parse(csvContent, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) => header.trim(),
+    transform: (value) => value.trim(),
+  });
+
+  if (parseResult.errors.length > 0) {
+    throw new ApiError(status.BAD_REQUEST, `CSV parsing errors: ${parseResult.errors.map(e => e.message).join(', ')}`);
+  }
+
+  const rows = parseResult.data as any[];
+  if (rows.length === 0) {
+    throw new ApiError(status.BAD_REQUEST, 'CSV file is empty or has no valid rows');
+  }
+
+  const results = {
+    total: rows.length,
+    success: 0,
+    failed: 0,
+    errors: [] as Array<{ row: number; errors: string[] }>,
+  };
+
+  const validProducts: any[] = [];
+  const categoryIds = new Set<string>();
+  const brandIds = new Set<string>();
+  const unitIds = new Set<string>();
+
+  // First pass: collect all IDs and validate structure
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowErrors: string[] = [];
+
+    if (!row.name || !row.name.trim()) {
+      rowErrors.push('Name is required');
+    }
+
+    if (!row.categoryId || !row.categoryId.trim()) {
+      rowErrors.push('Category ID is required');
+    } else {
+      const categoryId = row.categoryId.trim();
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        rowErrors.push(`Invalid category ID format: ${categoryId}`);
+      } else {
+        categoryIds.add(categoryId);
+      }
+    }
+
+    if (!row.units || !row.units.trim()) {
+      rowErrors.push('Units are required (comma-separated unit IDs)');
+    } else {
+      const units = row.units.split(',').map((u: string) => u.trim()).filter(Boolean);
+      const invalidUnits = units.filter((u: string) => !mongoose.Types.ObjectId.isValid(u));
+      if (invalidUnits.length > 0) {
+        rowErrors.push(`Invalid unit ID format(s): ${invalidUnits.join(', ')}`);
+      } else {
+        units.forEach((u: string) => unitIds.add(u));
+      }
+    }
+
+    if (row.brandId && row.brandId.trim()) {
+      const brandId = row.brandId.trim();
+      if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        rowErrors.push(`Invalid brand ID format: ${brandId}`);
+      } else {
+        brandIds.add(brandId);
+      }
+    }
+
+    if (rowErrors.length > 0) {
+      results.failed++;
+      results.errors.push({ row: i + 2, errors: rowErrors }); // +2 because row 1 is header
+      continue;
+    }
+
+    // Parse optional fields
+    let variants: Record<string, string[]> | undefined;
+    if (row.variants && row.variants.trim()) {
+      try {
+        variants = JSON.parse(row.variants);
+        if (typeof variants !== 'object' || Array.isArray(variants)) {
+          rowErrors.push('Variants must be a valid JSON object');
+        }
+      } catch (e) {
+        rowErrors.push('Invalid variants JSON format');
+      }
+    }
+
+    let specifications: Record<string, string | string[]> | undefined;
+    if (row.specifications && row.specifications.trim()) {
+      try {
+        specifications = JSON.parse(row.specifications);
+        if (typeof specifications !== 'object' || Array.isArray(specifications)) {
+          rowErrors.push('Specifications must be a valid JSON object');
+        }
+      } catch (e) {
+        rowErrors.push('Invalid specifications JSON format');
+      }
+    }
+
+    let tags: string[] | undefined;
+    if (row.tags && row.tags.trim()) {
+      tags = row.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+    }
+
+    if (rowErrors.length > 0) {
+      results.failed++;
+      results.errors.push({ row: i + 2, errors: rowErrors });
+      continue;
+    }
+
+    validProducts.push({
+      rowIndex: i + 2,
+      data: {
+        name: row.name.trim(),
+        categoryId: row.categoryId.trim(),
+        units: row.units.split(',').map((u: string) => u.trim()).filter(Boolean),
+        brandId: row.brandId?.trim() || undefined,
+        tags,
+        variants,
+        specifications,
+        isFeatured: row.isFeatured?.toLowerCase() === 'true',
+        isNewArrival: row.isNewArrival?.toLowerCase() === 'true',
+        thumbnail: row.thumbnail?.trim() || undefined,
+      },
+    });
+  }
+
+  const validCategoryIdArray = Array.from(categoryIds).filter(id => mongoose.Types.ObjectId.isValid(id));
+  const validBrandIdArray = Array.from(brandIds).filter(id => mongoose.Types.ObjectId.isValid(id));
+  const validUnitIdArray = Array.from(unitIds).filter(id => mongoose.Types.ObjectId.isValid(id));
+
+  const [categories, brands, units] = await Promise.all([
+    validCategoryIdArray.length > 0 ? Category.find({ _id: { $in: validCategoryIdArray.map(id => new mongoose.Types.ObjectId(id)) }, isDeleted: false }) : [],
+    validBrandIdArray.length > 0 ? Brand.find({ _id: { $in: validBrandIdArray.map(id => new mongoose.Types.ObjectId(id)) }, isDeleted: false }) : [],
+    validUnitIdArray.length > 0 ? Unit.find({ _id: { $in: validUnitIdArray.map(id => new mongoose.Types.ObjectId(id)) }, isDeleted: false }) : [],
+  ]);
+
+  const validCategoryIds = new Set(categories.map(c => String(c._id)));
+  const validBrandIds = new Set(brands.map(b => String(b._id)));
+  const validUnitIds = new Set(units.map(u => String(u._id)));
+
+  // Second pass: validate IDs and create products
+  const productsToCreate: any[] = [];
+
+  for (const product of validProducts) {
+    const errors: string[] = [];
+
+    if (!validCategoryIds.has(product.data.categoryId)) {
+      errors.push(`Invalid category ID: ${product.data.categoryId}`);
+    }
+
+    if (product.data.brandId && !validBrandIds.has(product.data.brandId)) {
+      errors.push(`Invalid brand ID: ${product.data.brandId}`);
+    }
+
+    const invalidUnits = product.data.units.filter((u: string) => !validUnitIds.has(u));
+    if (invalidUnits.length > 0) {
+      errors.push(`Invalid unit IDs: ${invalidUnits.join(', ')}`);
+    }
+
+    if (errors.length > 0) {
+      results.failed++;
+      results.errors.push({ row: product.rowIndex, errors });
+      continue;
+    }
+
+    try {
+      // Validate using zod schema
+      const validatedData = createProductValidation.parse({
+        name: product.data.name,
+        categoryId: product.data.categoryId,
+        units: product.data.units,
+        brandId: product.data.brandId,
+        tags: product.data.tags,
+        variants: product.data.variants,
+        specifications: product.data.specifications,
+        isFeatured: product.data.isFeatured,
+        isNewArrival: product.data.isNewArrival,
+        thumbnail: product.data.thumbnail,
+      });
+
+      productsToCreate.push({
+        ...validatedData,
+        category: validatedData.categoryId,
+        brand: validatedData.brandId,
+      });
+    } catch (error: any) {
+      results.failed++;
+      results.errors.push({
+        row: product.rowIndex,
+        errors: error.errors?.map((e: any) => e.message) || [error.message || 'Validation failed'],
+      });
+    }
+  }
+
+  // Bulk insert products
+  if (productsToCreate.length > 0) {
+    try {
+      const createdProducts = await Product.insertMany(productsToCreate, { ordered: false });
+
+      for (const product of createdProducts) {
+        // Invalidate related products cache (existing products might now be related to these new ones)
+        await redis.deleteByPattern(RedisPatterns.PRODUCT_RELATED_ANY(String(product._id)));
+      }
+
+      // Invalidate all product lists (new products added to lists)
+      await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
+      // Invalidate product filters (new products might affect filter options)
+      await redis.delete(RedisKeys.PRODUCT_FILTERS());
+      // Invalidate dashboard stats (product count changed)
+      await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
+      // Invalidate all user carts (carts display product name, thumbnail, etc.)
+      await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY("*"));
+      // Invalidate all cart lists (carts display product info)
+      await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
+
+      // Invalidate category and brand caches
+      const categoryIdsToInvalidate = new Set(productsToCreate.map(p => String(p.category)));
+      const brandIdsToInvalidate = new Set(productsToCreate.filter(p => p.brand).map(p => String(p.brand)));
+
+      for (const catId of categoryIdsToInvalidate) {
+        // Invalidate specific category cache (productCount changed)
+        await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(catId));
+      }
+      // Invalidate all category lists (productCount displayed in lists)
+      await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
+
+      for (const brandId of brandIdsToInvalidate) {
+        // Invalidate specific brand cache (productCount changed)
+        await redis.deleteByPattern(RedisPatterns.BRAND_ANY(brandId));
+      }
+      // Invalidate all brand lists (productCount displayed in lists)
+      await redis.deleteByPattern(RedisPatterns.BRANDS_ALL());
+
+      results.success = createdProducts.length;
+    } catch (error: any) {
+      // Handle bulk write errors
+      if (error.writeErrors) {
+        error.writeErrors.forEach((writeError: any) => {
+          const index = writeError.index;
+          results.failed++;
+          results.errors.push({
+            row: validProducts[index]?.rowIndex || index + 2,
+            errors: [writeError.errmsg || 'Insert failed'],
+          });
+        });
+        results.success = productsToCreate.length - error.writeErrors.length;
+      } else {
+        throw new ApiError(status.INTERNAL_SERVER_ERROR, `Bulk insert failed: ${error.message}`);
+      }
+    }
+  }
+
+  res.status(status.OK).json(
+    new ApiResponse(status.OK, 'Bulk import completed', results)
   );
   return;
 });
