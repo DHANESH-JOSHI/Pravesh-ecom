@@ -99,16 +99,6 @@ export const RedisKeys = {
   USERS_LIST: (query: Record<string, any> = {}) =>
     generateCacheKey("users", query),
 
-  // Wallet
-  WALLET_BY_USER: (userId: StringOrUnknown, query: Record<string, any> = {}) =>
-    generateCacheKey(`wallet:user:${userId}`, query),
-  WALLETS_LIST: (query: Record<string, any> = {}) =>
-    generateCacheKey("wallets", query),
-  WALLET_BALANCE: (userId: StringOrUnknown) =>
-    `wallet:balance:${userId}`,
-  WALLET_TRANSACTIONS: (userId: StringOrUnknown) =>
-    `wallet:transactions:${userId}`,
-
   // Wishlist
   WISHLIST_BY_USER: (userId: StringOrUnknown, query: Record<string, any> = {}) =>
     generateCacheKey(`wishlist:user:${userId}`, query),
@@ -180,10 +170,6 @@ export const RedisPatterns = {
   ORDERS_INDIVIDUAL: () => "order:*",
   ORDERS_BY_USER: (userId: StringOrUnknown) => `orders:user:${userId}*`,
   ORDER_ANY: (orderId: StringOrUnknown) => `order:${orderId}`,
-
-  // Wallets
-  WALLETS_ALL: () => "wallets*",
-  WALLET_BY_USER_ANY: (userId: StringOrUnknown) => `wallet:user:${userId}*`,
 
   // Dashboard
   DASHBOARD_ALL: () => "dashboard:stats*",

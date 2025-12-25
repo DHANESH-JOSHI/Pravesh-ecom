@@ -10,7 +10,8 @@
     "postbuild": "node -e \"const fs=require('fs');const cp=require('child_process');if(fs.existsSync('./dist')){const f=cp.execSync('find dist -name \\\"*.js\\\" 2>/dev/null|wc -l').toString().trim();const s=cp.execSync('du -sh dist 2>/dev/null').toString().split('\\t')[0];console.log('\\n✅ Build Successful!\\n');console.log('📊 Build Statistics:');console.log('   📦 '+f+' JavaScript files created');console.log('   💾 Total size: '+s);console.log('\\n✨ Ready to deploy! Run: npm start\\n');}else{console.log('\\n❌ Build failed - dist folder not created\\n');}\"",
     "build:clean": "rm -rf dist && npm run build",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix"
+    "lint:fix": "eslint src --ext .ts --fix",
+    "migrate:order-numbers": "npx tsx --tsconfig tsconfig.json scripts/migrate-order-numbers.ts"
   },
   "author": "",
   "license": "ISC",

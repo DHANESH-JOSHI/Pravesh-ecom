@@ -3,7 +3,6 @@ import { User } from "../user/user.model";
 import { loginValidation, registerValidation, requestOtpValidation, verifyOtpValidation } from "./auth.validation";
 import { getApiErrorClass, getApiResponseClass } from "@/interface";
 import status from "http-status";
-import { Wallet } from '../wallet/wallet.model';
 import mongoose from "mongoose";
 import { UserRole, UserStatus } from "../user/user.interface";
 import { getCookieNamesFromRequest } from "@/utils/cookieUtils";
@@ -48,12 +47,10 @@ export const registerUser = asyncHandler(async (req, res) => {
         } else {
           user = new User({ name, password, phone, email });
           await user.save({ session });
-          await Wallet.create([{ user: user._id }], { session });
         }
       } else {
         user = new User({ name, password, phone });
         await user.save({ session });
-        await Wallet.create([{ user: user._id }], { session });
       }
     }
     // User is pending verification — allow updating

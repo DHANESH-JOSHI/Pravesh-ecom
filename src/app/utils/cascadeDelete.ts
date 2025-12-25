@@ -90,7 +90,6 @@ export async function cascadeUserDelete(
   const Address = mongoose.model('Address');
   const Cart = mongoose.model('Cart');
   const Wishlist = mongoose.model('Wishlist');
-  const Wallet = mongoose.model('Wallet');
 
   await Review.deleteMany(
     { user: userId },
@@ -113,11 +112,6 @@ export async function cascadeUserDelete(
     { session }
   );
 
-  await Wallet.updateMany(
-    { user: userId, isDeleted: false },
-    { $set: { isDeleted: true } },
-    { session }
-  );
 }
 
 export async function recalculateProductRating(

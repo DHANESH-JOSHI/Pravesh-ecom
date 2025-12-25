@@ -50,6 +50,7 @@ const OrderSchema = new Schema<IOrder>(
     },
     feedback: { type: String },
     image: { type: String },
+    orderNumber: { type: String, unique: true, index: true },
   },
   {
     timestamps: true,

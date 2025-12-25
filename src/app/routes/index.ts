@@ -2,7 +2,6 @@ import { Router } from "express";
 import { authRouter } from "@/modules/auth/auth.routes";
 import { categoryRouter } from "@/modules/category/category.routes";
 import { productRouter } from "@/modules/product/product.routes";
-import { walletRouter } from "@/modules/wallet/wallet.routes";
 import { brandRouter } from "@/modules/brand/brand.routes";
 import { cartRouter } from "@/modules/cart/cart.routes";
 import { orderRouter } from '@/modules/order/order.routes';
@@ -45,10 +44,6 @@ const moduleRoutes: Route[] = [
   {
     path: '/brands',
     route: brandRouter
-  },
-  {
-    path: '/wallet',
-    route: walletRouter
   },
   {
     path: '/cart',

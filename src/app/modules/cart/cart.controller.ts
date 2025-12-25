@@ -30,10 +30,6 @@ export const getCartById = asyncHandler(async (req, res) => {
       path: 'user',
       select: '_id name email',
       match: { isDeleted: false },
-      populate: {
-        path: 'wallet',
-        select: 'balance'
-      }
     },
     {
       path: 'items.product',

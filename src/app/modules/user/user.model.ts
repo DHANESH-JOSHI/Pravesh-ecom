@@ -23,13 +23,6 @@ const userSchema = new Schema<IUser>(
 );
 applyMongooseToJSON(userSchema);
 
-userSchema.virtual("wallet", {
-  ref: "Wallet",
-  localField: "_id",
-  foreignField: "user",
-  justOne: true,
-});
-
 userSchema.virtual("cart", {
   ref: "Cart",
   localField: "_id",

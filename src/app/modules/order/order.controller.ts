@@ -3,7 +3,6 @@ import { CacheTTL } from "@/utils/cacheTTL";
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { Order } from './order.model';
 import { Cart } from '../cart/cart.model';
-// import { Wallet } from '../wallet/wallet.model'; // Commented out - wallet operations removed (price removed)
 import { OrderStatus } from './order.interface';
 import { checkoutFromCartValidation, adminUpdateOrderValidation } from './order.validation';
 import mongoose, { Types } from 'mongoose';
@@ -15,6 +14,7 @@ import { RedisKeys } from "@/utils/redisKeys";
 import { RedisPatterns } from '@/utils/redisKeys';
 import { User } from '../user/user.model';
 import { logOrderChange } from '../order-log/order-log.service';
+import { generateOrderNumber } from './counter.model';
 // import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
@@ -53,29 +53,22 @@ export const createOrder = asyncHandler(async (req, res) => {
       });
     }
 
-    // const wallet = await Wallet.findOne({ user: userId }).session(session);
-    // if (!wallet || wallet.balance < totalAmount) {
-    //   throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
-    // }
-    // wallet.balance -= totalAmount;
-    // wallet.transactions.push({
-    //   amount: -totalAmount,
-    //   description: `Order payment`,
-    //   createdAt: new Date(),
-    // });
-    // await wallet.save({ session });
-
     // Stock decrement removed - stock field no longer exists
     // for (const item of cart.items) {
     //   await Product.findByIdAndUpdate(item.product, {
     //     $inc: { stock: -item.quantity }
     //   }, { session });
     // }
+    
+    // Generate order number
+    const orderNumber = await generateOrderNumber();
+    
     const order = (await Order.create([{
       user: userId,
       items: orderItems,
       shippingAddress: shippingAddressId,
       status: OrderStatus.Received,
+      orderNumber,
       history: [{
         status: OrderStatus.Received,
         timestamp: new Date(),
@@ -123,12 +116,21 @@ export const createCustomOrder = asyncHandler(async (req, res) => {
 
   const customOrderImage = req.file.path;
 
+  // Generate order number
+  const orderNumber = await generateOrderNumber();
+
   const order = await Order.create({
     user: userId,
     items: [],
     status: OrderStatus.Received,
     isCustomOrder: true,
     image: customOrderImage,
+    orderNumber,
+    history: [{
+      status: OrderStatus.Received,
+      timestamp: new Date(),
+      updatedBy: undefined, // System created
+    }],
   });
 
   // Invalidate orders by this user (custom order created, affects user orders list)
@@ -308,20 +310,6 @@ export const confirmOrder = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'You can only confirm approved orders');
     }
 
-    // Wallet operations commented out - totalAmount is now 0 (price removed)
-    // const wallet = await Wallet.findOne({ user: userId }).session(session);
-    // if (!wallet || wallet.balance < order.totalAmount) {
-    //   throw new ApiError(status.BAD_REQUEST, 'Insufficient wallet funds');
-    // }
-
-    // wallet.balance -= order.totalAmount;
-    // wallet.transactions.push({
-    //   amount: -order.totalAmount,
-    //   description: `Payment for order #${order._id}`,
-    //   createdAt: new Date(),
-    // });
-    // await wallet.save({ session });
-
     order.status = OrderStatus.Confirmed;
     order.shippingAddress = shippingAddressId as Types.ObjectId;
     await order.save({ session });
@@ -334,13 +322,7 @@ export const confirmOrder = asyncHandler(async (req, res) => {
     await redis.deleteByPattern(RedisPatterns.ORDERS_BY_USER(String(userId)));
     // Invalidate all order lists (order cancelled, removed from lists)
     await redis.deleteByPattern(RedisPatterns.ORDERS_ALL());
-    // Invalidate user's wallet cache (wallet refunded, balance changed)
-    await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(userId)));
-    // Invalidate wallet balance (balance changed due to refund)
-    await redis.delete(RedisKeys.WALLET_BALANCE(String(userId)));
-    // Invalidate wallet transactions (new refund transaction added)
-    await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(userId)));
-    // Invalidate user cache (user might have order count or wallet balance displayed)
+    // Invalidate user cache (user might have order count displayed)
     await redis.deleteByPattern(RedisPatterns.USER_ANY(String(userId)));
     // Invalidate dashboard stats (order status stats changed)
     await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
@@ -563,10 +545,6 @@ export const getOrderById = asyncHandler(async (req, res) => {
         path: 'user',
         select: 'name email',
         match: { isDeleted: false },
-        populate: {
-          path: 'wallet',
-          select: 'balance'
-        }
       },
       {
         path: 'history.updatedBy',
@@ -758,17 +736,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
       throw new ApiError(status.BAD_REQUEST, 'You cannot approve or confirm an order with no items or without a shipping address');
     }
     if (newStatus === OrderStatus.Confirmed) {
-      // Wallet operations commented out - totalAmount is now 0 (price removed)
-      // const wallet = await Wallet.findOne({ user: order.user });
-      // if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
-
-      // wallet.balance -= order.totalAmount;
-      // wallet.transactions.push({
-      //   amount: -order.totalAmount,
-      //   description: `Payment for order #${order.id}`,
-      //   createdAt: new Date()
-      // });
-      // await wallet.save();
+      // Order confirmation logic
     }
     order.status = newStatus;
   }
@@ -778,17 +746,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
 
     if (newStatus === OrderStatus.Confirmed) {
-      // Wallet operations commented out - totalAmount is now 0 (price removed)
-      // const wallet = await Wallet.findOne({ user: order.user });
-      // if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
-
-      // wallet.balance -= order.totalAmount;
-      // wallet.transactions.push({
-      //   amount: -order.totalAmount,
-      //   description: `Payment for order #${order.id}`,
-      //   createdAt: new Date()
-      // });
-      // await wallet.save();
+      // Order confirmation logic
     }
 
     order.status = newStatus;
@@ -868,19 +826,6 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
 
     order.status = newStatus;
-
-    // Wallet refund operations commented out - totalAmount is now 0 (price removed)
-    // const wallet = await Wallet.findOne({ user: order.user });
-    // if (!wallet) throw new ApiError(status.NOT_FOUND, 'Wallet not found');
-
-    // wallet.balance += order.totalAmount;
-    // wallet.transactions.push({
-    //   amount: order.totalAmount,
-    //   description: `Refund for order ${order.id}`,
-    //   createdAt: new Date()
-    // });
-
-    // await wallet.save();
   }
   else if (oldStatus === OrderStatus.Refunded) {
     throw new ApiError(status.BAD_REQUEST, 'Order is already refunded, cannot do anything anymore');
@@ -924,19 +869,6 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   // Invalidate dashboard stats (order status stats changed)
   await redis.deleteByPattern(RedisPatterns.DASHBOARD_ALL());
   
-  // If wallet was affected by status change, invalidate wallet caches
-  const walletTouched = 
-    (oldStatus === OrderStatus.Received && newStatus === OrderStatus.Confirmed) ||
-    (oldStatus === OrderStatus.Approved && newStatus === OrderStatus.Confirmed) ||
-    (oldStatus === OrderStatus.Cancelled && newStatus === OrderStatus.Refunded);
-  if (walletTouched) {
-    // Invalidate user's wallet cache (wallet balance changed)
-    await redis.deleteByPattern(RedisPatterns.WALLET_BY_USER_ANY(String(order.user)));
-    // Invalidate wallet balance (balance changed)
-    await redis.delete(RedisKeys.WALLET_BALANCE(String(order.user)));
-    // Invalidate wallet transactions (new transaction added)
-    await redis.delete(RedisKeys.WALLET_TRANSACTIONS(String(order.user)));
-  }
 
   return res.status(status.OK).json(
     new ApiResponse(status.OK, 'Order status updated successfully', order)

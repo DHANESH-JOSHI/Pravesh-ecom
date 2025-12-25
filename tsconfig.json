@@ -34,5 +34,10 @@
         "./src/app/*"
       ]
     }
-  }
+  },
+  "exclude": [
+    "scripts/**/*",
+    "node_modules",
+    "dist"
+  ]
 }

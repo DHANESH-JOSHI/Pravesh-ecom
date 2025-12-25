@@ -259,9 +259,6 @@ export const getUserById = asyncHandler(async (req, res) => {
         options: { limit: 5, sort: { createdAt: -1 } },
       },
       {
-        path: 'wallet',
-      },
-      {
         path: 'cart',
       },
       {
