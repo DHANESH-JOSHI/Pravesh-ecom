@@ -1,11 +1,13 @@
 import { OrderLog } from "./order-log.model";
 import { Types } from "mongoose";
+import mongoose from "mongoose";
+import { OrderLogAction, OrderLogField } from "./order-log.interface";
 
 interface LogOrderChangeParams {
   orderId?: string | Types.ObjectId; // Optional for list views
   adminId: string | Types.ObjectId;
-  action: string;
-  field?: string;
+  action: OrderLogAction | string; // Allow string for backward compatibility
+  field?: OrderLogField | string; // Allow string for backward compatibility
   oldValue?: any;
   newValue?: any;
   description: string;
@@ -30,47 +32,209 @@ export const logOrderChange = async (params: LogOrderChangeParams) => {
   }
 };
 
-export const getOrderLogs = async (orderId: string | Types.ObjectId, limit = 50) => {
-  return await OrderLog.find({ order: orderId })
+export const getOrderLog = async (logId: string | Types.ObjectId) => {
+  return await OrderLog.findById(logId)
     .populate("admin", "name email role")
-    .sort({ createdAt: -1 })
-    .limit(limit)
+    .populate("order", "status orderNumber user")
     .lean();
 };
 
-export const getRecentLogs = async (limit = 50, skip = 0) => {
-  const logs = await OrderLog.find()
-    .populate("order", "status user")
-    .populate("admin", "name email role")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
-  
-  const total = await OrderLog.countDocuments();
-  
-  return {
-    logs,
-    hasMore: skip + logs.length < total,
-    total,
-  };
-};
+export const getAllLogs = async (filters: {
+  page?: number;
+  limit?: number;
+  orderId?: string;
+  staffId?: string;
+  action?: string;
+  field?: string;
+  search?: string;
+}) => {
+  const {
+    page = 1,
+    limit = 10,
+    orderId,
+    staffId,
+    action,
+    field,
+    search,
+  } = filters;
 
-export const getLogsByStaffId = async (staffId: string | Types.ObjectId, limit = 50, skip = 0) => {
-  const logs = await OrderLog.find({ admin: staffId })
-    .populate("order", "status user")
-    .populate("admin", "name email role")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
-  
-  const total = await OrderLog.countDocuments({ admin: staffId });
-  
+  const skip = (page - 1) * limit;
+  const filter: any = {};
+
+  // Filter by order ID
+  if (orderId && mongoose.Types.ObjectId.isValid(orderId)) {
+    filter.order = new mongoose.Types.ObjectId(orderId);
+  }
+
+  // Filter by staff ID
+  if (staffId && mongoose.Types.ObjectId.isValid(staffId)) {
+    filter.admin = new mongoose.Types.ObjectId(staffId);
+  }
+
+  // Filter by action
+  if (action && action !== "all") {
+    filter.action = action;
+  }
+
+  // Filter by field
+  if (field && field !== "all") {
+    filter.field = field;
+  }
+
+  // Build aggregation pipeline for search
+  const pipeline: any[] = [];
+
+  // If search is provided, we need to use aggregation to search across populated fields
+  if (search && search.trim()) {
+    const searchRegex = new RegExp(search.trim(), 'i');
+    
+    // First, lookup orders to search by orderNumber
+    pipeline.push({
+      $lookup: {
+        from: "orders",
+        localField: "order",
+        foreignField: "_id",
+        as: "orderDoc",
+        pipeline: [
+          { $project: { orderNumber: 1, status: 1, user: 1 } }
+        ]
+      }
+    });
+    
+    // Lookup admin to search by name/email
+    pipeline.push({
+      $lookup: {
+        from: "users",
+        localField: "admin",
+        foreignField: "_id",
+        as: "adminDoc",
+        pipeline: [
+          { $project: { name: 1, email: 1, role: 1 } }
+        ]
+      }
+    });
+    
+    // Unwind the arrays
+    pipeline.push({
+      $unwind: { path: "$orderDoc", preserveNullAndEmptyArrays: true }
+    });
+    pipeline.push({
+      $unwind: { path: "$adminDoc", preserveNullAndEmptyArrays: true }
+    });
+    
+    // Add search match
+    pipeline.push({
+      $match: {
+        $or: [
+          { "orderDoc.orderNumber": { $regex: searchRegex } },
+          { "adminDoc.name": { $regex: searchRegex } },
+          { "adminDoc.email": { $regex: searchRegex } }
+        ]
+      }
+    });
+    
+    // Apply other filters
+    if (Object.keys(filter).length > 0) {
+      pipeline.push({ $match: filter });
+    }
+    
+    // Sort and paginate
+    pipeline.push({ $sort: { createdAt: -1 } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+    
+    // Project to match expected structure
+    pipeline.push({
+      $project: {
+        _id: 1,
+        order: "$orderDoc._id",
+        admin: "$adminDoc._id",
+        action: 1,
+        field: 1,
+        oldValue: 1,
+        newValue: 1,
+        description: 1,
+        metadata: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        orderDoc: 1,
+        adminDoc: 1
+      }
+    });
+    
+    // Build count pipeline (without sort, skip, limit, and project)
+    const countPipeline = [...pipeline];
+    // Remove sort, skip, limit, and project stages
+    const stagesToRemove = ['$sort', '$skip', '$limit', '$project'];
+    const filteredCountPipeline = countPipeline.filter((stage: any) => {
+      const stageKey = Object.keys(stage)[0];
+      return !stagesToRemove.includes(stageKey);
+    });
+    filteredCountPipeline.push({ $count: "total" });
+    
+    // Get logs and total
+    const [logsResult, totalResult] = await Promise.all([
+      OrderLog.aggregate(pipeline),
+      OrderLog.aggregate(filteredCountPipeline)
+    ]);
+    
+    // Transform logs to match expected structure with populated fields
+    const logs = logsResult.map((log: any) => ({
+      _id: log._id,
+      order: log.orderDoc ? {
+        _id: log.orderDoc._id,
+        status: log.orderDoc.status,
+        orderNumber: log.orderDoc.orderNumber,
+        user: log.orderDoc.user
+      } : log.order,
+      admin: log.adminDoc ? {
+        _id: log.adminDoc._id,
+        name: log.adminDoc.name,
+        email: log.adminDoc.email,
+        role: log.adminDoc.role
+      } : log.admin,
+      action: log.action,
+      field: log.field,
+      oldValue: log.oldValue,
+      newValue: log.newValue,
+      description: log.description,
+      metadata: log.metadata,
+      createdAt: log.createdAt,
+      updatedAt: log.updatedAt
+    }));
+    
+    const total = totalResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / limit);
+    
+    return {
+      logs,
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      totalPages,
+    };
+  }
+
+  // No search - use simple find
+  const [logs, total] = await Promise.all([
+    OrderLog.find(filter)
+      .populate("order", "status orderNumber user")
+      .populate("admin", "name email role")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    OrderLog.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / limit);
+
   return {
     logs,
-    hasMore: skip + logs.length < total,
     total,
+    page: Number(page),
+    limit: Number(limit),
+    totalPages,
   };
 };
 
@@ -129,13 +293,11 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
 
       staffActivity[adminId].totalActions++;
       
-      if (log.action === 'view') {
+      if (log.action === OrderLogAction.VIEW) {
         staffActivity[adminId].views++;
-      } else if (log.action === 'status_update') {
+      } else if (log.action === OrderLogAction.UPDATE) {
         staffActivity[adminId].statusUpdates++;
-      } else if (log.action === 'items_updated') {
-        staffActivity[adminId].itemUpdates++;
-      } else if (log.action === 'view_list') {
+      } else if (log.action === OrderLogAction.LIST) {
         staffActivity[adminId].listViews++;
       }
 
@@ -269,169 +431,3 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
   }
 };
 
-export const getUserLogAnalytics = async (staffId: string | Types.ObjectId, days = 30) => {
-  try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const adminId = typeof staffId === 'string' ? new Types.ObjectId(staffId) : staffId;
-
-    // Get total logs count
-    const totalLogs = await OrderLog.countDocuments({
-      admin: adminId,
-      createdAt: { $gte: startDate }
-    });
-
-    // Get action breakdown
-    const actionBreakdown = await OrderLog.aggregate([
-      {
-        $match: {
-          admin: adminId,
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: "$action",
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          action: "$_id",
-          count: 1,
-          _id: 0
-        }
-      },
-      {
-        $sort: { count: -1 }
-      }
-    ]);
-
-    // Get daily activity
-    const dailyActivity = await OrderLog.aggregate([
-      {
-        $match: {
-          admin: adminId,
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
-          },
-          count: { $sum: 1 },
-          views: {
-            $sum: { $cond: [{ $eq: ["$action", "view"] }, 1, 0] }
-          },
-          updates: {
-            $sum: { $cond: [{ $in: ["$action", ["status_update", "items_updated", "feedback_updated"]] }, 1, 0] }
-          }
-        }
-      },
-      {
-        $project: {
-          date: "$_id",
-          count: 1,
-          views: 1,
-          updates: 1,
-          _id: 0
-        }
-      },
-      {
-        $sort: { date: 1 }
-      }
-    ]);
-
-    // Get hourly activity
-    const hourlyActivity = await OrderLog.aggregate([
-      {
-        $match: {
-          admin: adminId,
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: { $hour: "$createdAt" },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          hour: "$_id",
-          count: 1,
-          _id: 0
-        }
-      },
-      {
-        $sort: { hour: 1 }
-      }
-    ]);
-
-    // Fill missing hours
-    const fullHourlyData = Array.from({ length: 24 }, (_, i) => {
-      const hourData = hourlyActivity.find((h: any) => h.hour === i);
-      return {
-        hour: i,
-        count: hourData?.count || 0
-      };
-    });
-
-    // Get most viewed orders
-    const mostViewedOrders = await OrderLog.aggregate([
-      {
-        $match: {
-          admin: adminId,
-          action: "view",
-          order: { $exists: true, $ne: null },
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: "$order",
-          viewCount: { $sum: 1 },
-          lastViewed: { $max: "$createdAt" }
-        }
-      },
-      {
-        $project: {
-          orderId: "$_id",
-          viewCount: 1,
-          lastViewed: 1,
-          _id: 0
-        }
-      },
-      {
-        $sort: { viewCount: -1 }
-      },
-      {
-        $limit: 10
-      }
-    ]);
-
-    // Get summary stats
-    const summary = {
-      totalActions: totalLogs,
-      views: actionBreakdown.find((a: any) => a.action === 'view')?.count || 0,
-      statusUpdates: actionBreakdown.find((a: any) => a.action === 'status_update')?.count || 0,
-      itemUpdates: actionBreakdown.find((a: any) => a.action === 'items_updated')?.count || 0,
-      feedbackUpdates: actionBreakdown.find((a: any) => a.action === 'feedback_updated')?.count || 0,
-      listViews: actionBreakdown.find((a: any) => a.action === 'view_list')?.count || 0,
-    };
-
-    return {
-      summary,
-      actionBreakdown,
-      dailyActivity,
-      hourlyActivity: fullHourlyData,
-      mostViewedOrders,
-      period: days
-    };
-  } catch (error) {
-    console.error("Error in getUserLogAnalytics:", error);
-    throw error;
-  }
-};

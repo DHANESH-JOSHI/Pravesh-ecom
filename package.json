@@ -11,7 +11,8 @@
     "build:clean": "rm -rf dist && npm run build",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "migrate:order-numbers": "npx tsx --tsconfig tsconfig.json scripts/migrate-order-numbers.ts"
+    "migrate:order-numbers": "npx tsx --tsconfig tsconfig.json scripts/migrate-order-numbers.ts",
+    "migrate:order-log-actions": "npx tsx --tsconfig tsconfig.json scripts/migrate-order-log-actions.ts"
   },
   "author": "",
   "license": "ISC",

@@ -3,6 +3,7 @@ import { Document } from 'mongoose';
 
 export enum OrderStatus {
   Received = 'received',
+  Accepted = 'accepted',
   Approved = 'approved',
   Confirmed = 'confirmed',
   Cancelled = 'cancelled',
@@ -35,6 +36,7 @@ export interface IOrder extends Document {
   image?: string;
   feedback?: string;
   orderNumber?: string; // Display number in format ORD-YYYY-MM-NNNNNN
+  acceptedBy?: Types.ObjectId; // Staff member who accepted the order
   createdAt: Date;
   updatedAt: Date;
 }

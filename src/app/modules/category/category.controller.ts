@@ -284,9 +284,9 @@ export const getCategoryById = asyncHandler(async (req, res) => {
 
   const category = populate === "true"
     ? await query.populate([
-        { path: "parentCategory", match: { isDeleted: false } },
-        { path: "children", match: { isDeleted: false } },
-        { path: "brands", match: { isDeleted: false } },
+        { path: "parentCategory", select: "_id title slug", match: { isDeleted: false } },
+        { path: "children", select: "_id title slug path", match: { isDeleted: false } },
+        { path: "brands", select: "_id name slug image createdAt updatedAt", match: { isDeleted: false } },
       ])
     : await query.populate({ path: "parentCategory", select: "slug title", match: { isDeleted: false } });
 
@@ -307,9 +307,9 @@ export const getCategoryBySlug = asyncHandler(async (req, res) => {
   const query = Category.findOne({ slug })
   const category = populate === "true"
     ? await query.populate([
-        { path: "parentCategory", match: { isDeleted: false } },
-        { path: "children", match: { isDeleted: false } },
-        { path: "brands", match: { isDeleted: false } },
+        { path: "parentCategory", select: "_id title slug", match: { isDeleted: false } },
+        { path: "children", select: "_id title slug path", match: { isDeleted: false } },
+        { path: "brands", select: "_id name slug image createdAt updatedAt", match: { isDeleted: false } },
       ])
     : await query.populate({ path: "parentCategory", select: "slug title", match: { isDeleted: false } });
 

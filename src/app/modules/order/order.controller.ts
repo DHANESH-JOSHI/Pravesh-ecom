@@ -14,8 +14,8 @@ import { RedisKeys } from "@/utils/redisKeys";
 import { RedisPatterns } from '@/utils/redisKeys';
 import { User } from '../user/user.model';
 import { logOrderChange } from '../order-log/order-log.service';
+import { OrderLogAction, OrderLogField } from '../order-log/order-log.interface';
 import { generateOrderNumber } from './counter.model';
-// import { StockStatus } from '../product/product.interface';
 const ApiError = getApiErrorClass("ORDER");
 const ApiResponse = getApiResponseClass("ORDER");
 
@@ -38,13 +38,6 @@ export const createOrder = asyncHandler(async (req, res) => {
         throw new ApiError(status.BAD_REQUEST, `Product with ID ${item.product} is not available.`);
       }
 
-      // if (product.stockStatus === StockStatus.OutOfStock) {
-      //   throw new ApiError(status.BAD_REQUEST, `product ${product.name} is out of stock`);
-      // }
-
-      // if (product.stock < item.quantity) {
-      //   throw new ApiError(status.BAD_REQUEST, `Not enough stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
-      // }
       orderItems.push({
         product: product._id,
         quantity: item.quantity,
@@ -52,13 +45,6 @@ export const createOrder = asyncHandler(async (req, res) => {
         variantSelections: item.variantSelections || {},
       });
     }
-
-    // Stock decrement removed - stock field no longer exists
-    // for (const item of cart.items) {
-    //   await Product.findByIdAndUpdate(item.product, {
-    //     $inc: { stock: -item.quantity }
-    //   }, { session });
-    // }
     
     // Generate order number
     const orderNumber = await generateOrderNumber();
@@ -157,6 +143,18 @@ export const updateOrder = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'order not found');
   }
 
+  // Only allow editing if order has been accepted
+  if (order.status === OrderStatus.Received) {
+    throw new ApiError(status.BAD_REQUEST, 'Order must be accepted before it can be edited');
+  }
+
+  // Only the staff member who accepted the order can edit it
+  if (userRole === 'staff' && order.acceptedBy) {
+    if (String(adminId) !== String(order.acceptedBy)) {
+      throw new ApiError(status.FORBIDDEN, 'Only the staff member who accepted this order can edit it');
+    }
+  }
+
   // If order is already delivered and items are being updated, adjust salesCount and totalSold
   const wasDelivered = order.status === OrderStatus.Delivered;
   const oldItems = wasDelivered ? [...order.items] : [];
@@ -183,13 +181,13 @@ export const updateOrder = asyncHandler(async (req, res) => {
       });
     }
     
-    // Log items change only for staff users (not super admin)
-    if (adminId && userRole === 'staff') {
+    // Log items change for both admin and staff users
+    if (adminId && (userRole === 'admin' || userRole === 'staff')) {
       await logOrderChange({
         orderId: String(order._id),
         adminId: String(adminId),
-        action: 'items_updated',
-        field: 'items',
+        action: OrderLogAction.UPDATE,
+        field: OrderLogField.ITEMS,
         oldValue: oldItems,
         newValue: orderItems,
         description: `Order items updated. Old: ${oldItems.length} items, New: ${orderItems.length} items`,
@@ -200,13 +198,13 @@ export const updateOrder = asyncHandler(async (req, res) => {
   }
   
   if (feedback !== undefined && feedback !== oldFeedback) {
-    // Log feedback change only for staff users (not super admin)
-    if (adminId && userRole === 'staff') {
+    // Log feedback change for both admin and staff users
+    if (adminId && (userRole === 'admin' || userRole === 'staff')) {
       await logOrderChange({
         orderId: String(order._id),
         adminId: String(adminId),
-        action: 'feedback_updated',
-        field: 'feedback',
+        action: OrderLogAction.UPDATE,
+        field: OrderLogField.FEEDBACK,
         oldValue: oldFeedback,
         newValue: feedback,
         description: `Order feedback updated`,
@@ -312,6 +310,14 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
     order.status = OrderStatus.Confirmed;
     order.shippingAddress = shippingAddressId as Types.ObjectId;
+    
+    // Maintain history
+    order.history.push({
+      status: OrderStatus.Confirmed,
+      timestamp: new Date(),
+      updatedBy: undefined, // User action
+    });
+    
     await order.save({ session });
 
     await session.commitTransaction();
@@ -435,6 +441,9 @@ export const getMyOrders = asyncHandler(async (req, res) => {
         from: "products",
         localField: "items.product",
         foreignField: "_id",
+        pipeline: [
+          { $project: { name: 1, thumbnail: 1, slug: 1 } }
+        ],
         as: "productDocs",
       },
     });
@@ -523,12 +532,23 @@ export const getOrderById = asyncHandler(async (req, res) => {
   const cachedOrder = await redis.get(cacheKey);
 
   if (cachedOrder) {
+    // For staff users, check if they can access this order
+    if (userRole === 'staff' && adminId) {
+      const cachedOrderData = cachedOrder as any;
+      const canAccess = cachedOrderData.status === OrderStatus.Received || 
+                        (cachedOrderData.acceptedBy && String(cachedOrderData.acceptedBy) === String(adminId));
+      
+      if (!canAccess) {
+        throw new ApiError(status.FORBIDDEN, 'You can only view received orders or orders you have accepted');
+      }
+    }
+    
     // Log view only for staff users (not super admin)
     if (adminId && userRole === 'staff') {
       await logOrderChange({
         orderId: String(orderId),
         adminId: String(adminId),
-        action: 'view',
+        action: OrderLogAction.VIEW,
         description: `Order viewed by ${userRole}`,
         metadata: { cached: true }
       });
@@ -548,6 +568,10 @@ export const getOrderById = asyncHandler(async (req, res) => {
       },
       {
         path: 'history.updatedBy',
+        select: 'name email role'
+      },
+      {
+        path: 'acceptedBy',
         select: 'name email role'
       },
       {
@@ -576,12 +600,22 @@ export const getOrderById = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'Order not found');
   }
 
+  // For staff users, check if they can access this order
+  if (userRole === 'staff' && adminId) {
+    const canAccess = order.status === OrderStatus.Received || 
+                      (order.acceptedBy && String(order.acceptedBy) === String(adminId));
+    
+    if (!canAccess) {
+      throw new ApiError(status.FORBIDDEN, 'You can only view received orders or orders you have accepted');
+    }
+  }
+
   // Log view only for staff users (not super admin)
   if (adminId && userRole === 'staff') {
     await logOrderChange({
       orderId: String(orderId),
       adminId: String(adminId),
-      action: 'view',
+      action: OrderLogAction.VIEW,
       description: `Order viewed by ${userRole}`,
       metadata: { cached: false }
     });
@@ -598,7 +632,11 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.user?._id as string | Types.ObjectId | undefined;
   const userRole = req.user?.role as string | undefined;
   
-  const cacheKey = RedisKeys.ORDERS_LIST(req.query as Record<string, any>);
+  // For staff users, include their ID in cache key to get staff-specific cached results
+  const cacheKeyParams = userRole === 'staff' && adminId 
+    ? { ...req.query, staffId: String(adminId) }
+    : req.query;
+  const cacheKey = RedisKeys.ORDERS_LIST(cacheKeyParams as Record<string, any>);
   const cached = await redis.get(cacheKey);
 
   if (cached) {
@@ -606,7 +644,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
     if (adminId && userRole === 'staff') {
       await logOrderChange({
         adminId: String(adminId),
-        action: 'view_list',
+        action: OrderLogAction.LIST,
         description: `Orders list viewed by ${userRole}`,
         metadata: { 
           cached: true,
@@ -624,6 +662,15 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   const skip = (Number(page) - 1) * Number(limit);
 
   const filter: any = {};
+  
+  // For staff users, only show received orders and orders they accepted
+  if (userRole === 'staff' && adminId) {
+    filter.$or = [
+      { status: OrderStatus.Received },
+      { acceptedBy: new Types.ObjectId(adminId) }
+    ];
+  }
+  
   if (orderStatus) filter.status = orderStatus;
   if (isCustomOrder !== undefined) filter.isCustomOrder = isCustomOrder === "true";
 
@@ -687,7 +734,7 @@ export const getAllOrders = asyncHandler(async (req, res) => {
   if (adminId && userRole === 'staff') {
     await logOrderChange({
       adminId: String(adminId),
-      action: 'view_list',
+      action: OrderLogAction.LIST,
       description: `Orders list viewed by ${userRole}`,
       metadata: { 
         cached: false,
@@ -728,25 +775,40 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 
   const oldStatus = order.status;
+  const loggedAdminId = req.user?._id;
+  const loggedUserRole = req.user?.role;
+
+  // Only the staff member who accepted the order can change its status (for staff users)
+  if (loggedUserRole === 'staff' && order.acceptedBy) {
+    if (String(loggedAdminId) !== String(order.acceptedBy)) {
+      throw new ApiError(status.FORBIDDEN, 'Only the staff member who accepted this order can change its status');
+    }
+  }
+
   if (oldStatus === OrderStatus.Received) {
-    if (![OrderStatus.Approved, OrderStatus.Cancelled, OrderStatus.Confirmed].includes(newStatus)) {
-      throw new ApiError(status.BAD_REQUEST, 'You can only approve, cancel, or confirm for a received order');
+    if (newStatus !== OrderStatus.Accepted && newStatus !== OrderStatus.Cancelled) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only accept or cancel a received order');
     }
-    if ((newStatus === OrderStatus.Approved || newStatus === OrderStatus.Confirmed) && (order.items.length === 0 || !order.shippingAddress)) {
-      throw new ApiError(status.BAD_REQUEST, 'You cannot approve or confirm an order with no items or without a shipping address');
+    if (newStatus === OrderStatus.Accepted) {
+      // Track which staff member accepted the order
+      if (loggedUserRole === 'staff' && loggedAdminId) {
+        order.acceptedBy = loggedAdminId as Types.ObjectId;
+      }
     }
-    if (newStatus === OrderStatus.Confirmed) {
-      // Order confirmation logic
+    order.status = newStatus;
+  }
+  else if (oldStatus === OrderStatus.Accepted) {
+    if (![OrderStatus.Approved, OrderStatus.Cancelled].includes(newStatus)) {
+      throw new ApiError(status.BAD_REQUEST, 'You can only approve or cancel an accepted order');
+    }
+    if (newStatus === OrderStatus.Approved && (order.items.length === 0 || !order.shippingAddress)) {
+      throw new ApiError(status.BAD_REQUEST, 'You cannot approve an order with no items or without a shipping address');
     }
     order.status = newStatus;
   }
   else if (oldStatus === OrderStatus.Approved) {
     if (![OrderStatus.Cancelled, OrderStatus.Confirmed].includes(newStatus)) {
       throw new ApiError(status.BAD_REQUEST, 'You can only cancel or confirm an approved order');
-    }
-
-    if (newStatus === OrderStatus.Confirmed) {
-      // Order confirmation logic
     }
 
     order.status = newStatus;
@@ -831,7 +893,6 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new ApiError(status.BAD_REQUEST, 'Order is already refunded, cannot do anything anymore');
   }
 
-  const loggedAdminId = req.user?._id;
   order.history.push({
     status: newStatus,
     timestamp: new Date(),
@@ -840,21 +901,16 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
-  // Log status change only for staff users (not super admin)
-  const loggedUserRole = req.user?.role;
-  if (loggedAdminId && loggedUserRole === 'staff') {
+  // Log status change for both admin and staff users
+  if (loggedAdminId && (loggedUserRole === 'admin' || loggedUserRole === 'staff')) {
     await logOrderChange({
       orderId: String(order._id),
       adminId: String(loggedAdminId),
-      action: 'status_update',
-      field: 'status',
+      action: OrderLogAction.UPDATE,
+      field: OrderLogField.STATUS,
       oldValue: oldStatus,
       newValue: newStatus,
       description: `Order status changed from ${oldStatus} to ${newStatus}`,
-      metadata: {
-        orderId: String(order._id),
-        userId: String(order.user),
-      },
     });
   }
 
@@ -886,10 +942,19 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   if (String(order.user) !== String(userId)) {
     throw new ApiError(status.FORBIDDEN, 'You are not authorized to cancel this order');
   }
-  if (![OrderStatus.Received, OrderStatus.Approved, OrderStatus.Confirmed].includes(order.status)) {
-    throw new ApiError(status.BAD_REQUEST, 'only order with status Received, Approved or Confirmed can be cancelled');
+  if (![OrderStatus.Received, OrderStatus.Accepted, OrderStatus.Approved, OrderStatus.Confirmed].includes(order.status)) {
+    throw new ApiError(status.BAD_REQUEST, 'only order with status Received, Accepted, Approved or Confirmed can be cancelled');
   }
+  
   order.status = OrderStatus.Cancelled;
+  
+  // Maintain history
+  order.history.push({
+    status: OrderStatus.Cancelled,
+    timestamp: new Date(),
+    updatedBy: undefined, // User action
+  });
+  
   await order.save();
 
   // Invalidate this order's cache (order cancelled)

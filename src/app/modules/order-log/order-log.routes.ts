@@ -1,23 +1,18 @@
 import express from 'express';
 import { auth, authenticatedActionLimiter } from '@/middlewares';
 import {
-  getOrderLogsByOrderId,
-  getRecentOrderLogs,
-  getLogsByStaff,
-  getUserLogAnalyticsController,
+  getOrderLogById,
+  getAllLogsController,
   getAllAnalyticsController
 } from './order-log.controller';
 
 const router = express.Router();
 
-router.get('/order/:orderId', auth('admin'), authenticatedActionLimiter, getOrderLogsByOrderId);
+router.get('/', auth('admin'), authenticatedActionLimiter, getAllLogsController);
 
-router.get('/recent', auth('admin'), authenticatedActionLimiter, getRecentOrderLogs);
-router.get('/staff/:staffId', auth('admin'), authenticatedActionLimiter, getLogsByStaff);
-router.get('/staff/:staffId/analytics', auth('admin'), authenticatedActionLimiter, getUserLogAnalyticsController);
+router.get('/analytics', auth('admin'), authenticatedActionLimiter, getAllAnalyticsController);
 
-// Unified analytics endpoint
-router.get('/analytics/all', auth('admin'), authenticatedActionLimiter, getAllAnalyticsController);
+router.get('/:id', auth('admin'), authenticatedActionLimiter, getOrderLogById);
 
 export const orderLogRouter = router;
 

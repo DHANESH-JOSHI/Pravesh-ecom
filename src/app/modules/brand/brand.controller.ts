@@ -202,8 +202,8 @@ export const getBrandById = asyncHandler(async (req, res) => {
   const brand =
     populate === "true"
       ? await query.populate([
-          { path: "categories", match: { isDeleted: false } },
-          { path: "products", match: { isDeleted: false } },
+          { path: "categories", select: "_id title path createdAt updatedAt", match: { isDeleted: false } },
+          { path: "products", select: "_id name thumbnail sku createdAt updatedAt", match: { isDeleted: false }, options: { limit: 100 } },
         ])
       : await query;
 
@@ -229,8 +229,8 @@ export const getBrandBySlug = asyncHandler(async (req, res) => {
   const brand =
     populate === "true"
       ? await query.populate([
-          { path: "categories", match: { isDeleted: false } },
-          { path: "products", match: { isDeleted: false } },
+          { path: "categories", select: "_id title path createdAt updatedAt", match: { isDeleted: false } },
+          { path: "products", select: "_id name thumbnail sku createdAt updatedAt", match: { isDeleted: false }, options: { limit: 100 } },
         ])
       : await query;
 

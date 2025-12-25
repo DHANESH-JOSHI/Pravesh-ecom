@@ -24,6 +24,7 @@ export const getWishlist = asyncHandler(async (req, res) => {
 
   let wishlist = await Wishlist.findOne({ user: userId }).populate({
     path: 'items',
+    select: '_id name thumbnail slug sku',
     match: { isDeleted: false },
   });
 

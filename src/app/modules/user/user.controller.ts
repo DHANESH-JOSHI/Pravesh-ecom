@@ -248,21 +248,31 @@ export const getUserById = asyncHandler(async (req, res) => {
     user = await User.findOne({ _id: userId }, { password: 0 }).populate([
       {
         path: 'reviews',
+        select: '_id rating comment createdAt',
+        populate: {
+          path: 'product',
+          select: 'name',
+          match: { isDeleted: false }
+        },
         options: { limit: 5, sort: { createdAt: -1 } },
       },
       {
         path: 'addresses',
+        select: '_id fullname phone line1 line2 landmark city state postalCode country',
         options: { limit: 5 },
       },
       {
         path: 'orders',
+        select: '_id status createdAt updatedAt orderNumber',
         options: { limit: 5, sort: { createdAt: -1 } },
       },
       {
         path: 'cart',
+        select: '_id',
       },
       {
         path: 'wishlist',
+        select: '_id',
       },
     ]);
   } else {

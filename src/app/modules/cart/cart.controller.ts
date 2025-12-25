@@ -70,7 +70,16 @@ export const getMyCart = asyncHandler(async (req, res) => {
 
   let cart;
   if (populate === 'true') {
-    cart = await Cart.findOne({ user: userId }).populate({ path: 'items.product', match: { isDeleted: false } }).lean()
+    cart = await Cart.findOne({ user: userId }).populate({ 
+      path: 'items.product', 
+      select: '_id name thumbnail slug sku units',
+      match: { isDeleted: false },
+      populate: {
+        path: 'units',
+        select: 'name',
+        match: { isDeleted: false }
+      }
+    }).lean()
   } else {
     cart = await Cart.findOne({ user: userId }).lean()
   }

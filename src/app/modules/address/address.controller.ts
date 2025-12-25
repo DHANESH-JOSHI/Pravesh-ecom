@@ -56,6 +56,7 @@ export const getAddressById = asyncHandler(async (req, res) => {
       },
       {
         path: 'orders',
+        select: '_id orderNumber status createdAt',
         options: {
           limit: 10,
           sort: { createdAt: -1 }

@@ -1,80 +1,63 @@
 import { asyncHandler } from "@/utils";
 import { getApiErrorClass, getApiResponseClass } from '@/interface';
 import { 
-  getOrderLogs, 
-  getRecentLogs,
-  getLogsByStaffId,
-  getUserLogAnalytics,
+  getOrderLog,
+  getAllLogs,
   getAllAnalytics
 } from './order-log.service';
 import status from 'http-status';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 
 const ApiError = getApiErrorClass("ORDER_LOG");
 const ApiResponse = getApiResponseClass("ORDER_LOG");
 
-export const getOrderLogsByOrderId = asyncHandler(async (req, res) => {
-  const { orderId } = req.params;
-  const limit = parseInt(req.query.limit as string) || 50;
+export const getOrderLogById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(orderId)) {
-    throw new ApiError(status.BAD_REQUEST, 'Invalid order ID');
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(status.BAD_REQUEST, 'Invalid log ID');
   }
 
-  const logs = await getOrderLogs(orderId, limit);
+  const log = await getOrderLog(id);
+
+  if (!log) {
+    throw new ApiError(status.NOT_FOUND, 'Log not found');
+  }
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Order logs retrieved successfully', logs)
+    new ApiResponse(status.OK, 'Order log retrieved successfully', log)
   );
 });
 
-export const getRecentOrderLogs = asyncHandler(async (req, res) => {
-  const limit = parseInt(req.query.limit as string) || 50;
+export const getAllLogsController = asyncHandler(async (req, res) => {
+  const adminId = req.user?._id as string | Types.ObjectId | undefined;
+  const userRole = req.user?.role as string | undefined;
+
   const page = parseInt(req.query.page as string) || 1;
-  const skip = (page - 1) * limit;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const orderId = req.query.orderId as string | undefined;
+  const staffId = req.query.staffId as string | undefined;
+  const action = req.query.action as string | undefined;
+  const field = req.query.field as string | undefined;
+  const search = req.query.search as string | undefined;
 
-  const result = await getRecentLogs(limit, skip);
+  const effectiveStaffId = userRole === "staff" && adminId ? String(adminId) : staffId;
+
+  const filters = {
+    page,
+    limit,
+    orderId,
+    staffId: effectiveStaffId,
+    action: action && action !== "all" ? action : undefined,
+    field: field && field !== "all" ? field : undefined,
+    search: search && search.trim() ? search.trim() : undefined,
+  };
+
+  const result = await getAllLogs(filters);
 
   res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Recent order logs retrieved successfully', result)
+    new ApiResponse(status.OK, 'Order logs retrieved successfully', result)
   );
-});
-
-export const getLogsByStaff = asyncHandler(async (req, res) => {
-  const { staffId } = req.params;
-  const limit = parseInt(req.query.limit as string) || 50;
-  const page = parseInt(req.query.page as string) || 1;
-  const skip = (page - 1) * limit;
-
-  if (!mongoose.Types.ObjectId.isValid(staffId)) {
-    throw new ApiError(status.BAD_REQUEST, 'Invalid staff ID');
-  }
-
-  const result = await getLogsByStaffId(staffId, limit, skip);
-
-  res.status(status.OK).json(
-    new ApiResponse(status.OK, 'Staff logs retrieved successfully', result)
-  );
-});
-
-export const getUserLogAnalyticsController = asyncHandler(async (req, res) => {
-  try {
-    const { staffId } = req.params;
-    const days = parseInt(req.query.days as string) || 30;
-
-    if (!mongoose.Types.ObjectId.isValid(staffId)) {
-      throw new ApiError(status.BAD_REQUEST, 'Invalid staff ID');
-    }
-
-    const analytics = await getUserLogAnalytics(staffId, days);
-
-    res.status(status.OK).json(
-      new ApiResponse(status.OK, 'User log analytics retrieved successfully', analytics)
-    );
-  } catch (error: any) {
-    console.error("Error in getUserLogAnalyticsController:", error);
-    throw new ApiError(status.INTERNAL_SERVER_ERROR, error.message || 'Failed to retrieve user log analytics');
-  }
 });
 
 export const getAllAnalyticsController = asyncHandler(async (req, res) => {
