@@ -143,9 +143,9 @@ export const updateOrder = asyncHandler(async (req, res) => {
     throw new ApiError(status.NOT_FOUND, 'order not found');
   }
 
-  // Only allow editing if order has been accepted
-  if (order.status === OrderStatus.Received) {
-    throw new ApiError(status.BAD_REQUEST, 'Order must be accepted before it can be edited');
+  // Only allow editing if order status is accepted (after accepting, before approving)
+  if (order.status !== OrderStatus.Accepted) {
+    throw new ApiError(status.BAD_REQUEST, 'Order can only be edited when status is accepted');
   }
 
   // Only the staff member who accepted the order can edit it
@@ -155,9 +155,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
     }
   }
 
-  // If order is already delivered and items are being updated, adjust salesCount and totalSold
-  const wasDelivered = order.status === OrderStatus.Delivered;
-  const oldItems = wasDelivered ? [...order.items] : [];
+  // Store old items and feedback for logging
+  const oldItems = [...order.items];
   const oldFeedback = order.feedback;
 
   if (items && items.length > 0) {
@@ -216,48 +215,8 @@ export const updateOrder = asyncHandler(async (req, res) => {
   
   await order.save();
 
-  // If order was delivered and items changed, adjust salesCount and totalSold
-  if (wasDelivered && items && items.length > 0) {
-    const productIds = new Set<string>();
-    
-    // Decrement old items
-    for (const oldItem of oldItems) {
-      const productId = String(oldItem.product);
-      productIds.add(productId);
-      await Product.findByIdAndUpdate(
-        oldItem.product,
-        {
-          $inc: {
-            salesCount: -1,
-            totalSold: -oldItem.quantity,
-          },
-        }
-      );
-    }
-
-    // Increment new items
-    for (const newItem of order.items) {
-      const productId = String(newItem.product);
-      productIds.add(productId);
-      await Product.findByIdAndUpdate(
-        newItem.product,
-        {
-          $inc: {
-            salesCount: 1,
-            totalSold: newItem.quantity,
-          },
-        }
-      );
-    }
-
-    // Invalidate product caches
-    for (const productId of productIds) {
-      await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(productId));
-    }
-    if (productIds.size > 0) {
-      await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
-    }
-  }
+  // Note: Sales count and total sold are only adjusted when order status changes to "delivered"
+  // Since orders can only be edited when status is "accepted", we don't need to adjust sales metrics here
 
   // Invalidate this order's cache (order feedback updated)
   await redis.delete(RedisKeys.ORDER_BY_ID(orderId));
@@ -535,8 +494,9 @@ export const getOrderById = asyncHandler(async (req, res) => {
     // For staff users, check if they can access this order
     if (userRole === 'staff' && adminId) {
       const cachedOrderData = cachedOrder as any;
+      const acceptedById = cachedOrderData.acceptedBy?._id || cachedOrderData.acceptedBy;
       const canAccess = cachedOrderData.status === OrderStatus.Received || 
-                        (cachedOrderData.acceptedBy && String(cachedOrderData.acceptedBy) === String(adminId));
+                        (acceptedById && String(acceptedById) === String(adminId));
       
       if (!canAccess) {
         throw new ApiError(status.FORBIDDEN, 'You can only view received orders or orders you have accepted');
@@ -602,8 +562,9 @@ export const getOrderById = asyncHandler(async (req, res) => {
 
   // For staff users, check if they can access this order
   if (userRole === 'staff' && adminId) {
+    const acceptedById = (order.acceptedBy as any)?._id || order.acceptedBy;
     const canAccess = order.status === OrderStatus.Received || 
-                      (order.acceptedBy && String(order.acceptedBy) === String(adminId));
+                      (acceptedById && String(acceptedById) === String(adminId));
     
     if (!canAccess) {
       throw new ApiError(status.FORBIDDEN, 'You can only view received orders or orders you have accepted');
