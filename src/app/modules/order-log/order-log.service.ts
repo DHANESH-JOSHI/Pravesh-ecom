@@ -2,6 +2,8 @@ import { OrderLog } from "./order-log.model";
 import { Types } from "mongoose";
 import mongoose from "mongoose";
 import { OrderLogAction, OrderLogField } from "./order-log.interface";
+import { redis } from "@/config/redis";
+import { logger } from "@/config/logger";
 
 interface LogOrderChangeParams {
   orderId?: string | Types.ObjectId; // Optional for list views
@@ -14,8 +16,98 @@ interface LogOrderChangeParams {
   metadata?: Record<string, any>;
 }
 
+// Configurable deduplication windows (in milliseconds)
+// Only for read actions (VIEW, LIST) - UPDATE actions are always logged
+const DEDUP_WINDOWS = {
+  VIEW: 30 * 1000,    // 30 seconds for view actions
+  LIST: 30 * 1000,    // 30 seconds for list actions
+} as const;
+
+/**
+ * Creates a deduplication key for logging
+ * Only for read actions (VIEW, LIST) - UPDATE actions are always logged for audit
+ */
+const getDedupKey = (params: LogOrderChangeParams): { key: string; ttl: number } | null => {
+  const adminId = String(params.adminId);
+  const action = String(params.action).toLowerCase();
+  
+  // Only deduplicate read actions (VIEW, LIST)
+  // UPDATE actions are always logged - they represent actual changes
+  const isReadAction = action === OrderLogAction.VIEW || action === OrderLogAction.LIST;
+  
+  if (!isReadAction) {
+    // No deduplication for UPDATE or other actions
+    return null;
+  }
+  
+  const windowSize = action === OrderLogAction.VIEW ? DEDUP_WINDOWS.VIEW : DEDUP_WINDOWS.LIST;
+  const now = Date.now();
+  const roundedTime = Math.floor(now / windowSize) * windowSize;
+  
+  if (action === OrderLogAction.VIEW && params.orderId) {
+    // For VIEW: deduplicate by admin, order, and time window
+    return {
+      key: `log:dedup:${adminId}:${String(params.orderId)}:view:${roundedTime}`,
+      ttl: Math.ceil(DEDUP_WINDOWS.VIEW / 1000), // Convert to seconds
+    };
+  } else if (action === OrderLogAction.LIST) {
+    // For LIST: deduplicate by admin and time window
+    return {
+      key: `log:dedup:${adminId}:list:${roundedTime}`,
+      ttl: Math.ceil(DEDUP_WINDOWS.LIST / 1000),
+    };
+  }
+  
+  // Fallback: no deduplication
+  return null;
+};
+
+/**
+ * Logs order changes with deduplication to prevent duplicate logs from rapid requests
+ * Uses Redis to track recent logs within a time window
+ * 
+ * Features:
+ * - Deduplication only for read actions (VIEW, LIST)
+ * - UPDATE actions are ALWAYS logged (they represent actual changes)
+ * - Configurable time windows for read actions
+ * - Graceful error handling (logging never breaks the main flow)
+ */
 export const logOrderChange = async (params: LogOrderChangeParams) => {
   try {
+    const action = String(params.action).toLowerCase();
+    const isReadAction = action === OrderLogAction.VIEW || action === OrderLogAction.LIST;
+    
+    // For UPDATE actions, always log - they represent actual changes to the order
+    // No deduplication needed as these are intentional mutations
+    if (!isReadAction) {
+      await OrderLog.create({
+        order: params.orderId || undefined,
+        admin: params.adminId,
+        action: params.action,
+        field: params.field,
+        oldValue: params.oldValue,
+        newValue: params.newValue,
+        description: params.description,
+        metadata: params.metadata || {},
+      });
+      return;
+    }
+    
+    const dedupInfo = getDedupKey(params);
+    
+    if (dedupInfo) {
+      const { key: dedupKey, ttl } = dedupInfo;
+      
+      const exists = await redis.get<number>(dedupKey);
+      
+      if (exists !== null) {        
+        return;
+      }
+      
+      await redis.set(dedupKey, 1, ttl);
+    }
+    
+    // Create the log entry
     await OrderLog.create({
       order: params.orderId || undefined,
       admin: params.adminId,
@@ -27,8 +119,14 @@ export const logOrderChange = async (params: LogOrderChangeParams) => {
       metadata: params.metadata || {},
     });
   } catch (error) {
-    console.error("Failed to log order change:", error);
-    // Don't throw - logging should not break the main flow
+    logger.error("Failed to log order change:", {
+      error: error instanceof Error ? error.message : String(error),
+      params: {
+        orderId: params.orderId?.toString(),
+        adminId: params.adminId?.toString(),
+        action: params.action,
+      },
+    });
   }
 };
 
@@ -61,34 +159,27 @@ export const getAllLogs = async (filters: {
   const skip = (page - 1) * limit;
   const filter: any = {};
 
-  // Filter by order ID
   if (orderId && mongoose.Types.ObjectId.isValid(orderId)) {
     filter.order = new mongoose.Types.ObjectId(orderId);
   }
 
-  // Filter by staff ID
   if (staffId && mongoose.Types.ObjectId.isValid(staffId)) {
     filter.admin = new mongoose.Types.ObjectId(staffId);
   }
 
-  // Filter by action
   if (action && action !== "all") {
     filter.action = action;
   }
 
-  // Filter by field
   if (field && field !== "all") {
     filter.field = field;
   }
 
-  // Build aggregation pipeline for search
   const pipeline: any[] = [];
 
-  // If search is provided, we need to use aggregation to search across populated fields
   if (search && search.trim()) {
     const searchRegex = new RegExp(search.trim(), 'i');
     
-    // First, lookup orders to search by orderNumber
     pipeline.push({
       $lookup: {
         from: "orders",
@@ -101,7 +192,6 @@ export const getAllLogs = async (filters: {
       }
     });
     
-    // Lookup admin to search by name/email
     pipeline.push({
       $lookup: {
         from: "users",
@@ -114,7 +204,6 @@ export const getAllLogs = async (filters: {
       }
     });
     
-    // Unwind the arrays
     pipeline.push({
       $unwind: { path: "$orderDoc", preserveNullAndEmptyArrays: true }
     });
@@ -122,7 +211,6 @@ export const getAllLogs = async (filters: {
       $unwind: { path: "$adminDoc", preserveNullAndEmptyArrays: true }
     });
     
-    // Add search match
     pipeline.push({
       $match: {
         $or: [
@@ -133,17 +221,14 @@ export const getAllLogs = async (filters: {
       }
     });
     
-    // Apply other filters
     if (Object.keys(filter).length > 0) {
       pipeline.push({ $match: filter });
     }
     
-    // Sort and paginate
     pipeline.push({ $sort: { createdAt: -1 } });
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: limit });
     
-    // Project to match expected structure
     pipeline.push({
       $project: {
         _id: 1,
@@ -162,9 +247,7 @@ export const getAllLogs = async (filters: {
       }
     });
     
-    // Build count pipeline (without sort, skip, limit, and project)
     const countPipeline = [...pipeline];
-    // Remove sort, skip, limit, and project stages
     const stagesToRemove = ['$sort', '$skip', '$limit', '$project'];
     const filteredCountPipeline = countPipeline.filter((stage: any) => {
       const stageKey = Object.keys(stage)[0];
@@ -172,13 +255,11 @@ export const getAllLogs = async (filters: {
     });
     filteredCountPipeline.push({ $count: "total" });
     
-    // Get logs and total
     const [logsResult, totalResult] = await Promise.all([
       OrderLog.aggregate(pipeline),
       OrderLog.aggregate(filteredCountPipeline)
     ]);
     
-    // Transform logs to match expected structure with populated fields
     const logs = logsResult.map((log: any) => ({
       _id: log._id,
       order: log.orderDoc ? {
@@ -215,7 +296,6 @@ export const getAllLogs = async (filters: {
     };
   }
 
-  // No search - use simple find
   const [logs, total] = await Promise.all([
     OrderLog.find(filter)
       .populate("order", "status orderNumber user")
@@ -246,14 +326,12 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
     const dailyStartDate = new Date();
     dailyStartDate.setDate(dailyStartDate.getDate() - dailyDays);
 
-    // Get all logs for the period (used for multiple analytics)
     const logs = await OrderLog.find({
       createdAt: { $gte: startDate }
     })
       .populate("admin", "name email role")
       .lean();
 
-    // Staff Activity Analytics
     const staffActivity: Record<string, {
       name: string;
       email?: string;
@@ -309,7 +387,6 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
       }
     });
 
-    // Action Breakdown
     const actionBreakdown = await OrderLog.aggregate([
       {
         $match: {
@@ -336,7 +413,6 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
       }
     ]);
 
-    // Hourly Activity
     const hourlyCounts: Record<number, number> = {};
     
     logs.forEach((log: any) => {
@@ -349,7 +425,6 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
       count: hourlyCounts[i] || 0
     }));
 
-    // Daily Activity
     const dailyActivity = await OrderLog.aggregate([
       {
         $match: {
@@ -384,7 +459,6 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
       }
     ]);
 
-    // Most Viewed Orders
     const mostViewedOrders = await OrderLog.aggregate([
       {
         $match: {
@@ -426,7 +500,9 @@ export const getAllAnalytics = async (days = 7, dailyDays = 30) => {
       mostViewedOrders,
     };
   } catch (error) {
-    console.error("Error in getAllAnalytics:", error);
+    logger.error("Error in getAllAnalytics:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 };

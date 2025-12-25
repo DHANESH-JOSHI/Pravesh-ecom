@@ -7,6 +7,7 @@ import {
 } from './order-log.service';
 import status from 'http-status';
 import mongoose, { Types } from 'mongoose';
+import { logger } from "@/config/logger";
 
 const ApiError = getApiErrorClass("ORDER_LOG");
 const ApiResponse = getApiResponseClass("ORDER_LOG");
@@ -71,7 +72,9 @@ export const getAllAnalyticsController = asyncHandler(async (req, res) => {
       new ApiResponse(status.OK, 'All analytics retrieved successfully', analytics)
     );
   } catch (error: any) {
-    console.error("Error in getAllAnalyticsController:", error);
+    logger.error("Error in getAllAnalyticsController:", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw new ApiError(status.INTERNAL_SERVER_ERROR, error.message || 'Failed to retrieve analytics');
   }
 });

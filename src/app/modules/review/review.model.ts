@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { IReview } from './review.interface'
 import applyMongooseToJSON from '@/utils/mongooseToJSON';
 import { recalculateProductRating } from '@/utils/cascadeDelete';
+import { logger } from '@/config/logger';
 
 
 const reviewSchema = new mongoose.Schema<IReview>(
@@ -42,7 +43,9 @@ reviewSchema.post("findOneAndDelete", async function (doc) {
     try {
       await recalculateProductRating(doc.product);
     } catch (error) {
-      console.error('[REVIEW] Failed to recalculate product rating:', error);
+      logger.error('[REVIEW] Failed to recalculate product rating:', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 });
@@ -54,7 +57,9 @@ reviewSchema.post("deleteOne", async function () {
       await recalculateProductRating(doc.product);
     }
   } catch (error) {
-    console.error('[REVIEW] Failed to recalculate product rating:', error);
+    logger.error('[REVIEW] Failed to recalculate product rating:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
@@ -71,7 +76,9 @@ reviewSchema.post("deleteMany", async function () {
       await recalculateProductRating(new mongoose.Types.ObjectId(productId));
     }
   } catch (error) {
-    console.error('[REVIEW] Failed to recalculate product ratings:', error);
+    logger.error('[REVIEW] Failed to recalculate product ratings:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

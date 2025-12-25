@@ -13,6 +13,7 @@ const bannerSchema = new Schema<IBanner>(
       required: true,
     },
     targetId: { type: Schema.Types.ObjectId },
+    targetSlug: { type: String },
     isDeleted: { type: Boolean, default: true },
     order: { type: Number, default: 0, index: true },
   },

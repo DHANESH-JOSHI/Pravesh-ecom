@@ -16,6 +16,7 @@ export interface IBanner extends Document {
   targetUrl?: string;
   type: BannerType;
   targetId?: Types.ObjectId;
+  targetSlug?: string;
   isDeleted: boolean;
   order: number;
 }

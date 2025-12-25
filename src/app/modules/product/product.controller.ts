@@ -68,7 +68,7 @@ export const createProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY("*"));
   // Invalidate all cart lists (carts display product info)
   await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
-  
+
   // Invalidate category caches (category productCount changed)
   if (product.category) {
     // Invalidate specific category cache (productCount changed)
@@ -76,7 +76,7 @@ export const createProduct = asyncHandler(async (req, res) => {
     // Invalidate all category lists (productCount displayed in lists)
     await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
-  
+
   // Invalidate brand caches (brand productCount changed)
   if (product.brand) {
     // Invalidate specific brand cache (productCount changed)
@@ -158,10 +158,10 @@ export const getAllProducts = asyncHandler(async (req, res) => {
     isNewArrival,
     search,
     rating,
-    isDeleted,
+    isDeleted = "false" as string,
   } = query;
 
-  const filter: any = { isDeleted: isDeleted ?? false };
+  const filter: any = { isDeleted: isDeleted === "true" };
 
   if (categoryId) {
     const categoryIdString = categoryId.toString();
@@ -449,12 +449,12 @@ export const updateProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(oldSlug));
   // Invalidate related products cache (product data changed, might affect related products)
   await redis.deleteByPattern(RedisPatterns.PRODUCT_RELATED_ANY(String(id)));
-  
+
   // If slug changed, invalidate new slug cache
   if (newSlug !== oldSlug) {
     await redis.deleteByPattern(RedisPatterns.PRODUCT_ANY(newSlug));
   }
-  
+
   // Invalidate all product lists (product data changed in lists)
   await redis.deleteByPattern(RedisPatterns.PRODUCTS_ALL());
   // Invalidate product filters (product data might affect filter options)
@@ -465,13 +465,13 @@ export const updateProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY("*"));
   // Invalidate all cart lists (carts display product info)
   await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
-  
+
   // Invalidate category caches if category changed (affects category productCount)
   if (oldCategoryId && oldCategoryId !== newCategoryId) {
     // Invalidate old category cache (productCount decreased)
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(oldCategoryId));
   }
-  
+
   if (newCategoryId && newCategoryId !== oldCategoryId) {
     // Invalidate new category cache (productCount increased)
     await redis.deleteByPattern(RedisPatterns.CATEGORY_ANY(newCategoryId));
@@ -480,13 +480,13 @@ export const updateProduct = asyncHandler(async (req, res) => {
     // Invalidate all category lists (productCount changed in lists)
     await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
-  
+
   // Invalidate brand caches if brand changed (affects brand productCount)
   if (oldBrandId && oldBrandId !== newBrandId) {
     // Invalidate old brand cache (productCount decreased)
     await redis.deleteByPattern(RedisPatterns.BRAND_ANY(oldBrandId));
   }
-  
+
   if (newBrandId && newBrandId !== oldBrandId) {
     // Invalidate new brand cache (productCount increased)
     await redis.deleteByPattern(RedisPatterns.BRAND_ANY(newBrandId));
@@ -536,7 +536,7 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   await redis.deleteByPattern(RedisPatterns.CART_BY_USER_ANY("*"));
   // Invalidate all cart lists (carts display product info)
   await redis.deleteByPattern(RedisPatterns.CARTS_ALL());
-  
+
   // Invalidate category caches (category productCount decreased)
   if (product.category) {
     // Invalidate specific category cache (productCount decreased)
@@ -544,7 +544,7 @@ export const deleteProduct = asyncHandler(async (req, res) => {
     // Invalidate all category lists (productCount changed in lists)
     await redis.deleteByPattern(RedisPatterns.CATEGORIES_ALL());
   }
-  
+
   // Invalidate brand caches (brand productCount decreased)
   if (product.brand) {
     // Invalidate specific brand cache (productCount decreased)

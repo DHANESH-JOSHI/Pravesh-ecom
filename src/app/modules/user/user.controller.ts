@@ -11,6 +11,7 @@ import { UserRole, UserStatus } from "./user.interface";
 import { registerValidation } from "../auth/auth.validation";
 import { cloudinary } from "@/config/cloudinary";
 import { RedisPatterns } from "@/utils/redisKeys";
+import { logger } from "@/config/logger";
 const ApiError = getApiErrorClass("USER");
 const ApiResponse = getApiResponseClass("USER");
 
@@ -126,8 +127,9 @@ export const updateUser = asyncHandler(async (req, res) => {
           await cloudinary.uploader.destroy(`pravesh-users/${publicId}`);
         }
       } catch (error) {
-        // Log but don't fail if old image deletion fails
-        console.error("Error deleting old image:", error);
+        logger.error("Error deleting old image:", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }

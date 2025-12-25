@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { Types } from "mongoose";
-// import { StockStatus } from './product.interface';
 
 const objectIdValidation = z
   .string()
@@ -10,13 +9,8 @@ const objectIdValidation = z
 
 const createProductValidation = z.object({
   name: z.string().nonempty('Product name is required').max(200, 'Product name too long'),
-  // description: z.string().optional(),
-  // shortDescription: z.string().optional(),
   brandId: objectIdValidation.optional(),
   categoryId: objectIdValidation,
-
-
-  // stock: z.coerce.number().min(0, 'Stock cannot be negative'),
   units: z.preprocess((val) => {
     if (typeof val === 'string') {
       try { return JSON.parse(val); } catch (e) { return val; }
@@ -25,14 +19,6 @@ const createProductValidation = z.object({
   }, z.array(z.string().refine((val) => Types.ObjectId.isValid(val), {
     message: 'Invalid unit ID',
   }).transform((val) => new Types.ObjectId(val))).min(1, 'At least one unit is required')),
-  // minStock: z.coerce.number().min(0).optional(),
-
-  // features: z.preprocess((val) => {
-  //   if (typeof val === 'string') {
-  //     try { return JSON.parse(val); } catch (e) { return val; }
-  //   }
-  //   return val;
-  // }, z.array(z.string()).optional()),
   specifications: z.preprocess((val) => {
     if (typeof val === 'string') {
       try { return JSON.parse(val); } catch (e) { return val; }
@@ -65,10 +51,8 @@ const createProductValidation = z.object({
   ).refine(val => typeof val === 'object' && val !== null, {
     message: "Variants must be a valid JSON object string.",
   }).optional()),
-  // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),
-  // 
   thumbnail: z.string().url('Thumbnail must be a valid URL').optional(),
 });
 
@@ -79,10 +63,8 @@ const productsQueryValidation = z.object({
   order: z.enum(['asc', 'desc']).optional(),
   categoryId: objectIdValidation.optional(),
   brandId: objectIdValidation.optional(),
-  // stockStatus: z.enum(StockStatus).optional(),
   isFeatured: z.coerce.boolean().optional(),
   isNewArrival: z.coerce.boolean().optional(),
-  // isDiscount: z.coerce.boolean().optional(),
   isDeleted: z.coerce.boolean().optional(),
   tags: z.string().optional(),
   rating: z.string().regex(/^[1-5]$/, 'Rating must be between 1-5').optional(),

@@ -4,6 +4,7 @@ import applyMongooseToJSON from '@/utils/mongooseToJSON';
 import { generateUniqueSlug } from '@/utils/slugify';
 import { getPixabayImageForCategory } from '@/utils/pixabay';
 import { cascadeCategoryDelete } from '@/utils/cascadeDelete';
+import { logger } from '@/config/logger';
 
 const categorySchema: Schema = new Schema<ICategory>(
   {
@@ -99,7 +100,7 @@ categorySchema.pre("save", async function (next) {
       }
     }
   } catch (err: any) {
-    console.error('[CATEGORY_IMAGE] Generation failed:', err?.message || err);
+    logger.error('[CATEGORY_IMAGE] Generation failed:', err?.message || err);
   }
 
   next();

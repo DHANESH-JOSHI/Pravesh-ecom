@@ -10,6 +10,7 @@ import { IUser } from "@/modules/user/user.interface";
 import { Payload } from "@/utils";
 import { CacheTTL } from "@/utils/cacheTTL";
 import { getCookieNamesFromRequest } from "@/utils/cookieUtils";
+import { logger } from "@/config/logger";
 
 export const auth = (...requiredRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -78,11 +79,16 @@ export const optionalAuth = () => {
           await redis.set(cacheKey, userObject, CacheTTL.SHORT);
         }
       } catch (error) {
-        console.log("Invalid or expired token");
+        logger.error("Invalid or expired token", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
 
       next();
     } catch (error) {
+      logger.error("Error in optionalAuth", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       next();
     }
   }
